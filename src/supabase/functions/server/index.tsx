@@ -34,54 +34,25 @@ function createServiceClient(): SupabaseClient {
   });
 }
 
-type DecodedSupabaseToken = {
-  sub: string;
-  exp?: number;
-  email?: string;
-};
-
-function decodeSupabaseToken(token: string): DecodedSupabaseToken | null {
-  const parts = token.split(".");
-  if (parts.length < 2) {
-    return null;
-  }
-
-  try {
-    const base64Url = parts[1];
-    const padded =
-      base64Url.length % 4 === 0
-        ? base64Url
-        : base64Url.padEnd(base64Url.length + (4 - (base64Url.length % 4)), "=");
-    const payloadJson = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
-    const payload = JSON.parse(payloadJson) as DecodedSupabaseToken;
-
-    if (!payload?.sub) {
-      return null;
-    }
-
-    return payload;
-  } catch (error) {
-    console.error("Failed to decode Supabase token", error);
-    return null;
-  }
-}
-
 async function requireAdmin(
   supabaseAdmin: SupabaseClient,
   accessToken: string,
   actionDescription: string,
 ) {
-  const decodedToken = decodeSupabaseToken(accessToken);
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
 
-  if (!decodedToken) {
+  if (userError) {
+    console.error("Failed to resolve user from access token", userError);
     return { status: 401, body: { error: "Invalid authorization token" } } as const;
   }
 
-  if (decodedToken.exp && decodedToken.exp < Math.floor(Date.now() / 1000)) {
-    return { status: 401, body: { error: "Authorization token has expired" } } as const;
+  const user = userData?.user;
+
+  if (!user) {
+    return { status: 401, body: { error: "Invalid authorization token" } } as const;
   }
 
-  const userId = decodedToken.sub;
+  const userId = user.id;
 
   const { data: perfiles, error: perfilesError } = await supabaseAdmin
     .from("perfiles")
@@ -98,14 +69,8 @@ async function requireAdmin(
   );
 
   if (!isAdmin) {
-    let email = decodedToken.email;
-    if (!email) {
-      const { data: userData } = await supabaseAdmin.auth.admin.getUserById(userId);
-      email = userData?.user?.email ?? undefined;
-    }
-
     console.warn(
-      `User ${email ?? userId} attempted to ${actionDescription} without ADMIN role. Perfil rows found: ${
+      `User ${user.email ?? userId} attempted to ${actionDescription} without ADMIN role. Perfil rows found: ${
         perfiles?.length ?? 0
       }`,
     );

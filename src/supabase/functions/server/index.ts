@@ -34,6 +34,15 @@ function createServiceClient(): SupabaseClient {
   });
 }
 
+function normalizeRole(role: unknown) {
+  if (typeof role !== "string") return null;
+  return role
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
 async function requireAdmin(
   supabaseAdmin: SupabaseClient,
   accessToken: string,
@@ -53,31 +62,66 @@ async function requireAdmin(
   }
 
   const userId = user.id;
+  const normalizedMetadataRole = normalizeRole(
+    user.app_metadata?.role ??
+      (Array.isArray(user.app_metadata?.roles) ? user.app_metadata?.roles[0] : undefined) ??
+      user.user_metadata?.role,
+  );
 
-  const { data: perfiles, error: perfilesError } = await supabaseAdmin
+  if (normalizedMetadataRole === "ADMIN") {
+    return { userId } as const;
+  }
+
+  const {
+    data: perfil,
+    error: perfilError,
+  } = await supabaseAdmin
     .from("perfiles")
     .select("rol")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .maybeSingle();
 
-  if (perfilesError) {
-    console.error("Error verifying perfil:", perfilesError);
+  if (perfilError) {
+    console.error("Error verifying perfil:", perfilError);
     return { status: 500, body: { error: "Failed to verify user profile" } } as const;
   }
 
-  const isAdmin = (perfiles ?? []).some(
-    (perfil) => perfil?.rol && perfil.rol.trim().toUpperCase() === "ADMIN",
-  );
-
-  if (!isAdmin) {
+  if (!perfil) {
     console.warn(
-      `User ${user.email ?? userId} attempted to ${actionDescription} without ADMIN role. Perfil rows found: ${
-        perfiles?.length ?? 0
-      }`,
+      `User ${user.email ?? userId} attempted to ${actionDescription} but no perfil row was found.`,
+    );
+    return {
+      status: 403,
+      body: { error: `Administrator profile not found for user ${user.email ?? userId}` },
+    } as const;
+  }
+
+  const normalizedPerfilRole = normalizeRole(perfil.rol);
+
+  if (normalizedPerfilRole !== "ADMIN") {
+    console.warn(
+      `User ${user.email ?? userId} attempted to ${actionDescription} with role "${perfil.rol}".`,
     );
     return {
       status: 403,
       body: { error: `Only administrators can ${actionDescription}` },
     } as const;
+  }
+
+  if (normalizedMetadataRole !== "ADMIN") {
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
+        app_metadata: {
+          ...user.app_metadata,
+          role: "ADMIN",
+        },
+      });
+    } catch (syncError) {
+      console.warn(
+        `Failed to sync admin role to app_metadata for ${user.email ?? userId}:`,
+        syncError,
+      );
+    }
   }
 
   return { userId } as const;
@@ -121,6 +165,7 @@ app.post("/make-server-484a241a/create-user", async (c) => {
       password,
       email_confirm: true,
       user_metadata: { nombre },
+      app_metadata: { role: rol },
     });
 
     if (createError || !newUser?.user) {

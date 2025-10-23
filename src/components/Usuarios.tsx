@@ -290,9 +290,6 @@ export function Usuarios() {
 
               <h3 className="text-gray-900 mb-2">{perfil.nombre}</h3>
               
-              <p className="text-xs text-gray-500 mb-4 break-all">
-                ID: {perfil.user_id}
-              </p>
 
               <p className="text-sm text-gray-600">
                 Creado: {new Date(perfil.creado_en).toLocaleDateString('es-AR')}

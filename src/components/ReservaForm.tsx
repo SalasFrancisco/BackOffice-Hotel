@@ -23,6 +23,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   const [nombreCliente, setNombreCliente] = useState('');
   const [emailCliente, setEmailCliente] = useState('');
   const [telefonoCliente, setTelefonoCliente] = useState('');
+  const [empresaCliente, setEmpresaCliente] = useState('');
   const [idSalon, setIdSalon] = useState(reserva?.id_salon || 0);
   const [idDistribucion, setIdDistribucion] = useState(reserva?.id_distribucion || 0);
   const [fechaInicio, setFechaInicio] = useState(
@@ -76,13 +77,14 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       if (serviciosError) throw serviciosError;
       setServicios(serviciosData || []);
 
-      // Si estamos editando, cargar datos del cliente, distribuciones y servicios
+      // Si estamos editando, cargar datos del cliente embebido, distribuciones y servicios
       if (reserva) {
-        if (reserva.cliente) {
-          setNombreCliente(reserva.cliente.nombre);
-          setEmailCliente(reserva.cliente.email || '');
-          setTelefonoCliente(reserva.cliente.telefono || '');
-        }
+        // Campos embebidos en reservas (nuevo esquema)
+        // Nota: cast a any para tolerar entornos donde el tipo aún no se actualizó
+        setNombreCliente((reserva as any).nombre_cliente || '');
+        setEmailCliente((reserva as any).email_cliente || '');
+        setTelefonoCliente((reserva as any).telefono_cliente || '');
+        setEmpresaCliente((reserva as any).empresa_cliente || '');
         
         if (reserva.id_salon) {
           await loadDistribuciones(reserva.id_salon);
@@ -181,69 +183,12 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       setLoading(true);
 
       const { data: userData } = await supabase.auth.getUser();
-      let clienteId = reserva?.id_cliente;
-
-      // Si estamos creando una nueva reserva, buscar o crear el cliente
-      if (!reserva) {
-        let { data: clienteExistente, error: searchError } = await supabase
-          .from('clientes')
-          .select('*')
-          .or(`email.eq.${emailCliente || 'NULL_EMAIL_NEVER_MATCH'},nombre.eq.${nombreCliente}`)
-          .limit(1)
-          .maybeSingle();
-
-        if (searchError && searchError.code !== 'PGRST116') {
-          throw searchError;
-        }
-
-        if (clienteExistente) {
-          clienteId = clienteExistente.id;
-          
-          const updateData: any = {};
-          if (emailCliente && emailCliente !== clienteExistente.email) {
-            updateData.email = emailCliente;
-          }
-          if (telefonoCliente && telefonoCliente !== clienteExistente.telefono) {
-            updateData.telefono = telefonoCliente;
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            await supabase
-              .from('clientes')
-              .update(updateData)
-              .eq('id', clienteId);
-          }
-        } else {
-          const { data: nuevoCliente, error: createClienteError } = await supabase
-            .from('clientes')
-            .insert([{
-              nombre: nombreCliente,
-              email: emailCliente || null,
-              telefono: telefonoCliente || null,
-            }])
-            .select()
-            .single();
-
-          if (createClienteError) throw createClienteError;
-          clienteId = nuevoCliente.id;
-        }
-      } else {
-        await supabase
-          .from('clientes')
-          .update({
-            nombre: nombreCliente,
-            email: emailCliente || null,
-            telefono: telefonoCliente || null,
-          })
-          .eq('id', reserva.id_cliente);
-      }
 
       // Obtener precio base del salón seleccionado
       const selectedSalon = salones.find(s => s.id === idSalon);
       const monto = selectedSalon?.precio_base || 0;
 
       const reservaData = {
-        id_cliente: clienteId,
         id_salon: idSalon,
         id_distribucion: idDistribucion || null,
         fecha_inicio: new Date(fechaInicio).toISOString(),
@@ -252,6 +197,10 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
         monto,
         observaciones: observaciones || null,
         creado_por: userData.user?.id,
+        nombre_cliente: nombreCliente,
+        email_cliente: emailCliente || null,
+        telefono_cliente: telefonoCliente || null,
+        empresa_cliente: empresaCliente || null,
       };
 
       let error;
@@ -361,7 +310,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
         {/* Datos del Cliente */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h4 className="text-gray-900 mb-4">Datos del Cliente</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre Completo <span className="text-red-500">*</span>
@@ -372,6 +321,19 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
                 onChange={(e) => setNombreCliente(e.target.value)}
                 required
                 placeholder="Juan Pérez"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-700 mb-2">
+                Empresa
+              </label>
+              <input
+                type="text"
+                value={empresaCliente}
+                onChange={(e) => setEmpresaCliente(e.target.value)}
+                placeholder="Empresa SA"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>

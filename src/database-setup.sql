@@ -28,15 +28,7 @@ create table if not exists public.distribuciones (
   creado_en timestamptz default now()
 );
 
--- Clientes (Clients)
-create table if not exists public.clientes (
-  id bigint generated always as identity primary key,
-  nombre text not null,
-  empresa text,
-  telefono text,
-  email text,
-  cuit text
-);
+-- Clientes eliminados: datos se embeben en reservas
 
 -- Perfiles de usuarios (User Profiles)
 create table if not exists public.perfiles (
@@ -49,9 +41,13 @@ create table if not exists public.perfiles (
 -- Reservas (Reservations)
 create table if not exists public.reservas (
   id bigint generated always as identity primary key,
-  id_cliente bigint not null references public.clientes(id) on delete restrict,
   id_salon bigint not null references public.salones(id) on delete restrict,
   id_distribucion bigint references public.distribuciones(id) on delete set null,
+  -- Datos embebidos del cliente
+  nombre_cliente text not null,
+  email_cliente text,
+  telefono_cliente text,
+  empresa_cliente text,
   fecha_inicio timestamptz not null,
   fecha_fin timestamptz not null,
   estado text not null check (estado in ('Pendiente','Confirmado','Pagado','Cancelado')),
@@ -153,7 +149,6 @@ alter table public.categorias_servicios enable row level security;
 alter table public.servicios enable row level security;
 alter table public.reserva_servicios enable row level security;
 alter table public.distribuciones enable row level security;
-alter table public.clientes enable row level security;
 alter table public.reservas enable row level security;
 alter table public.pagos enable row level security;
 alter table public.perfiles enable row level security;
@@ -161,8 +156,6 @@ alter table public.perfiles enable row level security;
 -- Drop existing policies if any
 drop policy if exists admin_all_salones on public.salones;
 drop policy if exists operador_read_salones on public.salones;
-drop policy if exists admin_all_clientes on public.clientes;
-drop policy if exists operador_all_clientes on public.clientes;
 drop policy if exists admin_all_reservas on public.reservas;
 drop policy if exists operador_read_reservas on public.reservas;
 drop policy if exists operador_write_reservas on public.reservas;
@@ -205,16 +198,7 @@ create policy operador_read_distribuciones on public.distribuciones
     public.get_user_role() in ('ADMIN', 'OPERADOR')
   );
 
--- CLIENTES policies
-create policy admin_all_clientes on public.clientes
-  for all using (
-    public.get_user_role() = 'ADMIN'
-  );
-
-create policy operador_all_clientes on public.clientes
-  for all using (
-    public.get_user_role() in ('ADMIN', 'OPERADOR')
-  );
+-- CLIENTES eliminados: sin políticas
 
 -- RESERVAS policies
 create policy admin_all_reservas on public.reservas
@@ -311,16 +295,18 @@ insert into public.salones (nombre, capacidad, precio_base, descripcion) values
   ('Gran Salón', 200, 15000.00, 'Salón principal con equipamiento completo para eventos grandes'),
   ('Salón Norte', 80, 8000.00, 'Salón mediano ideal para reuniones corporativas'),
   ('Salón Terraza', 50, 6000.00, 'Espacio al aire libre con vista panorámica')
-on conflict do nothing;
+-- on conflict do nothing;
 
 -- Clientes
-insert into public.clientes (nombre, empresa, telefono, email, cuit) values
+  -- insert into public.clientes (nombre, empresa, telefono, email, cuit) values
+  /*
   ('María González', 'TechCorp SA', '+54 11 4444-5555', 'maria@techcorp.com', '30-12345678-9'),
   ('Juan Pérez', 'Eventos Premium', '+54 11 5555-6666', 'juan@eventospremium.com', '30-87654321-0'),
   ('Ana Martínez', 'Consultora ABC', '+54 11 6666-7777', 'ana@abc.com.ar', '27-11223344-5'),
   ('Carlos Rodríguez', null, '+54 11 7777-8888', 'carlos@email.com', null),
   ('Laura Fernández', 'Empresa XYZ', '+54 11 8888-9999', 'laura@xyz.com', '30-99887766-3')
-on conflict do nothing;
+  */
+-- on conflict do nothing;
 
 -- ============================================
 -- DEFAULT ADMIN USER CREATION
@@ -355,7 +341,7 @@ SELECT auth.create_user(
 -- Get the user_id from the result above, then insert the perfil:
 insert into public.perfiles (user_id, nombre, rol) values
   ('REPLACE-WITH-USER-UUID', 'Administrador', 'ADMIN')
-on conflict do nothing;
+-- on conflict do nothing;
 */
 
 -- ============================================

@@ -29,15 +29,6 @@ export type Distribucion = {
   salon?: Salon;
 };
 
-export type Cliente = {
-  id: number;
-  nombre: string;
-  empresa?: string;
-  telefono?: string;
-  email?: string;
-  cuit?: string;
-};
-
 export type CategoriaServicio = {
   id: number;
   nombre: string;
@@ -66,7 +57,6 @@ export type ReservaServicio = {
 
 export type Reserva = {
   id: number;
-  id_cliente: number;
   id_salon: number;
   id_distribucion?: number;
   fecha_inicio: string;
@@ -77,7 +67,11 @@ export type Reserva = {
   creado_por?: string;
   creado_en: string;
   actualizado_en?: string;
-  cliente?: Cliente;
+  // Datos embebidos del cliente
+  nombre_cliente: string;
+  email_cliente?: string;
+  telefono_cliente?: string;
+  empresa_cliente?: string;
   salon?: Salon;
   distribucion?: Distribucion;
   reserva_servicios?: ReservaServicio[];

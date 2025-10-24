@@ -18,7 +18,23 @@ export default function App() {
   const [rlsError, setRlsError] = useState(false);
 
   useEffect(() => {
-    checkSession();
+    const init = async () => {
+      try {
+        if (import.meta.env.VITE_ALWAYS_LOGOUT_ON_START === 'true') {
+          try {
+            await supabase.auth.signOut();
+          } catch (_) {
+            // ignore
+          }
+          setSession(null);
+          setPerfil(null);
+        }
+      } finally {
+        await checkSession();
+      }
+    };
+
+    init();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);

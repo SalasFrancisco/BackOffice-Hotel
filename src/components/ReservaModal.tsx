@@ -148,9 +148,9 @@ export function ReservaModal({ reserva, onClose }: ReservaModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600 mb-1">Cliente</p>
-              <p className="text-gray-900">{reserva.cliente?.nombre}</p>
-              {reserva.cliente?.empresa && (
-                <p className="text-sm text-gray-600">{reserva.cliente.empresa}</p>
+              <p className="text-gray-900">{(reserva as any).nombre_cliente}</p>
+              {(reserva as any).empresa_cliente && (
+                <p className="text-sm text-gray-600">{(reserva as any).empresa_cliente}</p>
               )}
             </div>
 

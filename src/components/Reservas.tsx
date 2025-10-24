@@ -34,7 +34,6 @@ export function Reservas() {
         .from('reservas')
         .select(`
           *,
-          cliente:clientes(*),
           salon:salones(*),
           distribucion:distribuciones(*)
         `)
@@ -109,7 +108,7 @@ export function Reservas() {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
-      r.cliente?.nombre.toLowerCase().includes(term) ||
+      r.nombre_cliente.toLowerCase().includes(term) ||
       r.salon?.nombre.toLowerCase().includes(term) ||
       r.estado.toLowerCase().includes(term) ||
       r.id.toString().includes(term)
@@ -215,9 +214,9 @@ export function Reservas() {
                   <tr key={reserva.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-900">#{reserva.id}</td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{reserva.cliente?.nombre}</div>
-                      {reserva.cliente?.empresa && (
-                        <div className="text-xs text-gray-500">{reserva.cliente.empresa}</div>
+                      <div className="text-sm text-gray-900">{reserva.nombre_cliente}</div>
+                      {reserva.empresa_cliente && (
+                        <div className="text-xs text-gray-500">{reserva.empresa_cliente}</div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{reserva.salon?.nombre}</td>

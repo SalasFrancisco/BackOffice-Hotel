@@ -57,7 +57,6 @@ export function Dashboard() {
         .from('reservas')
         .select(`
           *,
-          cliente:clientes(*),
           salon:salones(*)
         `)
         .or(`and(fecha_inicio.lte.${endOfMonth},fecha_fin.gte.${startOfMonth})`)

@@ -340,10 +340,17 @@ export function Dashboard() {
                           <button
                             key={`${reserva.id}-${day}`}
                             onClick={() => handleReservaClick(reserva)}
-                            className="w-full text-left px-2 py-1 rounded text-xs text-white truncate"
-                            style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
+                            className="w-full text-left px-3 py-2 rounded border border-gray-200 bg-gray-100 hover:bg-gray-200 transition-colors"
                           >
-                            {reserva.salon?.nombre}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-gray-700 font-medium truncate">
+                                #{reserva.id} - {reserva.cliente?.nombre || 'Sin cliente'}
+                              </span>
+                              <span
+                                className="flex-shrink-0 rounded-full border border-white"
+                                style={{ backgroundColor: ESTADO_COLORS[reserva.estado], width: '0.65rem', height: '0.65rem' }}
+                              />
+                            </div>
                           </button>
                         ))}
                       </div>

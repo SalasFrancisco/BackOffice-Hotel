@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
+import { generatePresupuestoDocumento } from '../utils/presupuesto';
 import { AlertCircle, CheckCircle, Package } from 'lucide-react';
 
 type ReservaFormProps = {
@@ -33,6 +34,15 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   );
   const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
+  const [cantidadPersonas, setCantidadPersonas] = useState(
+    reserva?.cantidad_personas ? reserva.cantidad_personas.toString() : ''
+  );
+
+  const currentSalon = salones.find(s => s.id === idSalon) || null;
+  const currentDistribucion = idDistribucion
+    ? distribuciones.find(d => d.id === idDistribucion) || null
+    : null;
+  const totalPersonasNumber = parseInt(cantidadPersonas, 10) || 0;
 
   useEffect(() => {
     loadInitialData();
@@ -46,6 +56,16 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       setIdDistribucion(0);
     }
   }, [idSalon]);
+
+  useEffect(() => {
+    const total = parseInt(cantidadPersonas, 10);
+    if (!idDistribucion || !total || total <= 0) return;
+
+    const selectedDist = distribuciones.find(d => d.id === idDistribucion);
+    if (selectedDist && total > selectedDist.capacidad) {
+      setIdDistribucion(0);
+    }
+  }, [cantidadPersonas, idDistribucion, distribuciones]);
 
   const loadInitialData = async () => {
     try {
@@ -83,6 +103,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           setEmailCliente(reserva.cliente.email || '');
           setTelefonoCliente(reserva.cliente.telefono || '');
         }
+        setCantidadPersonas(reserva.cantidad_personas ? reserva.cantidad_personas.toString() : '');
         
         if (reserva.id_salon) {
           await loadDistribuciones(reserva.id_salon);
@@ -167,8 +188,35 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     setMessage(null);
 
     // Validations
-    if (!nombreCliente || !idSalon || !fechaInicio || !fechaFin) {
+    if (!nombreCliente || !idSalon || !fechaInicio || !fechaFin || !cantidadPersonas) {
       setMessage({ type: 'error', text: 'Por favor complete todos los campos requeridos' });
+      return;
+    }
+
+    const totalPersonas = parseInt(cantidadPersonas, 10);
+    if (!totalPersonas || totalPersonas <= 0) {
+      setMessage({ type: 'error', text: 'Ingrese una cantidad de personas valida' });
+      return;
+    }
+
+    const selectedSalon = salones.find(s => s.id === idSalon) || null;
+    const selectedDistribucionData = idDistribucion
+      ? distribuciones.find(d => d.id === idDistribucion) || null
+      : null;
+
+    if (selectedSalon && totalPersonas > selectedSalon.capacidad) {
+      setMessage({
+        type: 'error',
+        text: `La capacidad maxima del salon seleccionado es de ${selectedSalon.capacidad} personas`,
+      });
+      return;
+    }
+
+    if (selectedDistribucionData && totalPersonas > selectedDistribucionData.capacidad) {
+      setMessage({
+        type: 'error',
+        text: `La distribucion elegida permite hasta ${selectedDistribucionData.capacidad} personas`,
+      });
       return;
     }
 
@@ -238,8 +286,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           .eq('id', reserva.id_cliente);
       }
 
-      // Obtener precio base del salón seleccionado
-      const selectedSalon = salones.find(s => s.id === idSalon);
+      // Obtener precio base del salon seleccionado
       const monto = selectedSalon?.precio_base || 0;
 
       const reservaData = {
@@ -250,6 +297,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
         fecha_fin: new Date(fechaFin).toISOString(),
         estado,
         monto,
+        cantidad_personas: totalPersonas,
         observaciones: observaciones || null,
         creado_por: userData.user?.id,
       };
@@ -304,19 +352,61 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
 
           if (serviciosError) {
             console.error('Error saving servicios:', serviciosError);
-            // No lanzamos error aquí, la reserva ya fue creada
+            // No lanzamos error aqui, la reserva ya fue creada
           }
         }
       }
 
-      setMessage({
-        type: 'success',
-        text: reserva ? 'Reserva actualizada correctamente' : 'Reserva creada correctamente',
-      });
+      let presupuestoErrorMessage: string | null = null;
 
-      setTimeout(() => {
-        onClose(true);
-      }, 1500);
+      if (!reserva && reservaId) {
+        if (!selectedSalon) {
+          presupuestoErrorMessage =
+            'No se encontro el salon seleccionado para generar el presupuesto.';
+        } else {
+          const serviciosDetalle = Array.from(selectedServicios.entries())
+            .map(([idServicio, cantidad]) => {
+              const servicioInfo = servicios.find(s => s.id === idServicio);
+              return servicioInfo ? { servicio: servicioInfo, cantidad } : null;
+            })
+            .filter((item): item is { servicio: Servicio; cantidad: number } => item !== null);
+
+          try {
+            await generatePresupuestoDocumento({
+              reservaId,
+              salon: selectedSalon,
+              distribucion: selectedDistribucionData,
+              cliente: { nombre: nombreCliente, email: emailCliente || null },
+              fechaInicio: new Date(fechaInicio).toISOString(),
+              fechaFin: new Date(fechaFin).toISOString(),
+              tipoEvento: observaciones ? observaciones.split('\n')[0] : null,
+              totalSalon: monto,
+              cantidadPersonas: totalPersonas,
+              servicios: serviciosDetalle,
+            });
+          } catch (error: any) {
+            presupuestoErrorMessage =
+              error?.message || 'Ocurrio un error inesperado al generar el presupuesto.';
+            console.error('Error generating presupuesto:', error);
+          }
+        }
+      }
+
+      if (presupuestoErrorMessage) {
+        setMessage({
+          type: 'error',
+          text: `Reserva creada, pero no se pudo generar el presupuesto: ${presupuestoErrorMessage}`,
+        });
+      } else {
+        setMessage({
+          type: 'success',
+          text: reserva ? 'Reserva actualizada correctamente' : 'Reserva creada correctamente',
+        });
+
+        setTimeout(() => {
+          onClose(true);
+        }, 1500);
+      }
     } catch (err: any) {
       console.error('Error saving reserva:', err);
       setMessage({ type: 'error', text: err.message });
@@ -409,11 +499,11 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           )}
         </div>
 
-        {/* Salón y Distribución */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Salon, Distribucion y Capacidad */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm text-gray-700 mb-2">
-              Salón <span className="text-red-500">*</span>
+              Salon <span className="text-red-500">*</span>
             </label>
             <select
               value={idSalon}
@@ -421,18 +511,23 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value={0}>Seleccione un salón</option>
+              <option value={0}>Seleccione un salon</option>
               {salones.map(salon => (
                 <option key={salon.id} value={salon.id}>
                   {salon.nombre} - ${salon.precio_base}
                 </option>
               ))}
             </select>
+            {currentSalon && totalPersonasNumber > currentSalon.capacidad && (
+              <p className="text-xs text-red-600 mt-1">
+                La capacidad del salon es de {currentSalon.capacidad} personas.
+              </p>
+            )}
           </div>
 
           <div>
             <label className="block text-sm text-gray-700 mb-2">
-              Distribución
+              Distribucion
             </label>
             <select
               value={idDistribucion}
@@ -440,18 +535,44 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={!idSalon || distribuciones.length === 0}
             >
-              <option value={0}>Sin distribución específica</option>
+              <option value={0}>Sin distribucion especifica</option>
               {distribuciones.map(dist => (
-                <option key={dist.id} value={dist.id}>
+                <option
+                  key={dist.id}
+                  value={dist.id}
+                  disabled={totalPersonasNumber > dist.capacidad}
+                >
                   {dist.nombre} - Cap: {dist.capacidad} personas
+                  {totalPersonasNumber > dist.capacidad ? ' (capacidad insuficiente)' : ''}
                 </option>
+
               ))}
             </select>
             {idSalon && distribuciones.length === 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                Este salón no tiene distribuciones configuradas
+                Este salon no tiene distribuciones configuradas
               </p>
             )}
+            {currentDistribucion && totalPersonasNumber > currentDistribucion.capacidad && (
+              <p className="text-xs text-red-600 mt-1">
+                La distribucion elegida admite hasta {currentDistribucion.capacidad} personas.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-700 mb-2">
+              Cantidad de personas <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={cantidadPersonas}
+              onChange={(e) => setCantidadPersonas(e.target.value)}
+              placeholder="Ej: 120"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
           </div>
         </div>
 
@@ -652,3 +773,4 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     </div>
   );
 }
+

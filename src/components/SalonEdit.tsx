@@ -81,7 +81,22 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     setMessage(null);
 
     if (!nombre || !capacidad || !precioBase) {
-      setMessage({ type: 'error', text: 'Complete todos los campos requeridos del salón' });
+      setMessage({ type: 'error', text: 'Complete todos los campos requeridos del salon' });
+      return;
+    }
+
+    const capacidadNumero = parseInt(capacidad, 10);
+    if (!capacidadNumero || capacidadNumero <= 0) {
+      setMessage({ type: 'error', text: 'Ingrese una capacidad valida para el salon' });
+      return;
+    }
+
+    const maxDistribucion = distribuciones.reduce((max, dist) => Math.max(max, dist.capacidad), 0);
+    if (distribuciones.length > 0 && capacidadNumero < maxDistribucion) {
+      setMessage({
+        type: 'error',
+        text: `La capacidad del salon no puede ser inferior a la mayor distribucion (${maxDistribucion} personas)`,
+      });
       return;
     }
 
@@ -92,7 +107,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
         .from('salones')
         .update({
           nombre,
-          capacidad: parseInt(capacidad),
+          capacidad: capacidadNumero,
           precio_base: parseFloat(precioBase),
           descripcion: descripcion || null,
         })
@@ -100,7 +115,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
       if (error) throw error;
 
-      setMessage({ type: 'success', text: 'Salón actualizado correctamente' });
+      setMessage({ type: 'success', text: 'Salon actualizado correctamente' });
       loadData();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -129,8 +144,25 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     e.preventDefault();
     setMessage(null);
 
+
     if (!distNombre || !distCapacidad) {
-      setMessage({ type: 'error', text: 'Complete todos los campos de la distribución' });
+      setMessage({ type: 'error', text: 'Complete todos los campos de la distribucion' });
+      return;
+    }
+
+    const capacidadSalon = salon ? salon.capacidad : parseInt(capacidad, 10) || 0;
+    const capacidadDistribucion = parseInt(distCapacidad, 10);
+
+    if (!capacidadDistribucion || capacidadDistribucion <= 0) {
+      setMessage({ type: 'error', text: 'Ingrese una capacidad valida para la distribucion' });
+      return;
+    }
+
+    if (capacidadDistribucion > capacidadSalon) {
+      setMessage({
+        type: 'error',
+        text: `La distribucion no puede superar la capacidad del salon (${capacidadSalon} personas)`,
+      });
       return;
     }
 
@@ -142,24 +174,26 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
           .from('distribuciones')
           .update({
             nombre: distNombre,
-            capacidad: parseInt(distCapacidad),
+            capacidad: capacidadDistribucion,
           })
           .eq('id', editingDist.id);
 
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Distribución actualizada correctamente' });
+        setMessage({ type: 'success', text: 'Distribucion actualizada correctamente' });
       } else {
         const { error } = await supabase
           .from('distribuciones')
           .insert([{
             id_salon: salonId,
             nombre: distNombre,
-            capacidad: parseInt(distCapacidad),
+            capacidad: capacidadDistribucion,
           }]);
 
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Distribución creada correctamente' });
+        setMessage({ type: 'success', text: 'Distribucion creada correctamente' });
       }
+
+
 
       setShowDistDialog(false);
       setEditingDist(null);
@@ -215,7 +249,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       <div className="p-8">
         <div className="flex items-start gap-2 p-4 bg-red-50 border border-red-200 rounded-lg">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-800">Salón no encontrado</p>
+          <p className="text-sm text-red-800">Salon no encontrado</p>
         </div>
       </div>
     );
@@ -236,7 +270,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
           <Building2 className="w-6 h-6 text-blue-600" />
         </div>
         <div>
-          <h2 className="text-gray-900">Editar Salón</h2>
+          <h2 className="text-gray-900">Editar Salon</h2>
           <p className="text-sm text-gray-600">ID: {salon.id}</p>
         </div>
       </div>
@@ -260,9 +294,9 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
         </div>
       )}
 
-      {/* Datos del Salón */}
+      {/* Datos del Salon */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <h3 className="text-gray-900 mb-4">Datos del Salón</h3>
+        <h3 className="text-gray-900 mb-4">Datos del Salon</h3>
         <form onSubmit={handleSaveSalon} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -336,7 +370,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h3 className="text-gray-900">Distribuciones del Salón</h3>
+            <h3 className="text-gray-900">Distribuciones del Salon</h3>
             <p className="text-sm text-gray-600">Configuraciones de distribución con diferentes capacidades</p>
           </div>
           <button
@@ -350,7 +384,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
         {distribuciones.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            No hay distribuciones creadas para este salón
+            No hay distribuciones creadas para este Salon
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -454,3 +488,4 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     </div>
   );
 }
+

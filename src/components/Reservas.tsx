@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Reserva } from '../utils/supabase/client';
-import { Plus, Search, Edit, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, AlertCircle, CheckCircle, FileText } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ReservaForm } from './ReservaForm';
 
@@ -57,15 +57,27 @@ export function Reservas() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('¿Está seguro de eliminar esta reserva?')) return;
+    if (!confirm('Esta seguro de eliminar esta reserva?')) return;
 
     try {
+      const reservaTarget = reservas.find(r => r.id === id);
+
       const { error: deleteError } = await supabase
         .from('reservas')
         .delete()
         .eq('id', id);
 
       if (deleteError) throw deleteError;
+
+      if (reservaTarget?.presupuesto_url) {
+        const { error: storageError } = await supabase.storage
+          .from('presupuestos')
+          .remove([reservaTarget.presupuesto_url]);
+
+        if (storageError) {
+          console.error('Error removing presupuesto file:', storageError);
+        }
+      }
 
       setMessage({ type: 'success', text: 'Reserva eliminada correctamente' });
       loadReservas();
@@ -94,6 +106,30 @@ export function Reservas() {
     }
   };
 
+  const handleOpenPresupuesto = async (reserva: Reserva) => {
+    if (!reserva.presupuesto_url) return;
+
+    try {
+      const { data, error: signedUrlError } = await supabase.storage
+        .from('presupuestos')
+        .createSignedUrl(reserva.presupuesto_url, 60);
+
+      if (signedUrlError) throw signedUrlError;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank', 'noopener');
+      } else {
+        throw new Error('No se pudo obtener la URL firmada del presupuesto.');
+      }
+    } catch (err: any) {
+      console.error('Error opening presupuesto:', err);
+      setMessage({
+        type: 'error',
+        text: 'No se pudo abrir el presupuesto. Intente nuevamente.',
+      });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleString('es-AR', {
@@ -119,7 +155,7 @@ export function Reservas() {
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-gray-900">Gestión de Reservas</h2>
+        <h2 className="text-gray-900">Gestion de Reservas</h2>
         <button
           onClick={handleCreateNew}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -161,7 +197,7 @@ export function Reservas() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por cliente, salón, estado o ID..."
+            placeholder="Buscar por cliente, salon, estado o ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -189,7 +225,7 @@ export function Reservas() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">ID</th>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Salón</th>
+                <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Salon</th>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Fecha Inicio</th>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Fecha Fin</th>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">Estado</th>
@@ -236,6 +272,15 @@ export function Reservas() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
+                        {reserva.presupuesto_url && (
+                          <button
+                            onClick={() => handleOpenPresupuesto(reserva)}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Ver presupuesto"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(reserva)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -266,7 +311,7 @@ export function Reservas() {
 
       {/* Dialog for Create/Edit */}
       <Dialog open={showDialog} onOpenChange={(open) => !open && handleDialogClose()}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingReserva ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
           </DialogHeader>
@@ -279,3 +324,5 @@ export function Reservas() {
     </div>
   );
 }
+
+

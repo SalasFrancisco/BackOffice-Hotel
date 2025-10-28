@@ -57,6 +57,8 @@ create table if not exists public.reservas (
   estado text not null check (estado in ('Pendiente','Confirmado','Pagado','Cancelado')),
   monto numeric(12,2) not null default 0,
   observaciones text,
+  cantidad_personas int not null default 0,
+  presupuesto_url text,
   creado_por uuid references auth.users(id),
   creado_en timestamptz default now(),
   actualizado_en timestamptz
@@ -64,18 +66,44 @@ create table if not exists public.reservas (
 
 -- Add range column for overlap detection
 alter table public.reservas add column if not exists rango tstzrange generated always as (tstzrange(fecha_inicio, fecha_fin, '[)')) stored;
+alter table public.reservas add column if not exists presupuesto_url text;
+alter table public.reservas add column if not exists cantidad_personas int default 0;
 
--- Prevent overlapping reservations in same salon
-do $$ 
+-- ============================================
+-- STORAGE: PRESUPUESTOS
+-- ============================================
+
+do $$
 begin
   if not exists (
-    select 1 from pg_constraint where conname = 'reservas_no_solape_excl'
+    select 1 from storage.buckets where id = 'presupuestos'
   ) then
-    alter table public.reservas add constraint reservas_no_solape_excl
-      exclude using gist (id_salon with =, rango with &&)
-      where (estado != 'Cancelado');
+    insert into storage.buckets (id, name, public)
+    values ('presupuestos', 'presupuestos', false);
   end if;
 end $$;
+
+drop policy if exists "presupuestos_insert_auth" on storage.objects;
+drop policy if exists "presupuestos_select_owner" on storage.objects;
+drop policy if exists "presupuestos_delete_owner" on storage.objects;
+
+create policy "presupuestos_insert_auth"
+  on storage.objects for insert to authenticated
+  with check (bucket_id = 'presupuestos' and owner = auth.uid());
+
+create policy "presupuestos_select_owner"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'presupuestos' and owner = auth.uid());
+
+create policy "presupuestos_delete_owner"
+  on storage.objects for delete to authenticated
+  using (bucket_id = 'presupuestos' and owner = auth.uid());
+
+-- Prevent overlapping reservations in same salon (except Pending or Cancelled)
+alter table public.reservas drop constraint if exists reservas_no_solape_excl;
+alter table public.reservas add constraint reservas_no_solape_excl
+  exclude using gist (id_salon with =, rango with &&)
+  where (estado in ('Confirmado','Pagado'));
 
 -- Pagos (Payments) - Optional
 create table if not exists public.pagos (

@@ -73,10 +73,12 @@ export type Reserva = {
   fecha_fin: string;
   estado: 'Pendiente' | 'Confirmado' | 'Pagado' | 'Cancelado';
   monto: number;
+  cantidad_personas: number;
   observaciones?: string;
   creado_por?: string;
   creado_en: string;
   actualizado_en?: string;
+  presupuesto_url?: string | null;
   cliente?: Cliente;
   salon?: Salon;
   distribucion?: Distribucion;

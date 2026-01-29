@@ -1533,6 +1533,12 @@
 
                         <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono"></div>
 
+                        <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" required></div>
+
+                    </div>
+
+                    <div class="form-row">
+
                         <div class="form-group half">
 
                             <label>Salón</label>
@@ -1543,9 +1549,7 @@
 
                             <div class="custom-select-wrapper" id="salonSelectWrapper">
 
-                                <div class="custom-select-trigger" id="salonTrigger"><span>Seleccione...</span><i
-
-                                        class="fas fa-chevron-down"></i></div>
+                                <div class="custom-select-trigger" id="salonTrigger"><span>Seleccione...</span><i class="fas fa-chevron-down"></i></div>
 
                                 <div class="custom-options" id="salonOptionsList">
 
@@ -1557,10 +1561,6 @@
 
                         </div>
 
-                    </div>
-
-                    <div class="form-row">
-
                         <div class="form-group half">
 
                             <label>Distribución</label>
@@ -1568,8 +1568,6 @@
                             <select id="distribucion"></select>
 
                         </div>
-
-                        <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" required></div>
 
                     </div>
 
@@ -2401,7 +2399,12 @@
 
         // --- LOGICA SELECTOR INTELIGENTE ---
 
-        const PUBLIC_API_BASE = 'https://gcmkqbilhtkexexwumux.supabase.co/functions/v1/server/make-server-484a241a';
+        const PROJECT_ID = 'gcmkqbilhtkexexwumux';
+        const PUBLIC_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjbWtxYmlsaHRrZXhleHd1bXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1ODU1OTksImV4cCI6MjA3OTE2MTU5OX0.9dPbyp_0pj2eZQ7dEEwWlmT2PhaoL1_nl6FPrv5rVH0';
+        // Primary base used previously (function deployed as `server`)
+        const PUBLIC_API_BASE = `https://${PROJECT_ID}.supabase.co/functions/v1/server/make-server-484a241a`;
+        // Alternate base in case the function was deployed without the `server` prefix
+        const PUBLIC_API_BASE_ALT = `https://${PROJECT_ID}.supabase.co/functions/v1/make-server-484a241a`;
 
         let salonesDB = [];
 
@@ -2680,53 +2683,104 @@
         }
 
         async function loadCatalog() {
+            // Intentamos primero la función pública (edge function).
+            // Probamos dos variantes de ruta en orden: con el prefijo `server` y sin él.
+            const functionAttempts = [
+                `${PUBLIC_API_BASE}/public-catalog`,
+                `${PUBLIC_API_BASE_ALT}/public-catalog`,
+            ];
 
-            try {
+            for (const url of functionAttempts) {
+                try {
+                    const response = await fetch(url);
+                    const text = await response.text();
+                    let data = null;
+                    try { data = text ? JSON.parse(text) : null; } catch (e) { /* no-op */ }
+                    if (!response.ok) {
+                        console.warn(`Function attempt failed (${response.status}) at ${url}:`, data || text);
+                        continue; // try next
+                    }
 
-                const response = await fetch(`${PUBLIC_API_BASE}/public-catalog`);
-
-                const data = await response.json();
-
-                if (!response.ok) {
-
-                    throw new Error(data?.error || 'No se pudo cargar el catálogo.');
-
-                }
-
-                salonesDB = (data.salones || []).map(salon => ({
-
+                    salonesDB = (data.salones || []).map(salon => ({
                     id: salon.id,
-
                     nombre: salon.nombre,
-
                     capacidad: salon.capacidad,
-
                     precio_base: salon.precio_base,
-
                     img: salon.imagen_url || defaultSalonImg
-
                 }));
 
-                catalogDistribuciones = data.distribuciones || [];
+                    catalogDistribuciones = data.distribuciones || [];
+                    catalogCategorias = data.categorias || [];
+                    catalogServicios = data.servicios || [];
 
-                catalogCategorias = data.categorias || [];
+                    updateSalonRecommendations();
+                    updateDistribucionesForSalon(null);
+                    renderServicios();
+                    return;
+                } catch (err) {
+                    console.warn('Error parsing/using function response for', url, err);
+                    continue; // try next URL
+                }
+            }
+            console.warn('All function attempts failed, trying REST fallback');
 
-                catalogServicios = data.servicios || [];
+            // Fallback: usar REST pública de Supabase con public anon key
+            try {
+                const restBase = `https://${PROJECT_ID}.supabase.co/rest/v1`;
+                const headers = {
+                    'apikey': PUBLIC_ANON_KEY,
+                    'Authorization': `Bearer ${PUBLIC_ANON_KEY}`,
+                    'Accept': 'application/json'
+                };
+
+                const [salonesRes, distribRes, categoriasRes, serviciosRes] = await Promise.all([
+                    fetch(`${restBase}/salones?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/distribuciones?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/categorias_servicios?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/servicios?select=*,categoria:categorias_servicios(*)&order=nombre`, { headers }),
+                ]);
+
+                if (!salonesRes.ok || !distribRes.ok || !categoriasRes.ok || !serviciosRes.ok) {
+                    const details = {
+                        salones: salonesRes.status,
+                        distribuciones: distribRes.status,
+                        categorias: categoriasRes.status,
+                        servicios: serviciosRes.status,
+                    };
+                    throw new Error('REST API devolvio respuesta no OK: ' + JSON.stringify(details));
+                }
+
+                const [salonesData, distribData, categoriasData, serviciosData] = await Promise.all([
+                    salonesRes.json(), distribRes.json(), categoriasRes.json(), serviciosRes.json()
+                ]);
+
+                salonesDB = (salonesData || []).map(salon => ({
+                    id: salon.id,
+                    nombre: salon.nombre,
+                    capacidad: salon.capacidad,
+                    precio_base: salon.precio_base,
+                    img: salon.imagen_url || defaultSalonImg
+                }));
+
+                catalogDistribuciones = distribData || [];
+                catalogCategorias = categoriasData || [];
+                catalogServicios = (serviciosData || []).map(s => ({
+                    id: s.id,
+                    id_categoria: s.id_categoria ?? (s.categoria ? s.categoria.id : 0),
+                    nombre: s.nombre,
+                    descripcion: s.descripcion,
+                    precio: s.precio
+                }));
 
                 updateSalonRecommendations();
-
                 updateDistribucionesForSalon(null);
-
                 renderServicios();
-
+                return;
             } catch (error) {
-
-                salonOptionsList.innerHTML = '<div style="padding:15px; font-size:12px; color:#999;">No se pudo cargar el catálogo.</div>';
-
-                serviciosContainer.innerHTML = '<div style="font-size:12px; color:#999;">No se pudo cargar los servicios.</div>';
-
+                console.error('Error loading catalog (fallback):', error);
+                salonOptionsList.innerHTML = '<div style="padding:15px; font-size:12px; color:#999;">No se pudo cargar el catálogo. Intentá abrir la consola para más detalles.</div>';
+                serviciosContainer.innerHTML = '<div style="font-size:12px; color:#999;">No se pudo cargar los servicios. Intentá abrir la consola para más detalles.</div>';
             }
-
         }
 
         inputCantidad.addEventListener('input', updateSalonRecommendations);

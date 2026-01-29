@@ -3,9 +3,7 @@ import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import pdfMake from "npm:pdfmake/build/pdfmake";
-import pdfFonts from "npm:pdfmake/build/vfs_fonts";
-import type { TDocumentDefinitions } from "npm:pdfmake/interfaces";
+// pdfmake is imported dynamically at runtime only when PDF generation is needed
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -30,25 +28,11 @@ app.use(
 );
 
 app.get("/make-server-484a241a/health", (c) => c.json({ status: "ok" }));
+// Also expose the same health route under /server prefix (some invocations
+// arrive with the function name included in the path).
+app.get("/server/make-server-484a241a/health", (c) => c.json({ status: "ok" }));
 
-let pdfFontsReady = false;
-
-const ensurePdfFonts = () => {
-  if (pdfFontsReady) return;
-
-  const fontsSource =
-    (pdfFonts as any)?.pdfMake?.vfs ||
-    (pdfFonts as any)?.default?.pdfMake?.vfs ||
-    (pdfFonts as any)?.default ||
-    (pdfFonts as any);
-
-  if (!fontsSource) {
-    throw new Error("No se pudieron cargar las fuentes para generar el PDF.");
-  }
-
-  (pdfMake as any).vfs = fontsSource;
-  pdfFontsReady = true;
-};
+// PDF font loading and pdfmake are performed lazily inside the PDF builder
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -158,143 +142,163 @@ const buildPresupuestoPdf = async (input: {
   cantidadPersonas: number;
   servicios: PresupuestoServicio[];
 }) => {
-  ensurePdfFonts();
+  try {
+    const mod = await import('npm:pdf-lib');
+    const { PDFDocument, StandardFonts, rgb } = (mod as any);
 
-  const capacidadMaxima =
-    input.distribucion?.capacidad && input.distribucion.capacidad > 0
-      ? input.distribucion.capacidad
-      : input.salon.capacidad;
+    const pdfDoc = await PDFDocument.create();
+    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const totalServicios = input.servicios.reduce((acc, { servicio, cantidad }) => {
-    const unit = Number(servicio.precio) || 0;
-    return acc + unit * cantidad;
-  }, 0);
+    const page = pdfDoc.addPage([595.28, 841.89]); // A4
+    const { width, height } = page.getSize();
+    const margin = 40;
+    let y = height - margin;
 
-  const totalGeneral = input.salon.precio_base + totalServicios;
+    const small = 10;
+    const normal = 12;
+    const headerSize = 16;
 
-  const docDefinition: TDocumentDefinitions = {
-    pageMargins: [40, 50, 40, 60],
-    content: [
-      { text: "Presupuesto de Evento", style: "header" },
-      { text: `Reserva #${input.reservaId}`, style: "subheader", margin: [0, 0, 0, 20] },
-      {
-        columns: [
-          [
-            { text: "Informacion del cliente", style: "sectionTitle" },
-            {
-              table: {
-                widths: ["auto", "*"],
-                body: [
-                  ["Nombre:", input.cliente.nombre],
-                  ["Email:", input.cliente.email || "No informado"],
-                  ["Tipo de evento:", input.tipoEvento?.trim() || "Evento"],
-                ],
-              },
-              layout: "noBorders",
-            },
-          ],
-          [
-            { text: "Detalles del evento", style: "sectionTitle" },
-            {
-              table: {
-                widths: ["auto", "*"],
-                body: [
-                  ["Fecha:", formatDate(input.fechaInicio)],
-                  ["Horario:", `${formatTime(input.fechaInicio)} a ${formatTime(input.fechaFin)}`],
-                  ["Salon:", input.salon.nombre],
-                  ["Distribucion:", input.distribucion?.nombre || "Sin distribucion definida"],
-                  ["Cantidad de asistentes:", String(input.cantidadPersonas)],
-                  ["Capacidad maxima:", String(capacidadMaxima)],
-                ],
-              },
-              layout: "noBorders",
-            },
-          ],
-        ],
-        columnGap: 30,
-        margin: [0, 0, 0, 25],
-      },
-      { text: "Salon contratado", style: "sectionTitle" },
-      {
-        table: {
-          widths: ["*", "auto", "auto", "auto"],
-          body: [
-            [
-              { text: "Descripcion", style: "tableHeader" },
-              { text: "Cantidad", style: "tableHeader", alignment: "center" },
-              { text: "Precio unitario", style: "tableHeader", alignment: "right" },
-              { text: "Subtotal", style: "tableHeader", alignment: "right" },
-            ],
-            [
-              {
-                text: input.salon.descripcion || "Sin descripcion",
-                style: "tableCell",
-              },
-              { text: "1", style: "tableCell", alignment: "center" },
-              { text: formatCurrency(input.salon.precio_base), style: "tableCell", alignment: "right" },
-              { text: formatCurrency(input.salon.precio_base), style: "tableCell", alignment: "right" },
-            ],
-          ],
-        },
-        layout: "lightHorizontalLines",
-        margin: [0, 0, 0, 20],
-      },
-      { text: "Servicios adicionales solicitados", style: "sectionTitle" },
-      {
-        table: {
-          widths: ["*", "*", "auto", "auto", "auto"],
-          body: buildServiciosBody(input.servicios),
-        },
-        layout: "lightHorizontalLines",
-      },
-      {
-        table: {
-          widths: ["*", "auto"],
-          body: [
-            [
-              { text: "Total salon", alignment: "right", style: "totalLabel" },
-              { text: formatCurrency(input.salon.precio_base), alignment: "right", style: "totalValue" },
-            ],
-            [
-              { text: "Total servicios", alignment: "right", style: "totalLabel" },
-              { text: formatCurrency(totalServicios), alignment: "right", style: "totalValue" },
-            ],
-            [
-              { text: "Total general", alignment: "right", style: "grandTotalLabel" },
-              { text: formatCurrency(totalGeneral), alignment: "right", style: "grandTotalValue" },
-            ],
-          ],
-        },
-        layout: "noBorders",
-        margin: [0, 20, 0, 0],
-      },
-    ],
-    styles: {
-      header: { fontSize: 20, bold: true },
-      subheader: { fontSize: 14, color: "#666666" },
-      sectionTitle: { fontSize: 12, bold: true, margin: [0, 10, 0, 6] },
-      tableHeader: { bold: true, fillColor: "#f5f5f5" },
-      tableCell: { fontSize: 10 },
-      totalLabel: { fontSize: 11, bold: true, margin: [0, 4, 0, 4] },
-      totalValue: { fontSize: 11, margin: [0, 4, 0, 4] },
-      grandTotalLabel: { fontSize: 12, bold: true, margin: [0, 8, 0, 0] },
-      grandTotalValue: { fontSize: 12, bold: true, margin: [0, 8, 0, 0] },
-    },
-    defaultStyle: { fontSize: 10 },
-  };
+    const accent = rgb(0.07, 0.38, 0.65);
+    const muted = rgb(0.82, 0.84, 0.86);
+    const textColor = rgb(0.12, 0.12, 0.12);
 
-  const pdfBuffer = await new Promise<Uint8Array>((resolve, reject) => {
-    try {
-      const pdfDoc = pdfMake.createPdf(docDefinition);
-      (pdfDoc as any).getBuffer((buffer: ArrayBuffer) => {
-        resolve(new Uint8Array(buffer));
-      });
-    } catch (error) {
-      reject(error);
+    const drawText = (text: string, x: number, yPos: number, size = small, opts: any = {}) => {
+      page.drawText(String(text), { x, y: yPos, size, font: opts.bold ? helveticaBold : helvetica, color: opts.color ?? textColor });
+    };
+
+    const drawLine = (x: number, yPos: number, w: number, thickness = 1, color = muted) => {
+      page.drawRectangle({ x, y: yPos - thickness / 2, width: w, height: thickness, color });
+    };
+
+    // Header
+    drawText('Quinto Centenario', margin, y, 14, { bold: true, color: accent });
+    drawText('PRESUPUESTO', width - margin - 140, y, 16, { bold: true });
+    y -= headerSize + 6;
+    drawLine(margin, y, width - margin * 2, 1.5);
+    y -= 18;
+
+    // Client / Meta box
+    const boxHeight = 68;
+    page.drawRectangle({ x: margin, y: y - boxHeight, width: width - margin * 2, height: boxHeight, color: rgb(0.97, 0.98, 0.99) });
+    drawLine(margin, y - 2, width - margin * 2, 0.7, muted);
+
+    const colGap = 30;
+    const colWidth = (width - margin * 2 - colGap) / 2;
+    const leftX = margin + 8;
+    const rightX = margin + colWidth + colGap + 8;
+
+    drawText(`Nombre: ${input.cliente.nombre}`, leftX, y - 20, normal);
+    drawText(`Email: ${input.cliente.email ?? 'No informado'}`, leftX, y - 36, small);
+    drawText(`Tipo: ${input.tipoEvento?.trim() || 'Evento'}`, leftX, y - 52, small);
+
+    drawText(`Reserva #${input.reservaId}`, rightX, y - 20, normal, { bold: true });
+    drawText(`Fecha: ${formatDate(input.fechaInicio)}`, rightX, y - 36, small);
+    drawText(`Horario: ${formatTime(input.fechaInicio)} - ${formatTime(input.fechaFin)}`, rightX, y - 52, small);
+
+    y -= boxHeight + 10;
+
+    // Salon contratado
+    drawText('SALON CONTRATADO', margin + 8, y, 12, { bold: true });
+    y -= 16;
+    drawText(input.salon.nombre, margin + 8, y, normal, { bold: true });
+    drawText(input.salon.descripcion || 'Sin descripcion', margin + 8, y - 18, small);
+    drawText(formatCurrency(input.salon.precio_base), width - margin - 120, y, normal, { color: textColor });
+    y -= 36;
+
+    // Servicios table header
+    const tableX = margin + 8;
+    const tableW = width - margin * 2 - 16;
+    const colWidths = [tableW * 0.40, tableW * 0.30, tableW * 0.10, tableW * 0.20]; // name, desc, qty, price
+
+    // Header row
+    const headerH = 22;
+    page.drawRectangle({ x: tableX, y: y - headerH, width: tableW, height: headerH, color: rgb(0.95, 0.95, 0.95) });
+    drawText('Servicio', tableX + 4, y - 16, small, { bold: true });
+    drawText('Descripcion', tableX + colWidths[0] + 6, y - 16, small, { bold: true });
+    drawText('Cant.', tableX + colWidths[0] + colWidths[1] + 6, y - 16, small, { bold: true });
+    drawText('Subtotal', tableX + colWidths[0] + colWidths[1] + colWidths[2] + 6, y - 16, small, { bold: true });
+    y -= headerH;
+
+    let totalServicios = 0;
+    const rowH = 18;
+
+    const servicios = input.servicios || [];
+    for (let i = 0; i < servicios.length; i++) {
+      const s = servicios[i];
+      const unit = Number(s.servicio.precio) || 0;
+      const qty = Number(s.cantidad) || 1;
+      const subtotal = unit * qty;
+      totalServicios += subtotal;
+
+      if (y < margin + 80) {
+        pdfDoc.addPage();
+        // not strictly correct for multi-page tables, but sufficient for now
+      }
+
+      // Row background alternate
+      if (i % 2 === 1) {
+        page.drawRectangle({ x: tableX, y: y - rowH, width: tableW, height: rowH, color: rgb(0.99, 0.99, 0.99) });
+      }
+
+      drawText(s.servicio.nombre, tableX + 4, y - 14, small);
+      drawText(s.servicio.descripcion || 'Sin descripcion', tableX + colWidths[0] + 6, y - 14, small);
+      drawText(String(qty), tableX + colWidths[0] + colWidths[1] + 6, y - 14, small);
+      drawText(formatCurrency(subtotal), tableX + colWidths[0] + colWidths[1] + colWidths[2] + 6, y - 14, small);
+
+      // Separator line
+      drawLine(tableX, y - rowH, tableW, 0.5, rgb(0.9, 0.9, 0.9));
+
+      y -= rowH;
     }
-  });
 
-  return pdfBuffer;
+    y -= 8;
+
+    // Totals
+    const totalGeneral = input.salon.precio_base + totalServicios;
+    const totalsBoxH = 56;
+    const totalsBoxW = 200;
+    const totalsBoxX = width - margin - totalsBoxW;
+    const totalsBoxY = y - totalsBoxH + 12;
+    page.drawRectangle({ x: totalsBoxX, y: totalsBoxY, width: totalsBoxW, height: totalsBoxH, color: rgb(0.98, 0.98, 0.98) });
+
+    const pad = 10;
+    const line1Y = totalsBoxY + totalsBoxH - 12;
+    const line2Y = totalsBoxY + totalsBoxH - 28;
+    const line3Y = totalsBoxY + totalsBoxH - 44;
+
+    drawText('Subtotal salon', totalsBoxX + pad, line1Y, small);
+    {
+      const txt = formatCurrency(input.salon.precio_base);
+      const wTxt = helvetica.widthOfTextAtSize(txt, small);
+      drawText(txt, totalsBoxX + totalsBoxW - pad - wTxt, line1Y, small);
+    }
+
+    drawText('Total servicios', totalsBoxX + pad, line2Y, small);
+    {
+      const txt = formatCurrency(totalServicios);
+      const wTxt = helvetica.widthOfTextAtSize(txt, small);
+      drawText(txt, totalsBoxX + totalsBoxW - pad - wTxt, line2Y, small);
+    }
+
+    drawText('Total general', totalsBoxX + pad, line3Y, normal, { bold: true });
+    {
+      const txt = formatCurrency(totalGeneral);
+      const measure = typeof helveticaBold.widthOfTextAtSize === 'function' ? helveticaBold.widthOfTextAtSize(txt, normal) : helvetica.widthOfTextAtSize(txt, normal);
+      drawText(txt, totalsBoxX + totalsBoxW - pad - measure, line3Y, normal, { bold: true });
+    }
+
+    y -= totalsBoxH + 8;
+
+    // Footer note
+    drawLine(margin, 80, width - margin * 2, 0.7);
+    drawText('Este presupuesto es válido por 30 días. Para confirmar la reserva contacte al hotel.', margin, 68, small);
+
+    const pdfBytes = await pdfDoc.save();
+    return pdfBytes instanceof Uint8Array ? pdfBytes : new Uint8Array(pdfBytes);
+  } catch (err) {
+    throw new Error('PDF generation failed: ' + (err?.message || String(err)));
+  }
 };
 
 function createServiceClient(): SupabaseClient {
@@ -600,7 +604,7 @@ app.post("/make-server-484a241a/delete-user", async (c) => {
   }
 });
 
-app.get("/make-server-484a241a/public-catalog", async (c) => {
+const publicCatalogHandler = async (c) => {
   try {
     const supabaseAdmin = createServiceClient();
 
@@ -627,9 +631,12 @@ app.get("/make-server-484a241a/public-catalog", async (c) => {
     console.error("Error in public-catalog endpoint:", error);
     return c.json({ error: error?.message ?? "Internal server error" }, 500);
   }
-});
+};
 
-app.post("/make-server-484a241a/public-reserva", async (c) => {
+app.get("/make-server-484a241a/public-catalog", publicCatalogHandler);
+app.get("/server/make-server-484a241a/public-catalog", publicCatalogHandler);
+
+const publicReservaHandler = async (c) => {
   try {
     const body = (await c.req.json()) as PublicReservaPayload;
 
@@ -854,70 +861,74 @@ app.post("/make-server-484a241a/public-reserva", async (c) => {
       }
     }
 
-    const pdfBuffer = await buildPresupuestoPdf({
-      reservaId: reservaData.id,
-      salon: {
-        nombre: salonData.nombre,
-        descripcion: salonData.descripcion,
-        precio_base: Number(salonData.precio_base) || 0,
-        capacidad: salonData.capacidad,
-      },
-      distribucion: distribucionData,
-      cliente: {
-        nombre,
-        email,
-      },
-      fechaInicio,
-      fechaFin,
-      tipoEvento,
-      cantidadPersonas: totalPersonas,
-      servicios: serviciosDetalle,
-    });
+    let downloadUrl: string | undefined = undefined;
 
-    const storagePath = `reservas/reserva-${reservaData.id}.pdf`;
-
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("presupuestos")
-      .upload(storagePath, pdfBuffer, {
-        cacheControl: "3600",
-        contentType: "application/pdf",
-        upsert: true,
+    try {
+      const pdfBuffer = await buildPresupuestoPdf({
+        reservaId: reservaData.id,
+        salon: {
+          nombre: salonData.nombre,
+          descripcion: salonData.descripcion,
+          precio_base: Number(salonData.precio_base) || 0,
+          capacidad: salonData.capacidad,
+        },
+        distribucion: distribucionData,
+        cliente: {
+          nombre,
+          email,
+        },
+        fechaInicio,
+        fechaFin,
+        tipoEvento,
+        cantidadPersonas: totalPersonas,
+        servicios: serviciosDetalle,
       });
 
-    if (uploadError) {
-      console.error("Error subiendo presupuesto:", uploadError);
-      return c.json(
-        { error: "Reserva creada pero no se pudo generar el presupuesto." },
-        500,
-      );
-    }
+      const storagePath = `reservas/reserva-${reservaData.id}.pdf`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("presupuestos")
+        .upload(storagePath, pdfBuffer, {
+          cacheControl: "3600",
+          contentType: "application/pdf",
+          upsert: true,
+        });
 
-    await supabaseAdmin
-      .from("reservas")
-      .update({ presupuesto_url: storagePath })
-      .eq("id", reservaData.id);
+      if (uploadError) {
+        console.error("Error subiendo presupuesto:", uploadError);
+        // don't fail the whole request; just continue without download URL
+      } else {
+        await supabaseAdmin
+          .from("reservas")
+          .update({ presupuesto_url: storagePath })
+          .eq("id", reservaData.id);
 
-    const { data: signedData, error: signedError } = await supabaseAdmin.storage
-      .from("presupuestos")
-      .createSignedUrl(storagePath, 60 * 15);
+        const { data: signedData, error: signedError } = await supabaseAdmin.storage
+          .from("presupuestos")
+          .createSignedUrl(storagePath, 60 * 15);
 
-    if (signedError || !signedData) {
-      console.error("Error creando URL firmada:", signedError);
-      return c.json(
-        { error: "Reserva creada pero no se pudo generar el enlace de descarga." },
-        500,
-      );
+        if (signedError || !signedData) {
+          console.error("Error creando URL firmada:", signedError);
+        } else {
+          downloadUrl = signedData.signedUrl;
+        }
+      }
+    } catch (err) {
+      console.warn("PDF generation failed or not available:", err?.message || err);
+      // proceed without downloadUrl
     }
 
     return c.json({
       success: true,
       reservaId: reservaData.id,
-      downloadUrl: signedData.signedUrl,
+      downloadUrl,
     });
   } catch (error) {
     console.error("Error in public-reserva endpoint:", error);
     return c.json({ error: error?.message ?? "Internal server error" }, 500);
   }
-});
+};
+
+app.post("/make-server-484a241a/public-reserva", publicReservaHandler);
+app.post("/server/make-server-484a241a/public-reserva", publicReservaHandler);
 
 Deno.serve(app.fetch);

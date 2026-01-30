@@ -3,8 +3,34 @@
   import react from '@vitejs/plugin-react-swc';
   import path from 'path';
 
-  export default defineConfig({
-    plugins: [react()],
+const reservasRedirectPlugin = () => ({
+  name: 'reservas-redirect',
+  configureServer(server: any) {
+    server.middlewares.use((req: any, res: any, next: any) => {
+      if (req?.url === '/reservas') {
+        res.statusCode = 301;
+        res.setHeader('Location', '/reservas/');
+        res.end();
+        return;
+      }
+      next();
+    });
+  },
+  configurePreviewServer(server: any) {
+    server.middlewares.use((req: any, res: any, next: any) => {
+      if (req?.url === '/reservas') {
+        res.statusCode = 301;
+        res.setHeader('Location', '/reservas/');
+        res.end();
+        return;
+      }
+      next();
+    });
+  },
+});
+
+export default defineConfig({
+  plugins: [react(), reservasRedirectPlugin()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {

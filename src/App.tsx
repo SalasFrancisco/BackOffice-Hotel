@@ -13,7 +13,15 @@ export default function App() {
   const [session, setSession] = useState<any>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, setCurrentPage] = useState(() => {
+    const win = window as any;
+    const initial = typeof win.__INITIAL_PAGE__ === 'string' ? win.__INITIAL_PAGE__ : '';
+    if (initial) {
+      return initial;
+    }
+    const hashPage = window.location.hash.replace('#', '');
+    return hashPage || 'dashboard';
+  });
   const [editingSalonId, setEditingSalonId] = useState<number | null>(null);
   const [rlsError, setRlsError] = useState(false);
 

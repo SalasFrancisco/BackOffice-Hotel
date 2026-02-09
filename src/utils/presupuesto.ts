@@ -15,6 +15,7 @@ export type PresupuestoPayload = {
   cliente: {
     nombre: string;
     email?: string | null;
+    telefono?: string | null;
   };
   fechaInicio: string;
   fechaFin: string;
@@ -152,6 +153,7 @@ export async function generatePresupuestoDocumento({
                 body: [
                   ['Nombre:', cliente.nombre],
                   ['Email:', cliente.email || 'No informado'],
+                  ['Telefono:', cliente.telefono || 'No informado'],
                   ['Tipo de evento:', tipoEvento?.trim() || 'Evento'],
                 ],
               },

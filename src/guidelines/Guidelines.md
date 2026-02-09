@@ -18,7 +18,7 @@
 
 - Todas las tablas tienen RLS habilitado
 - ADMIN tiene acceso completo (CRUD)
-- OPERADOR tiene lectura total + crear/editar reservas y clientes
+- OPERADOR tiene lectura total + crear/editar reservas
 - Usar políticas sin recursión para evitar errores 42P17
 
 ## Convenciones

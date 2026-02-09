@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
-import { LogOut, LayoutDashboard, Calendar, ListChecks, PackagePlus, Building2, UserCog } from 'lucide-react';
-import { supabase, Perfil } from '../utils/supabase/client';
+import { LogOut, LayoutDashboard, ListChecks, PackagePlus, Building2, UserCog } from 'lucide-react';
+import { Perfil } from '../utils/supabase/client';
 
 type LayoutProps = {
   children: ReactNode;

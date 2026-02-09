@@ -15,8 +15,9 @@
 - `/src`: codigo fuente, estilos, utilidades y documentacion SQL/markdown.
 - `/src/components`: pantallas y piezas de UI estructurales, con subcarpetas `figma` (helpers) y `ui` (wrappers radicados).
 - `/src/utils`: cliente Supabase tipado y constantes sensibles.
-- `/src/supabase`: codigo de funciones serverless y utilidades de almacenamiento KV autogeneradas.
+- `/supabase/functions`: funciones edge (Hono/Deno) y utilidades auxiliares para integraciones.
 - `/src/styles` y `/src/guidelines`: definiciones de tema y convenciones de desarrollo.
+- `/supabase/functions`: codigo desplegable de Edge Functions.
 - `node_modules` y `build`: artefactos derivados de npm/vite (no se documentan por ser generados).
 
 ### Documentos en la raiz
@@ -49,7 +50,7 @@
 - **SQL-UTILES.md:** coleccion de consultas SQL utiles (reportes, ABM rapidos, diagnostico RLS, limpiezas, backups). Cubre usuarios, salones, reservas, servicios, reportes de ingresos, top salones y mas.
 
 ### Subcarpetas clave
-- `components/`, `guidelines/`, `styles/`, `supabase/`, `utils/`: concentran la logica de dominio, convenciones de diseno, estilos globales, integraciones con Supabase y utilidades compartidas.
+- `components/`, `guidelines/`, `styles/`, `utils/`: concentran la logica de dominio, convenciones de diseno, estilos globales e integraciones de frontend con Supabase.
 
 ### Carpeta `src/guidelines`
 - **Guidelines.md:** establece reglas generales (codigo limpio, reutilizacion de componentes, respeto por TypeScript), criterios de diseno (Tailwind v4, consistencia con shadcn/ui, responsive por defecto) y recordatorios de RLS (ADMIN con CRUD, OPERADOR con permisos limitados, evitar recursion). Tambien fija convenciones de formato (fecha `dd/MM/yyyy HH:mm`, uso de `Dialog` para formularios, iconografia de mensajes y colores de estado).
@@ -59,17 +60,17 @@
 
 ### Carpeta `src/utils`
 - **supabase/client.ts:** centraliza la inicializacion de Supabase JS usando `projectId` y `publicAnonKey` de `info.tsx`. Exporta tipos TypeScript para entidades del dominio (`Perfil`, `Salon`, `Distribucion`, `Cliente`, `CategoriaServicio`, `Servicio`, `ReservaServicio`, `Reserva`) reutilizados en toda la app.
-- **supabase/info.tsx:** archivo autogenerado con constantes `projectId` (`nfivlwsteygarpfixtst`) y `publicAnonKey` JWT. Es consumido por `client.ts` y por funciones edge para construir URL y K/V; no debe editarse manualmente.
+- **supabase/info.tsx:** archivo autogenerado con constantes `projectId` (`gcmkqbilhtkexexwumux`) y `publicAnonKey` JWT. Es consumido por `client.ts`; no debe editarse manualmente.
 
-### Carpeta `src/supabase`
-- **functions/server/index.tsx:** funcion edge escrita con Hono para Deno. Configura CORS, logging y crea clientes Supabase con la clave `service_role`. Incluye helper `requireAdmin()` que valida que el bearer token pertenezca a un usuario con rol ADMIN (consultando la tabla `perfiles`) antes de permitir acciones. Endpoints expuestos:
+### Carpeta `supabase/functions`
+- **server/index.ts:** funcion edge escrita con Hono para Deno. Configura CORS, logging y crea clientes Supabase con la clave `service_role`. Incluye helper `requireAdmin()` que valida que el bearer token pertenezca a un usuario con rol ADMIN (consultando la tabla `perfiles`) antes de permitir acciones. Endpoints expuestos:
   - `GET /make-server-484a241a/health`: chequeo basico.
   - `POST /make-server-484a241a/create-user`: crea usuario `auth/admin` con metadata `nombre`, auto confirma, inserta fila en `perfiles` y retorna info basica.
   - `POST /make-server-484a241a/update-user-email`: cambia email de un usuario existente (requiere ADMIN).
   - `POST /make-server-484a241a/get-user-email`: recupera email actual de un `user_id`.
   - `POST /make-server-484a241a/delete-user`: borra perfil asociado y elimina el usuario de Auth.
   Cada endpoint valida body, maneja errores de Supabase admin y devuelve JSON estructurado.
-- **functions/server/kv_store.tsx:** utilidades autogeneradas para operar contra la tabla `kv_store_484a241a` (`set`, `get`, `delete`, `mset`, `mget`, `mdel`, `getByPrefix`). Usa `supabase-js` via jsr con `service_role` para persistir configuracion de Figma Make.
+- **server/kv_store.tsx:** utilidades autogeneradas para operar contra la tabla `kv_store_484a241a` (`set`, `get`, `delete`, `mset`, `mget`, `mdel`, `getByPrefix`). Usa `supabase-js` via jsr con `service_role` para persistir configuracion de Figma Make.
 
 ### Componentes de dominio (`src/components`)
 - **ConfirmDialog.tsx:** wrapper reutilizable construido encima de `ui/alert-dialog`. Recibe flags `open`/`onOpenChange`/`onConfirm` y textos personalizables. Si `variant` es `"destructive"` muestra un icono `AlertTriangle` y colorea el boton primario en rojo. Centraliza uso de los subcomponentes `AlertDialog*` para confirmaciones.
@@ -144,4 +145,4 @@
 - `node_modules/`: directorio generado por npm; contiene dependencias versionadas en `package-lock.json`.
 - `build/`: se genera al correr `npm run build` y contiene assets compilados por Vite (no presente en el repo por defecto).
 - Los scripts SQL y funciones edge requieren ejecutar sucesivamente `database-setup.sql` y `fix-policies.sql` para garantizar que `App.tsx` no active el flujo de error RLS.
-- Las llamadas `fetch` en `Usuarios.tsx` dependen de que las funciones edge esten desplegadas en Supabase bajo el mismo slug `make-server-484a241a`.
+- Las llamadas de `Usuarios.tsx` incluyen fallback de rutas para soportar despliegues con y sin prefijo `make-server-484a241a`, pero igualmente requieren que la funcion edge `server` este desplegada en Supabase.

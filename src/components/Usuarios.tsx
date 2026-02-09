@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil } from '../utils/supabase/client';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { projectId } from '../utils/supabase/info';
 import { AlertCircle, CheckCircle, Shield, User, Plus, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 
@@ -15,20 +15,79 @@ export function Usuarios() {
   const [editing, setEditing] = useState(false);
   const [editingPerfil, setEditingPerfil] = useState<Perfil | null>(null);
   
-  // Form fields for create
+  // Campos del formulario de alta
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newNombre, setNewNombre] = useState('');
   const [newRol, setNewRol] = useState<'ADMIN' | 'OPERADOR'>('OPERADOR');
 
-  // Form fields for edit
+  // Campos del formulario de edición
   const [editNombre, setEditNombre] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRol, setEditRol] = useState<'ADMIN' | 'OPERADOR'>('OPERADOR');
+  const [editPassword, setEditPassword] = useState('');
 
   useEffect(() => {
     loadPerfiles();
   }, []);
+
+  const parseServerResponse = async (response: Response) => {
+    const text = await response.text();
+    if (!text) return {};
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: text };
+    }
+  };
+
+  const callServerEndpoint = async (path: string, accessToken: string, body: Record<string, any>) => {
+    // Probamos rutas en orden de prioridad para tolerar despliegues previos.
+    const urls = [
+      `https://${projectId}.supabase.co/functions/v1/server/${path}`,
+      `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/${path}`,
+      `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/${path}`,
+    ];
+
+    let lastPayload: any = { error: 'No se pudo contactar el servidor' };
+    let lastStatus = 0;
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        const payload = await parseServerResponse(response);
+        lastPayload = payload;
+        lastStatus = response.status;
+
+        if (response.ok) {
+          return { response, payload };
+        }
+
+        const message = String(payload?.error || '');
+        const isNotFound = response.status === 404 || /not found|404/i.test(message);
+
+        if (!isNotFound) {
+          return { response, payload };
+        }
+      } catch (err: any) {
+        lastPayload = { error: err?.message || 'Error de red al contactar el servidor' };
+      }
+    }
+
+    return {
+      response: new Response(null, { status: lastStatus || 500 }),
+      payload: lastPayload,
+    };
+  };
 
   const loadPerfiles = async () => {
     try {
@@ -69,27 +128,19 @@ export function Usuarios() {
       }
 
       // Call server endpoint to create user
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/create-user`,
+      const { response, payload } = await callServerEndpoint(
+        'create-user',
+        session.access_token,
         {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            email: newEmail,
-            password: newPassword,
-            nombre: newNombre,
-            rol: newRol,
-          }),
+          email: newEmail,
+          password: newPassword,
+          nombre: newNombre,
+          rol: newRol,
         }
       );
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Error al crear usuario');
+        throw new Error(payload.error || 'Error al crear usuario');
       }
 
       setMessage({ type: 'success', text: `Usuario ${newEmail} creado correctamente` });
@@ -112,27 +163,21 @@ export function Usuarios() {
     setEditingPerfil(perfil);
     setEditNombre(perfil.nombre);
     setEditRol(perfil.rol);
+    setEditPassword('');
     
     // Get user email from server
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
 
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/get-user-email`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ userId: perfil.user_id }),
-        }
+      const { response, payload } = await callServerEndpoint(
+        'get-user-email',
+        session.access_token,
+        { userId: perfil.user_id }
       );
 
       if (response.ok) {
-        const data = await response.json();
-        setEditEmail(data.email || '');
+        setEditEmail(payload.email || '');
       } else {
         setEditEmail('');
       }
@@ -173,32 +218,48 @@ export function Usuarios() {
         throw new Error('No hay sesión activa');
       }
 
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/update-user-email`,
+      const { response, payload } = await callServerEndpoint(
+        'update-user-email',
+        session.access_token,
         {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            userId: editingPerfil.user_id,
-            newEmail: editEmail,
-          }),
+          userId: editingPerfil.user_id,
+          newEmail: editEmail,
         }
       );
 
+      let warning = '';
       if (!response.ok) {
-        const data = await response.json();
-        console.error('Error updating email:', data.error);
-        // Don't throw here, just warn - email update might fail but other changes succeeded
-        setMessage({ type: 'success', text: 'Usuario actualizado (email no pudo ser actualizado)' });
-      } else {
-        setMessage({ type: 'success', text: 'Usuario actualizado correctamente' });
+        console.error('Error updating email:', payload.error);
+        warning = ' El email no pudo actualizarse.';
       }
+
+      if (editPassword.trim().length > 0) {
+        if (editPassword.trim().length < 6) {
+          throw new Error('La nueva contraseña debe tener al menos 6 caracteres');
+        }
+
+        const { response: resetResponse, payload: resetPayload } = await callServerEndpoint(
+          'reset-user-password',
+          session.access_token,
+          {
+            userId: editingPerfil.user_id,
+            newPassword: editPassword.trim(),
+          }
+        );
+
+        if (!resetResponse.ok) {
+          throw new Error(resetPayload.error || 'No se pudo actualizar la contraseña del usuario');
+        }
+      }
+
+      setMessage({
+        type: 'success',
+        text: `Usuario actualizado correctamente.${warning}`,
+      });
 
       setShowEditDialog(false);
       setEditingPerfil(null);
+      setEditPassword('');
       loadPerfiles();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -448,12 +509,28 @@ export function Usuarios() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm text-gray-700 mb-2">
+                Nueva contraseña (opcional)
+              </label>
+              <input
+                type="password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                minLength={6}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Completa solo si quieres cambiarla"
+              />
+              <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+            </div>
+
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => {
                   setShowEditDialog(false);
                   setEditingPerfil(null);
+                  setEditPassword('');
                 }}
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >

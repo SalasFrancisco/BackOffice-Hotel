@@ -64,7 +64,7 @@ type PublicServicioPayload = {
 };
 
 type PublicReservaPayload = {
-  nombre: string;
+  nombre?: string | null;
   email?: string | null;
   telefono?: string | null;
   fecha_inicio: string;
@@ -135,7 +135,7 @@ const buildPresupuestoPdf = async (input: {
   reservaId: number;
   salon: { nombre: string; descripcion?: string | null; precio_base: number; capacidad: number };
   distribucion?: { nombre: string; capacidad: number } | null;
-  cliente: { nombre: string; email?: string | null };
+  cliente: { nombre: string; email?: string | null; telefono?: string | null };
   fechaInicio: string;
   fechaFin: string;
   tipoEvento?: string | null;
@@ -211,6 +211,7 @@ const buildPresupuestoPdf = async (input: {
                 body: [
                   ["Nombre:", input.cliente.nombre],
                   ["Email:", input.cliente.email || "No informado"],
+                  ["Telefono:", input.cliente.telefono || "No informado"],
                   ["Tipo de evento:", input.tipoEvento?.trim() || "Evento"],
                 ],
               },
@@ -624,6 +625,48 @@ app.post("/make-server-484a241a/delete-user", async (c) => {
   }
 });
 
+app.post("/make-server-484a241a/reset-user-password", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const adminCheck = await requireAdmin(supabaseAdmin, accessToken, "reset user passwords");
+
+    if ("status" in adminCheck) {
+      return c.json(adminCheck.body, adminCheck.status);
+    }
+
+    const body = await c.req.json();
+    const { userId, newPassword } = body ?? {};
+
+    if (!userId || !newPassword) {
+      return c.json({ error: "Missing required fields: userId, newPassword" }, 400);
+    }
+
+    if (String(newPassword).length < 6) {
+      return c.json({ error: "Password must be at least 6 characters long" }, 400);
+    }
+
+    const { error: updatePasswordError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { password: newPassword },
+    );
+
+    if (updatePasswordError) {
+      console.error("Error resetting user password:", updatePasswordError);
+      return c.json({ error: updatePasswordError.message }, 400);
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error in reset-user-password endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+});
+
 const publicCatalogHandler = async (c) => {
   try {
     const supabaseAdmin = createServiceClient();
@@ -661,9 +704,6 @@ const publicReservaHandler = async (c) => {
     const body = (await c.req.json()) as PublicReservaPayload;
 
     const {
-      nombre,
-      email,
-      telefono,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
       tipo_evento: tipoEvento,
@@ -675,9 +715,9 @@ const publicReservaHandler = async (c) => {
       servicios,
     } = body ?? {};
 
-    if (!nombre || !fechaInicio || !fechaFin || !cantidad) {
+    if (!nombre || !email || !telefono || !fechaInicio || !fechaFin || !cantidad) {
       return c.json(
-        { error: "Missing required fields: nombre, fecha_inicio, fecha_fin, cantidad" },
+        { error: "Missing required fields: nombre, email, telefono, fecha_inicio, fecha_fin, cantidad" },
         400,
       );
     }
@@ -750,71 +790,15 @@ const publicReservaHandler = async (c) => {
       );
     }
 
-    let clienteId: number | null = null;
-
-    if (email) {
-      const { data: clienteExistente } = await supabaseAdmin
-        .from("clientes")
-        .select("*")
-        .eq("email", email)
-        .limit(1)
-        .maybeSingle();
-      if (clienteExistente) clienteId = clienteExistente.id;
-    } else if (telefono) {
-      const { data: clienteExistente } = await supabaseAdmin
-        .from("clientes")
-        .select("*")
-        .eq("telefono", telefono)
-        .limit(1)
-        .maybeSingle();
-      if (clienteExistente) clienteId = clienteExistente.id;
-    } else {
-      const { data: clienteExistente } = await supabaseAdmin
-        .from("clientes")
-        .select("*")
-        .eq("nombre", nombre)
-        .limit(1)
-        .maybeSingle();
-      if (clienteExistente) clienteId = clienteExistente.id;
-    }
-
-    if (clienteId) {
-      await supabaseAdmin
-        .from("clientes")
-        .update({
-          nombre,
-          email,
-          telefono,
-        })
-        .eq("id", clienteId);
-    } else {
-      const { data: nuevoCliente, error: clienteError } = await supabaseAdmin
-        .from("clientes")
-        .insert([
-          {
-            nombre,
-            email,
-            telefono,
-          },
-        ])
-        .select()
-        .single();
-
-      if (clienteError || !nuevoCliente) {
-        console.error("Error creando cliente:", clienteError);
-        return c.json({ error: "No se pudo crear el cliente" }, 500);
-      }
-
-      clienteId = nuevoCliente.id;
-    }
-
     const observacionesParts = [
       tipoEvento ? `Tipo de evento: ${tipoEvento}` : null,
       observaciones ? `Observaciones: ${observaciones}` : null,
     ].filter(Boolean);
 
     const reservaPayload = {
-      id_cliente: clienteId,
+      cliente_nombre: nombre,
+      cliente_email: email,
+      cliente_telefono: telefono,
       id_salon: salonData.id,
       id_distribucion: distribucionData?.id ?? null,
       fecha_inicio: fechaInicio,
@@ -900,8 +884,9 @@ const publicReservaHandler = async (c) => {
         },
         distribucion: distribucionData,
         cliente: {
-          nombre,
+          nombre: nombre?.trim() || "Reserva sin cliente",
           email,
+          telefono,
         },
         fechaInicio,
         fechaFin,
@@ -973,5 +958,28 @@ const publicReservaHandler = async (c) => {
 
 app.post("/make-server-484a241a/public-reserva", publicReservaHandler);
 app.post("/server/make-server-484a241a/public-reserva", publicReservaHandler);
+
+// Alias de compatibilidad: algunos despliegues exponen rutas sin el
+// segmento make-server. Estas rutas se redirigen a los handlers canónicos.
+const proxyTo = (path: string) => (c: any) =>
+  app.fetch(new Request(new URL(path, c.req.url), c.req.raw));
+
+app.get("/health", proxyTo("/make-server-484a241a/health"));
+app.post("/create-user", proxyTo("/make-server-484a241a/create-user"));
+app.post("/update-user-email", proxyTo("/make-server-484a241a/update-user-email"));
+app.post("/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
+app.post("/delete-user", proxyTo("/make-server-484a241a/delete-user"));
+app.post("/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
+app.get("/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
+app.post("/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
+
+app.get("/server/health", proxyTo("/make-server-484a241a/health"));
+app.post("/server/create-user", proxyTo("/make-server-484a241a/create-user"));
+app.post("/server/update-user-email", proxyTo("/make-server-484a241a/update-user-email"));
+app.post("/server/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
+app.post("/server/delete-user", proxyTo("/make-server-484a241a/delete-user"));
+app.post("/server/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
+app.get("/server/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
+app.post("/server/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
 
 Deno.serve(app.fetch);

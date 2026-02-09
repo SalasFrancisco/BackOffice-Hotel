@@ -103,7 +103,10 @@ export function ReservaModal({ reserva, onClose }: ReservaModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4 z-[9999]"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(1px)' }}
+    >
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-start p-6 border-b border-gray-200">
@@ -146,12 +149,12 @@ export function ReservaModal({ reserva, onClose }: ReservaModalProps) {
           )}
 
           <div className="grid grid-cols-2 gap-4">
+
             <div>
               <p className="text-sm text-gray-600 mb-1">Cliente</p>
-              <p className="text-gray-900">{reserva.cliente?.nombre}</p>
-              {reserva.cliente?.empresa && (
-                <p className="text-sm text-gray-600">{reserva.cliente.empresa}</p>
-              )}
+              <p className="text-gray-900">{reserva.cliente_nombre || 'Sin nombre'}</p>
+              <p className="text-sm text-gray-600">{reserva.cliente_email || 'Sin email'}</p>
+              <p className="text-sm text-gray-600">{reserva.cliente_telefono || 'Sin telefono'}</p>
             </div>
 
             <div>

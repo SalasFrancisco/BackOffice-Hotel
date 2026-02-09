@@ -1525,13 +1525,13 @@
 
                         <div class="form-group half"><label>Nombre / Empresa</label><input type="text" id="nombre" required></div>
 
-                        <div class="form-group half"><label>Email</label><input type="email" id="email"></div>
+                        <div class="form-group half"><label>Email</label><input type="email" id="email" required></div>
 
                     </div>
 
                     <div class="form-row">
 
-                        <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono"></div>
+                        <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono" required></div>
 
                         <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" required></div>
 
@@ -2837,6 +2837,14 @@
 
             const observaciones = document.getElementById('observaciones').value.trim();
 
+            if (!nombre || !email || !telefono) {
+
+                setStatus('Complete nombre, email y telefono del cliente.', true);
+
+                return;
+
+            }
+
             if (!salonId) {
 
                 setStatus('Seleccione un salon antes de enviar el formulario.', true);
@@ -2984,4 +2992,6 @@
 </body>
 
 </html>
+
+
 

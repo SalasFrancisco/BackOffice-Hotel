@@ -28,16 +28,6 @@ create table if not exists public.distribuciones (
   creado_en timestamptz default now()
 );
 
--- Clientes (Clients)
-create table if not exists public.clientes (
-  id bigint generated always as identity primary key,
-  nombre text not null,
-  empresa text,
-  telefono text,
-  email text,
-  cuit text
-);
-
 -- Perfiles de usuarios (User Profiles)
 create table if not exists public.perfiles (
   user_id uuid primary key references auth.users on delete cascade,
@@ -49,7 +39,9 @@ create table if not exists public.perfiles (
 -- Reservas (Reservations)
 create table if not exists public.reservas (
   id bigint generated always as identity primary key,
-  id_cliente bigint not null references public.clientes(id) on delete restrict,
+  cliente_nombre text not null,
+  cliente_email text not null,
+  cliente_telefono text not null,
   id_salon bigint not null references public.salones(id) on delete restrict,
   id_distribucion bigint references public.distribuciones(id) on delete set null,
   fecha_inicio timestamptz not null,
@@ -68,6 +60,9 @@ create table if not exists public.reservas (
 alter table public.reservas add column if not exists rango tstzrange generated always as (tstzrange(fecha_inicio, fecha_fin, '[)')) stored;
 alter table public.reservas add column if not exists presupuesto_url text;
 alter table public.reservas add column if not exists cantidad_personas int default 0;
+alter table public.reservas add column if not exists cliente_nombre text;
+alter table public.reservas add column if not exists cliente_email text;
+alter table public.reservas add column if not exists cliente_telefono text;
 
 -- ============================================
 -- STORAGE: PRESUPUESTOS
@@ -181,7 +176,6 @@ alter table public.categorias_servicios enable row level security;
 alter table public.servicios enable row level security;
 alter table public.reserva_servicios enable row level security;
 alter table public.distribuciones enable row level security;
-alter table public.clientes enable row level security;
 alter table public.reservas enable row level security;
 alter table public.pagos enable row level security;
 alter table public.perfiles enable row level security;
@@ -189,8 +183,6 @@ alter table public.perfiles enable row level security;
 -- Drop existing policies if any
 drop policy if exists admin_all_salones on public.salones;
 drop policy if exists operador_read_salones on public.salones;
-drop policy if exists admin_all_clientes on public.clientes;
-drop policy if exists operador_all_clientes on public.clientes;
 drop policy if exists admin_all_reservas on public.reservas;
 drop policy if exists operador_read_reservas on public.reservas;
 drop policy if exists operador_write_reservas on public.reservas;
@@ -230,17 +222,6 @@ create policy admin_all_distribuciones on public.distribuciones
 
 create policy operador_read_distribuciones on public.distribuciones
   for select using (
-    public.get_user_role() in ('ADMIN', 'OPERADOR')
-  );
-
--- CLIENTES policies
-create policy admin_all_clientes on public.clientes
-  for all using (
-    public.get_user_role() = 'ADMIN'
-  );
-
-create policy operador_all_clientes on public.clientes
-  for all using (
     public.get_user_role() in ('ADMIN', 'OPERADOR')
   );
 
@@ -341,14 +322,6 @@ insert into public.salones (nombre, capacidad, precio_base, descripcion) values
   ('Salón Terraza', 50, 6000.00, 'Espacio al aire libre con vista panorámica')
 on conflict do nothing;
 
--- Clientes
-insert into public.clientes (nombre, empresa, telefono, email, cuit) values
-  ('María González', 'TechCorp SA', '+54 11 4444-5555', 'maria@techcorp.com', '30-12345678-9'),
-  ('Juan Pérez', 'Eventos Premium', '+54 11 5555-6666', 'juan@eventospremium.com', '30-87654321-0'),
-  ('Ana Martínez', 'Consultora ABC', '+54 11 6666-7777', 'ana@abc.com.ar', '27-11223344-5'),
-  ('Carlos Rodríguez', null, '+54 11 7777-8888', 'carlos@email.com', null),
-  ('Laura Fernández', 'Empresa XYZ', '+54 11 8888-9999', 'laura@xyz.com', '30-99887766-3')
-on conflict do nothing;
 
 -- ============================================
 -- DEFAULT ADMIN USER CREATION
@@ -397,10 +370,10 @@ on conflict do nothing;
 -- on conflict do nothing;
 
 -- Sample reservations (uncomment after creating users)
--- insert into public.reservas (id_cliente, id_salon, fecha_inicio, fecha_fin, estado, monto, observaciones, creado_por) values
---   (1, 1, '2025-10-20 18:00:00+00', '2025-10-20 23:00:00+00', 'Confirmado', 15000.00, 'Evento corporativo anual', 'UUID-OF-USER'),
---   (2, 2, '2025-10-22 14:00:00+00', '2025-10-22 18:00:00+00', 'Pendiente', 8000.00, 'Reunión de directorio', 'UUID-OF-USER'),
---   (3, 3, '2025-10-25 21:00:00+00', '2025-10-26 02:00:00+00', 'Pagado', 6000.00, 'Cena de gala - cruza medianoche', 'UUID-OF-USER');
+-- insert into public.reservas (cliente_nombre, cliente_email, cliente_telefono, id_salon, fecha_inicio, fecha_fin, estado, monto, observaciones, creado_por) values
+--   ('Cliente Demo', 'demo1@ejemplo.com', '+54 11 1111 1111', 1, '2025-10-20 18:00:00+00', '2025-10-20 23:00:00+00', 'Confirmado', 15000.00, 'Evento corporativo anual', 'UUID-OF-USER'),
+--   ('Cliente Demo', 'demo2@ejemplo.com', '+54 11 2222 2222', 2, '2025-10-22 14:00:00+00', '2025-10-22 18:00:00+00', 'Pendiente', 8000.00, 'Reuni�n de directorio', 'UUID-OF-USER'),
+--   ('Cliente Demo', 'demo3@ejemplo.com', '+54 11 3333 3333', 3, '2025-10-25 21:00:00+00', '2025-10-26 02:00:00+00', 'Pagado', 6000.00, 'Cena de gala - cruza medianoche', 'UUID-OF-USER');
 
 -- ============================================
 -- SETUP COMPLETE
@@ -409,3 +382,4 @@ on conflict do nothing;
 -- 1. Create users via Supabase Auth Dashboard
 -- 2. Insert perfiles for those users with appropriate roles
 -- 3. Test the application
+

@@ -57,7 +57,6 @@ export function Dashboard() {
         .from('reservas')
         .select(`
           *,
-          cliente:clientes(*),
           salon:salones(*)
         `)
         .or(`and(fecha_inicio.lte.${endOfMonth},fecha_fin.gte.${startOfMonth})`)
@@ -344,7 +343,7 @@ export function Dashboard() {
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-xs text-gray-700 font-medium truncate">
-                                #{reserva.id} - {reserva.cliente?.nombre || 'Sin cliente'}
+                                #{reserva.id} - {reserva.cliente_nombre || 'Sin nombre'}
                               </span>
                               <span
                                 className="flex-shrink-0 rounded-full border border-white"

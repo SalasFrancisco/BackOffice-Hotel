@@ -9,6 +9,8 @@ type ReservaFormProps = {
 };
 
 export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
+  const CLIENTE_PDF_NOMBRE = 'Reserva sin cliente';
+
   const [salones, setSalones] = useState<Salon[]>([]);
   const [distribuciones, setDistribuciones] = useState<Distribucion[]>([]);
   const [categorias, setCategorias] = useState<CategoriaServicio[]>([]);
@@ -21,9 +23,9 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   const [selectedServicios, setSelectedServicios] = useState<Map<number, number>>(new Map());
 
   // Form fields
-  const [nombreCliente, setNombreCliente] = useState('');
-  const [emailCliente, setEmailCliente] = useState('');
-  const [telefonoCliente, setTelefonoCliente] = useState('');
+  const [nombreCliente, setNombreCliente] = useState(reserva?.cliente_nombre || '');
+  const [emailCliente, setEmailCliente] = useState(reserva?.cliente_email || '');
+  const [telefonoCliente, setTelefonoCliente] = useState(reserva?.cliente_telefono || '');
   const [idSalon, setIdSalon] = useState(reserva?.id_salon || 0);
   const [idDistribucion, setIdDistribucion] = useState(reserva?.id_distribucion || 0);
   const [fechaInicio, setFechaInicio] = useState(
@@ -96,13 +98,11 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       if (serviciosError) throw serviciosError;
       setServicios(serviciosData || []);
 
-      // Si estamos editando, cargar datos del cliente, distribuciones y servicios
+      // Si estamos editando, cargar distribuciones y servicios
       if (reserva) {
-        if (reserva.cliente) {
-          setNombreCliente(reserva.cliente.nombre);
-          setEmailCliente(reserva.cliente.email || '');
-          setTelefonoCliente(reserva.cliente.telefono || '');
-        }
+        setNombreCliente(reserva.cliente_nombre || '');
+        setEmailCliente(reserva.cliente_email || '');
+        setTelefonoCliente(reserva.cliente_telefono || '');
         setCantidadPersonas(reserva.cantidad_personas ? reserva.cantidad_personas.toString() : '');
         
         if (reserva.id_salon) {
@@ -188,7 +188,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     setMessage(null);
 
     // Validations
-    if (!nombreCliente || !idSalon || !fechaInicio || !fechaFin || !cantidadPersonas) {
+    if (!nombreCliente || !emailCliente || !telefonoCliente || !idSalon || !fechaInicio || !fechaFin || !cantidadPersonas) {
       setMessage({ type: 'error', text: 'Por favor complete todos los campos requeridos' });
       return;
     }
@@ -229,68 +229,13 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       setLoading(true);
 
       const { data: userData } = await supabase.auth.getUser();
-      let clienteId = reserva?.id_cliente;
-
-      // Si estamos creando una nueva reserva, buscar o crear el cliente
-      if (!reserva) {
-        let { data: clienteExistente, error: searchError } = await supabase
-          .from('clientes')
-          .select('*')
-          .or(`email.eq.${emailCliente || 'NULL_EMAIL_NEVER_MATCH'},nombre.eq.${nombreCliente}`)
-          .limit(1)
-          .maybeSingle();
-
-        if (searchError && searchError.code !== 'PGRST116') {
-          throw searchError;
-        }
-
-        if (clienteExistente) {
-          clienteId = clienteExistente.id;
-          
-          const updateData: any = {};
-          if (emailCliente && emailCliente !== clienteExistente.email) {
-            updateData.email = emailCliente;
-          }
-          if (telefonoCliente && telefonoCliente !== clienteExistente.telefono) {
-            updateData.telefono = telefonoCliente;
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            await supabase
-              .from('clientes')
-              .update(updateData)
-              .eq('id', clienteId);
-          }
-        } else {
-          const { data: nuevoCliente, error: createClienteError } = await supabase
-            .from('clientes')
-            .insert([{
-              nombre: nombreCliente,
-              email: emailCliente || null,
-              telefono: telefonoCliente || null,
-            }])
-            .select()
-            .single();
-
-          if (createClienteError) throw createClienteError;
-          clienteId = nuevoCliente.id;
-        }
-      } else {
-        await supabase
-          .from('clientes')
-          .update({
-            nombre: nombreCliente,
-            email: emailCliente || null,
-            telefono: telefonoCliente || null,
-          })
-          .eq('id', reserva.id_cliente);
-      }
-
       // Obtener precio base del salon seleccionado
       const monto = selectedSalon?.precio_base || 0;
 
       const reservaData = {
-        id_cliente: clienteId,
+        cliente_nombre: nombreCliente,
+        cliente_email: emailCliente,
+        cliente_telefono: telefonoCliente,
         id_salon: idSalon,
         id_distribucion: idDistribucion || null,
         fecha_inicio: new Date(fechaInicio).toISOString(),
@@ -376,7 +321,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               reservaId,
               salon: selectedSalon,
               distribucion: selectedDistribucionData,
-              cliente: { nombre: nombreCliente, email: emailCliente || null },
+              cliente: { nombre: nombreCliente || CLIENTE_PDF_NOMBRE, email: emailCliente || null, telefono: telefonoCliente || null },
               fechaInicio: new Date(fechaInicio).toISOString(),
               fechaFin: new Date(fechaFin).toISOString(),
               tipoEvento: observaciones ? observaciones.split('\n')[0] : null,
@@ -448,57 +393,50 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Datos del Cliente */}
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="text-gray-900 mb-4">Datos del Cliente</h4>
+          <h4 className="text-gray-900 mb-4">Datos del cliente</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
-                Nombre Completo <span className="text-red-500">*</span>
+                Nombre <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={nombreCliente}
                 onChange={(e) => setNombreCliente(e.target.value)}
                 required
-                placeholder="Juan Pérez"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Nombre del cliente o empresa"
               />
             </div>
-
             <div>
               <label className="block text-sm text-gray-700 mb-2">
-                Email
+                Email <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
                 value={emailCliente}
                 onChange={(e) => setEmailCliente(e.target.value)}
-                placeholder="juan@ejemplo.com"
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="cliente@dominio.com"
               />
             </div>
-
             <div>
               <label className="block text-sm text-gray-700 mb-2">
-                Teléfono
+                Telefono <span className="text-red-500">*</span>
               </label>
               <input
                 type="tel"
                 value={telefonoCliente}
                 onChange={(e) => setTelefonoCliente(e.target.value)}
-                placeholder="+54 11 1234-5678"
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="+54 11 0000 0000"
               />
             </div>
           </div>
-          {!reserva && (
-            <p className="text-xs text-gray-500 mt-2">
-              Si el cliente ya existe (por email o nombre), se actualizarán sus datos. Si no existe, se creará automáticamente.
-            </p>
-          )}
         </div>
-
         {/* Salon, Distribucion y Capacidad */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>

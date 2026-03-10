@@ -704,6 +704,9 @@ const publicReservaHandler = async (c) => {
     const body = (await c.req.json()) as PublicReservaPayload;
 
     const {
+      nombre,
+      email,
+      telefono,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
       tipo_evento: tipoEvento,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Reserva } from '../utils/supabase/client';
-import { Plus, Search, Edit, Trash2, AlertCircle, CheckCircle, FileText } from 'lucide-react';
+import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ReservaForm } from './ReservaForm';
 
@@ -52,38 +52,6 @@ export function Reservas() {
       setError(err.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Esta seguro de eliminar esta reserva?')) return;
-
-    try {
-      const reservaTarget = reservas.find(r => r.id === id);
-
-      const { error: deleteError } = await supabase
-        .from('reservas')
-        .delete()
-        .eq('id', id);
-
-      if (deleteError) throw deleteError;
-
-      if (reservaTarget?.presupuesto_url) {
-        const { error: storageError } = await supabase.storage
-          .from('presupuestos')
-          .remove([reservaTarget.presupuesto_url]);
-
-        if (storageError) {
-          console.error('Error removing presupuesto file:', storageError);
-        }
-      }
-
-      setMessage({ type: 'success', text: 'Reserva eliminada correctamente' });
-      loadReservas();
-      setTimeout(() => setMessage(null), 3000);
-    } catch (err: any) {
-      console.error('Error deleting reserva:', err);
-      setMessage({ type: 'error', text: err.message });
     }
   };
 
@@ -190,6 +158,40 @@ export function Reservas() {
         </div>
       )}
 
+      {showDialog && (!editingReserva ? (
+        <div className="sticky top-0 z-20 mb-6 bg-white rounded-lg shadow border border-gray-200">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold">Nueva Reserva</h3>
+            <button
+              onClick={() => handleDialogClose()}
+              className="text-gray-500 hover:text-gray-700 transition-colors"
+              title="Cerrar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6">
+            <ReservaForm
+              reserva={editingReserva}
+              onClose={handleDialogClose}
+            />
+          </div>
+        </div>
+      ) : (
+        <Dialog open={showDialog} onOpenChange={(open) => !open && handleDialogClose()}>
+          <DialogContent className="max-w-[95vw] sm:max-w-[50vw] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Editar Reserva</DialogTitle>
+            </DialogHeader>
+            <ReservaForm
+              reserva={editingReserva}
+              onClose={handleDialogClose}
+            />
+          </DialogContent>
+        </Dialog>
+      ))}
+
       {/* Filters */}
       <div className="flex gap-3 mb-6">
         <div className="flex-1 relative">
@@ -284,13 +286,6 @@ export function Reservas() {
                         >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(reserva.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -304,19 +299,6 @@ export function Reservas() {
       <div className="mt-4 text-sm text-gray-600">
         Mostrando {filteredReservas.length} de {reservas.length} reservas
       </div>
-
-      {/* Dialog for Create/Edit */}
-      <Dialog open={showDialog} onOpenChange={(open) => !open && handleDialogClose()}>
-        <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingReserva ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
-          </DialogHeader>
-          <ReservaForm
-            reserva={editingReserva}
-            onClose={handleDialogClose}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

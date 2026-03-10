@@ -34,7 +34,11 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   const [fechaFin, setFechaFin] = useState(
     reserva ? new Date(reserva.fecha_fin).toISOString().slice(0, 16) : ''
   );
-  const estado: Reserva['estado'] = reserva?.estado || 'Pendiente';
+  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
+
+  useEffect(() => {
+    setEstado(reserva?.estado || 'Pendiente');
+  }, [reserva]);
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
     reserva?.cantidad_personas ? reserva.cantidad_personas.toString() : ''
@@ -543,10 +547,26 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           </div>
         </div>
 
-        {/* Estado */}
-        <div className="text-sm text-gray-700">
-          <strong>Estado:</strong> {estado}
-        </div>
+        {/* Estado (solo editable cuando se está editando una reserva) */}
+        {reserva && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-700 mb-2">
+                Estado
+              </label>
+              <select
+                value={estado}
+                onChange={(e) => setEstado(e.target.value as Reserva['estado'])}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="Pendiente">Pendiente</option>
+                <option value="Confirmado">Confirmado</option>
+                <option value="Pagado">Pagado</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* Precio Info */}
         {idSalon > 0 && (

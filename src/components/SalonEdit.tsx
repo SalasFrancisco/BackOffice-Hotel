@@ -3,6 +3,12 @@ import { supabase, Salon, Distribucion } from '../utils/supabase/client';
 import { ArrowLeft, Plus, Edit, Trash2, AlertCircle, CheckCircle, Building2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  hasNonWhitespaceValue,
+  preventInvalidNumberKeys,
+  sanitizeDecimalInput,
+  sanitizeIntegerInput,
+} from '../utils/formSanitizers';
 
 type SalonEditProps = {
   salonId: number;
@@ -80,14 +86,25 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     e.preventDefault();
     setMessage(null);
 
-    if (!nombre || !capacidad || !precioBase) {
+    const nombreSanitizado = nombre.trim();
+    const capacidadSanitizada = sanitizeIntegerInput(capacidad);
+    const precioBaseSanitizado = sanitizeDecimalInput(precioBase);
+    const descripcionSanitizada = descripcion.trim();
+
+    if (!hasNonWhitespaceValue(nombreSanitizado) || !capacidadSanitizada || !precioBaseSanitizado) {
       setMessage({ type: 'error', text: 'Complete todos los campos requeridos del salon' });
       return;
     }
 
-    const capacidadNumero = parseInt(capacidad, 10);
+    const capacidadNumero = parseInt(capacidadSanitizada, 10);
     if (!capacidadNumero || capacidadNumero <= 0) {
       setMessage({ type: 'error', text: 'Ingrese una capacidad valida para el salon' });
+      return;
+    }
+
+    const precioNumero = parseFloat(precioBaseSanitizado);
+    if (Number.isNaN(precioNumero) || precioNumero < 0) {
+      setMessage({ type: 'error', text: 'Ingrese un precio base valido para el salon' });
       return;
     }
 
@@ -106,10 +123,10 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       const { error } = await supabase
         .from('salones')
         .update({
-          nombre,
+          nombre: nombreSanitizado,
           capacidad: capacidadNumero,
-          precio_base: parseFloat(precioBase),
-          descripcion: descripcion || null,
+          precio_base: precioNumero,
+          descripcion: hasNonWhitespaceValue(descripcionSanitizada) ? descripcionSanitizada : null,
         })
         .eq('id', salonId);
 
@@ -144,14 +161,16 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     e.preventDefault();
     setMessage(null);
 
+    const distNombreSanitizado = distNombre.trim();
+    const distCapacidadSanitizada = sanitizeIntegerInput(distCapacidad);
 
-    if (!distNombre || !distCapacidad) {
+    if (!hasNonWhitespaceValue(distNombreSanitizado) || !distCapacidadSanitizada) {
       setMessage({ type: 'error', text: 'Complete todos los campos de la distribucion' });
       return;
     }
 
     const capacidadSalon = salon ? salon.capacidad : parseInt(capacidad, 10) || 0;
-    const capacidadDistribucion = parseInt(distCapacidad, 10);
+    const capacidadDistribucion = parseInt(distCapacidadSanitizada, 10);
 
     if (!capacidadDistribucion || capacidadDistribucion <= 0) {
       setMessage({ type: 'error', text: 'Ingrese una capacidad valida para la distribucion' });
@@ -173,7 +192,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
         const { error } = await supabase
           .from('distribuciones')
           .update({
-            nombre: distNombre,
+            nombre: distNombreSanitizado,
             capacidad: capacidadDistribucion,
           })
           .eq('id', editingDist.id);
@@ -185,7 +204,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
           .from('distribuciones')
           .insert([{
             id_salon: salonId,
-            nombre: distNombre,
+            nombre: distNombreSanitizado,
             capacidad: capacidadDistribucion,
           }]);
 
@@ -320,7 +339,9 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 type="number"
                 min="1"
                 value={capacidad}
-                onChange={(e) => setCapacidad(e.target.value)}
+                onChange={(e) => setCapacidad(sanitizeIntegerInput(e.target.value))}
+                onKeyDown={preventInvalidNumberKeys}
+                inputMode="numeric"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -335,7 +356,9 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 step="0.01"
                 min="0"
                 value={precioBase}
-                onChange={(e) => setPrecioBase(e.target.value)}
+                onChange={(e) => setPrecioBase(sanitizeDecimalInput(e.target.value))}
+                onKeyDown={preventInvalidNumberKeys}
+                inputMode="decimal"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -447,7 +470,9 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 type="number"
                 min="1"
                 value={distCapacidad}
-                onChange={(e) => setDistCapacidad(e.target.value)}
+                onChange={(e) => setDistCapacidad(sanitizeIntegerInput(e.target.value))}
+                onKeyDown={preventInvalidNumberKeys}
+                inputMode="numeric"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />

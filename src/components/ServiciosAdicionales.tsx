@@ -3,6 +3,11 @@ import { supabase, Perfil, CategoriaServicio, Servicio } from '../utils/supabase
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  hasNonWhitespaceValue,
+  preventInvalidNumberKeys,
+  sanitizeDecimalInput,
+} from '../utils/formSanitizers';
 
 type ServiciosAdicionalesProps = {
   perfil: Perfil;
@@ -96,7 +101,10 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     e.preventDefault();
     setMessage(null);
 
-    if (!categoriaNombre) {
+    const categoriaNombreSanitizado = categoriaNombre.trim();
+    const categoriaDescripcionSanitizada = categoriaDescripcion.trim();
+
+    if (!hasNonWhitespaceValue(categoriaNombreSanitizado)) {
       setMessage({ type: 'error', text: 'El nombre es requerido' });
       return;
     }
@@ -107,8 +115,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         const { error } = await supabase
           .from('categorias_servicios')
           .update({
-            nombre: categoriaNombre,
-            descripcion: categoriaDescripcion || null,
+            nombre: categoriaNombreSanitizado,
+            descripcion: hasNonWhitespaceValue(categoriaDescripcionSanitizada) ? categoriaDescripcionSanitizada : null,
           })
           .eq('id', editingCategoria.id);
 
@@ -119,8 +127,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         const { error } = await supabase
           .from('categorias_servicios')
           .insert({
-            nombre: categoriaNombre,
-            descripcion: categoriaDescripcion || null,
+            nombre: categoriaNombreSanitizado,
+            descripcion: hasNonWhitespaceValue(categoriaDescripcionSanitizada) ? categoriaDescripcionSanitizada : null,
           });
 
         if (error) throw error;
@@ -186,12 +194,17 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     e.preventDefault();
     setMessage(null);
 
-    if (!servicioNombre || !servicioPrecio || !servicioCategoria) {
+    const servicioNombreSanitizado = servicioNombre.trim();
+    const servicioDescripcionSanitizada = servicioDescripcion.trim();
+    const servicioPrecioSanitizado = sanitizeDecimalInput(servicioPrecio);
+    const servicioCategoriaSanitizada = servicioCategoria.trim();
+
+    if (!hasNonWhitespaceValue(servicioNombreSanitizado) || !servicioPrecioSanitizado || !hasNonWhitespaceValue(servicioCategoriaSanitizada)) {
       setMessage({ type: 'error', text: 'Todos los campos marcados son requeridos' });
       return;
     }
 
-    const precio = parseFloat(servicioPrecio);
+    const precio = parseFloat(servicioPrecioSanitizado);
     if (isNaN(precio) || precio < 0) {
       setMessage({ type: 'error', text: 'El precio debe ser un número válido' });
       return;
@@ -203,10 +216,10 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         const { error } = await supabase
           .from('servicios')
           .update({
-            nombre: servicioNombre,
-            descripcion: servicioDescripcion || null,
+            nombre: servicioNombreSanitizado,
+            descripcion: hasNonWhitespaceValue(servicioDescripcionSanitizada) ? servicioDescripcionSanitizada : null,
             precio: precio,
-            id_categoria: parseInt(servicioCategoria),
+            id_categoria: parseInt(servicioCategoriaSanitizada, 10),
           })
           .eq('id', editingServicio.id);
 
@@ -217,10 +230,10 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         const { error } = await supabase
           .from('servicios')
           .insert({
-            nombre: servicioNombre,
-            descripcion: servicioDescripcion || null,
+            nombre: servicioNombreSanitizado,
+            descripcion: hasNonWhitespaceValue(servicioDescripcionSanitizada) ? servicioDescripcionSanitizada : null,
             precio: precio,
-            id_categoria: parseInt(servicioCategoria),
+            id_categoria: parseInt(servicioCategoriaSanitizada, 10),
           });
 
         if (error) throw error;
@@ -534,7 +547,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                 type="number"
                 step="0.01"
                 value={servicioPrecio}
-                onChange={(e) => setServicioPrecio(e.target.value)}
+                onChange={(e) => setServicioPrecio(sanitizeDecimalInput(e.target.value))}
+                onKeyDown={preventInvalidNumberKeys}
+                inputMode="decimal"
                 required
                 min="0"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

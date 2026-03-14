@@ -3,6 +3,7 @@ import { supabase, Perfil } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
 import { AlertCircle, CheckCircle, Shield, User, Plus, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { hasNonWhitespaceValue } from '../utils/formSanitizers';
 
 export function Usuarios() {
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
@@ -113,7 +114,10 @@ export function Usuarios() {
     e.preventDefault();
     setMessage(null);
 
-    if (!newEmail || !newPassword || !newNombre || !newRol) {
+    const newEmailSanitizado = newEmail.trim();
+    const newNombreSanitizado = newNombre.trim();
+
+    if (!hasNonWhitespaceValue(newEmailSanitizado) || !hasNonWhitespaceValue(newPassword) || !hasNonWhitespaceValue(newNombreSanitizado) || !newRol) {
       setMessage({ type: 'error', text: 'Todos los campos son requeridos' });
       return;
     }
@@ -132,9 +136,9 @@ export function Usuarios() {
         'create-user',
         session.access_token,
         {
-          email: newEmail,
+          email: newEmailSanitizado,
           password: newPassword,
-          nombre: newNombre,
+          nombre: newNombreSanitizado,
           rol: newRol,
         }
       );
@@ -143,7 +147,7 @@ export function Usuarios() {
         throw new Error(payload.error || 'Error al crear usuario');
       }
 
-      setMessage({ type: 'success', text: `Usuario ${newEmail} creado correctamente` });
+      setMessage({ type: 'success', text: `Usuario ${newEmailSanitizado} creado correctamente` });
       setShowCreateDialog(false);
       setNewEmail('');
       setNewPassword('');
@@ -193,7 +197,10 @@ export function Usuarios() {
     e.preventDefault();
     setMessage(null);
 
-    if (!editingPerfil || !editNombre || !editEmail) {
+    const editNombreSanitizado = editNombre.trim();
+    const editEmailSanitizado = editEmail.trim();
+
+    if (!editingPerfil || !hasNonWhitespaceValue(editNombreSanitizado) || !hasNonWhitespaceValue(editEmailSanitizado)) {
       setMessage({ type: 'error', text: 'Todos los campos son requeridos' });
       return;
     }
@@ -205,7 +212,7 @@ export function Usuarios() {
       const { error: updateError } = await supabase
         .from('perfiles')
         .update({
-          nombre: editNombre,
+          nombre: editNombreSanitizado,
           rol: editRol,
         })
         .eq('user_id', editingPerfil.user_id);
@@ -223,7 +230,7 @@ export function Usuarios() {
         session.access_token,
         {
           userId: editingPerfil.user_id,
-          newEmail: editEmail,
+          newEmail: editEmailSanitizado,
         }
       );
 

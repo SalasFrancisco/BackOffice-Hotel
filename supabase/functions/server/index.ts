@@ -158,8 +158,8 @@ const buildPresupuestoPdf = async (input: {
     } catch (localErr) {
       // Local vendor not available; attempt to load from npm specifier.
       try {
-        const mod = await import('npm:pdfmake/build/pdfmake');
-        const fonts = await import('npm:pdfmake/build/vfs_fonts');
+        const mod = await import('npm:pdfmake@0.2.20/build/pdfmake.js');
+        const fonts = await import('npm:pdfmake@0.2.20/build/vfs_fonts.js');
         pdfMake = (mod && (mod as any).default) || mod;
         pdfFonts = (fonts && (fonts as any).default) || fonts;
       } catch (err) {
@@ -667,6 +667,63 @@ app.post("/make-server-484a241a/reset-user-password", async (c) => {
   }
 });
 
+app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+
+    if (userError || !userData?.user) {
+      return c.json({ error: "Invalid authorization token" }, 401);
+    }
+
+    const body = await c.req.json();
+    const reservaId = Number(body?.reservaId);
+    const presupuestoPathFromBody = typeof body?.presupuestoPath === "string" ? body.presupuestoPath.trim() : "";
+
+    let presupuestoPath = presupuestoPathFromBody;
+
+    if (!presupuestoPath) {
+      if (!Number.isFinite(reservaId) || reservaId <= 0) {
+        return c.json({ error: "Missing required field: reservaId or presupuestoPath" }, 400);
+      }
+
+      const { data: reservaData, error: reservaError } = await supabaseAdmin
+        .from("reservas")
+        .select("presupuesto_url")
+        .eq("id", reservaId)
+        .single();
+
+      if (reservaError) {
+        return c.json({ error: reservaError.message }, 400);
+      }
+
+      presupuestoPath = reservaData?.presupuesto_url || "";
+    }
+
+    if (!presupuestoPath) {
+      return c.json({ error: "La reserva no tiene presupuesto generado" }, 404);
+    }
+
+    const { data: signedData, error: signedError } = await supabaseAdmin.storage
+      .from("presupuestos")
+      .createSignedUrl(presupuestoPath, 60);
+
+    if (signedError || !signedData?.signedUrl) {
+      return c.json({ error: signedError?.message || "No se pudo firmar la URL del presupuesto" }, 500);
+    }
+
+    return c.json({ signedUrl: signedData.signedUrl });
+  } catch (error) {
+    console.error("Error in get-presupuesto-url endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+});
+
 const publicCatalogHandler = async (c) => {
   try {
     const supabaseAdmin = createServiceClient();
@@ -973,6 +1030,7 @@ app.post("/update-user-email", proxyTo("/make-server-484a241a/update-user-email"
 app.post("/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
+app.post("/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
 app.get("/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
 app.post("/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
 
@@ -982,6 +1040,7 @@ app.post("/server/update-user-email", proxyTo("/make-server-484a241a/update-user
 app.post("/server/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/server/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/server/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
+app.post("/server/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
 app.get("/server/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
 app.post("/server/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
 

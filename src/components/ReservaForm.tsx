@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
 import { generatePresupuestoDocumento } from '../utils/presupuesto';
 import { AlertCircle, CheckCircle, Package } from 'lucide-react';
+import {
+  hasNonWhitespaceValue,
+  preventInvalidNumberKeys,
+  sanitizeIntegerInput,
+  sanitizePhoneInput,
+} from '../utils/formSanitizers';
 
 type ReservaFormProps = {
   reserva?: Reserva | null;
@@ -25,7 +31,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   // Form fields
   const [nombreCliente, setNombreCliente] = useState(reserva?.cliente_nombre || '');
   const [emailCliente, setEmailCliente] = useState(reserva?.cliente_email || '');
-  const [telefonoCliente, setTelefonoCliente] = useState(reserva?.cliente_telefono || '');
+  const [telefonoCliente, setTelefonoCliente] = useState(sanitizePhoneInput(reserva?.cliente_telefono || ''));
   const [idSalon, setIdSalon] = useState(reserva?.id_salon || 0);
   const [idDistribucion, setIdDistribucion] = useState(reserva?.id_distribucion || 0);
   const [fechaInicio, setFechaInicio] = useState(
@@ -106,7 +112,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       if (reserva) {
         setNombreCliente(reserva.cliente_nombre || '');
         setEmailCliente(reserva.cliente_email || '');
-        setTelefonoCliente(reserva.cliente_telefono || '');
+        setTelefonoCliente(sanitizePhoneInput(reserva.cliente_telefono || ''));
         setCantidadPersonas(reserva.cantidad_personas ? reserva.cantidad_personas.toString() : '');
         
         if (reserva.id_salon) {
@@ -191,13 +197,27 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     e.preventDefault();
     setMessage(null);
 
+    const nombreClienteSanitizado = nombreCliente.trim();
+    const emailClienteSanitizado = emailCliente.trim();
+    const telefonoClienteSanitizado = sanitizePhoneInput(telefonoCliente);
+    const cantidadPersonasSanitizada = sanitizeIntegerInput(cantidadPersonas);
+    const observacionesSanitizadas = observaciones.trim();
+
     // Validations
-    if (!nombreCliente || !emailCliente || !telefonoCliente || !idSalon || !fechaInicio || !fechaFin || !cantidadPersonas) {
+    if (
+      !hasNonWhitespaceValue(nombreClienteSanitizado)
+      || !hasNonWhitespaceValue(emailClienteSanitizado)
+      || !telefonoClienteSanitizado
+      || !idSalon
+      || !fechaInicio
+      || !fechaFin
+      || !cantidadPersonasSanitizada
+    ) {
       setMessage({ type: 'error', text: 'Por favor complete todos los campos requeridos' });
       return;
     }
 
-    const totalPersonas = parseInt(cantidadPersonas, 10);
+    const totalPersonas = parseInt(cantidadPersonasSanitizada, 10);
     if (!totalPersonas || totalPersonas <= 0) {
       setMessage({ type: 'error', text: 'Ingrese una cantidad de personas valida' });
       return;
@@ -237,9 +257,9 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       const monto = selectedSalon?.precio_base || 0;
 
       const reservaData = {
-        cliente_nombre: nombreCliente,
-        cliente_email: emailCliente,
-        cliente_telefono: telefonoCliente,
+        cliente_nombre: nombreClienteSanitizado,
+        cliente_email: emailClienteSanitizado,
+        cliente_telefono: telefonoClienteSanitizado,
         id_salon: idSalon,
         id_distribucion: idDistribucion || null,
         fecha_inicio: new Date(fechaInicio).toISOString(),
@@ -247,7 +267,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
         estado,
         monto,
         cantidad_personas: totalPersonas,
-        observaciones: observaciones || null,
+        observaciones: hasNonWhitespaceValue(observacionesSanitizadas) ? observacionesSanitizadas : null,
         creado_por: userData.user?.id,
       };
 
@@ -325,10 +345,14 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               reservaId,
               salon: selectedSalon,
               distribucion: selectedDistribucionData,
-              cliente: { nombre: nombreCliente || CLIENTE_PDF_NOMBRE, email: emailCliente || null, telefono: telefonoCliente || null },
+              cliente: {
+                nombre: nombreClienteSanitizado || CLIENTE_PDF_NOMBRE,
+                email: emailClienteSanitizado || null,
+                telefono: telefonoClienteSanitizado || null,
+              },
               fechaInicio: new Date(fechaInicio).toISOString(),
               fechaFin: new Date(fechaFin).toISOString(),
-              tipoEvento: observaciones ? observaciones.split('\n')[0] : null,
+              tipoEvento: hasNonWhitespaceValue(observacionesSanitizadas) ? observacionesSanitizadas.split('\n')[0] : null,
               totalSalon: monto,
               cantidadPersonas: totalPersonas,
               servicios: serviciosDetalle,
@@ -433,10 +457,12 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               <input
                 type="tel"
                 value={telefonoCliente}
-                onChange={(e) => setTelefonoCliente(e.target.value)}
+                onChange={(e) => setTelefonoCliente(sanitizePhoneInput(e.target.value))}
+                onKeyDown={preventInvalidNumberKeys}
+                inputMode="numeric"
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="+54 11 0000 0000"
+                placeholder="5491100000000"
               />
             </div>
           </div>
@@ -510,7 +536,9 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               type="number"
               min={1}
               value={cantidadPersonas}
-              onChange={(e) => setCantidadPersonas(e.target.value)}
+              onChange={(e) => setCantidadPersonas(sanitizeIntegerInput(e.target.value))}
+              onKeyDown={preventInvalidNumberKeys}
+              inputMode="numeric"
               placeholder="Ej: 120"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
@@ -651,7 +679,9 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
                                       type="number"
                                       min="1"
                                       value={cantidad}
-                                      onChange={(e) => updateCantidadServicio(servicio.id, parseInt(e.target.value) || 1)}
+                                      onChange={(e) => updateCantidadServicio(servicio.id, parseInt(sanitizeIntegerInput(e.target.value), 10) || 1)}
+                                      onKeyDown={preventInvalidNumberKeys}
+                                      inputMode="numeric"
                                       className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent"
                                     />
                                   </div>

@@ -3,6 +3,12 @@ import { supabase, Salon, Perfil } from '../utils/supabase/client';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Building2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  hasNonWhitespaceValue,
+  preventInvalidNumberKeys,
+  sanitizeDecimalInput,
+  sanitizeIntegerInput,
+} from '../utils/formSanitizers';
 
 type SalonesProps = {
   perfil: Perfil;
@@ -88,8 +94,25 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
     e.preventDefault();
     if (!canEdit) return;
 
-    if (!nombre || !capacidad || !precioBase) {
+    const nombreSanitizado = nombre.trim();
+    const capacidadSanitizada = sanitizeIntegerInput(capacidad);
+    const precioBaseSanitizado = sanitizeDecimalInput(precioBase);
+    const descripcionSanitizada = descripcion.trim();
+
+    if (!hasNonWhitespaceValue(nombreSanitizado) || !capacidadSanitizada || !precioBaseSanitizado) {
       setMessage({ type: 'error', text: 'Por favor complete todos los campos requeridos' });
+      return;
+    }
+
+    const capacidadNumero = parseInt(capacidadSanitizada, 10);
+    if (!capacidadNumero || capacidadNumero <= 0) {
+      setMessage({ type: 'error', text: 'Por favor ingrese una capacidad valida' });
+      return;
+    }
+
+    const precioNumero = parseFloat(precioBaseSanitizado);
+    if (Number.isNaN(precioNumero) || precioNumero < 0) {
+      setMessage({ type: 'error', text: 'Por favor ingrese un precio base valido' });
       return;
     }
 
@@ -97,10 +120,10 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       setFormLoading(true);
 
       const salonData = {
-        nombre,
-        capacidad: parseInt(capacidad),
-        precio_base: parseFloat(precioBase),
-        descripcion: descripcion || null,
+        nombre: nombreSanitizado,
+        capacidad: capacidadNumero,
+        precio_base: precioNumero,
+        descripcion: hasNonWhitespaceValue(descripcionSanitizada) ? descripcionSanitizada : null,
       };
 
       if (editingSalon) {
@@ -299,7 +322,9 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
                   type="number"
                   min="1"
                   value={capacidad}
-                  onChange={(e) => setCapacidad(e.target.value)}
+                  onChange={(e) => setCapacidad(sanitizeIntegerInput(e.target.value))}
+                  onKeyDown={preventInvalidNumberKeys}
+                  inputMode="numeric"
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -314,7 +339,9 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
                   step="0.01"
                   min="0"
                   value={precioBase}
-                  onChange={(e) => setPrecioBase(e.target.value)}
+                  onChange={(e) => setPrecioBase(sanitizeDecimalInput(e.target.value))}
+                  onKeyDown={preventInvalidNumberKeys}
+                  inputMode="decimal"
                   required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />

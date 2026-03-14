@@ -1531,9 +1531,9 @@
 
                     <div class="form-row">
 
-                        <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono" required></div>
+                        <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono" inputmode="numeric" required></div>
 
-                        <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" required></div>
+                        <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" inputmode="numeric" required></div>
 
                     </div>
 
@@ -2434,6 +2434,112 @@
 
         const serviciosResumen = document.getElementById('serviciosResumen');
 
+        const inputTelefono = document.getElementById('telefono');
+
+        const invalidNumberKeys = new Set(['e', 'E', '+', '-', ' ']);
+
+        const hasNonWhitespaceValue = (value) => value.trim().length > 0;
+
+        const sanitizeIntegerInput = (value) => value.replace(/\D/g, '');
+
+        const sanitizePhoneInput = (value) => value.replace(/\D/g, '');
+
+        const preventInvalidNumberKeys = (event) => {
+            if (invalidNumberKeys.has(event.key)) {
+                event.preventDefault();
+            }
+        };
+
+        const parseJsonResponse = async (response) => {
+            const text = await response.text();
+            if (!text) return {};
+
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                return { error: text };
+            }
+        };
+
+        const base64ToPdfBlob = (base64) => {
+            const byteCharacters = atob(base64);
+            const byteArrays = [];
+            const sliceSize = 1024;
+
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+
+            return new Blob(byteArrays, { type: 'application/pdf' });
+        };
+
+        const triggerBlobDownload = (blob, fileName) => {
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        };
+
+        const triggerAnchorDownload = (url, fileName) => {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        const triggerUrlDownload = async (url, fileName) => {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`No se pudo descargar el archivo (HTTP ${response.status})`);
+            }
+            const blob = await response.blob();
+            triggerBlobDownload(blob, fileName);
+        };
+
+        const downloadGeneratedPresupuesto = async (data) => {
+            const reservaId = data?.reservaId || 'evento';
+            const fileName = data?.fileName || `presupuesto-reserva-${reservaId}.pdf`;
+
+            if (data?.pdfBase64) {
+                try {
+                    const blob = base64ToPdfBlob(data.pdfBase64);
+                    triggerBlobDownload(blob, fileName);
+                    return true;
+                } catch (error) {
+                    console.warn('No se pudo descargar desde PDF base64:', error);
+                }
+            }
+
+            const downloadUrl = data?.downloadUrl || data?.download_url || data?.signedUrl || data?.signed_url;
+            if (downloadUrl) {
+                try {
+                    await triggerUrlDownload(downloadUrl, fileName);
+                    return true;
+                } catch (error) {
+                    console.warn('No se pudo descargar desde URL firmada:', error);
+                    try {
+                        triggerAnchorDownload(downloadUrl, fileName);
+                        return true;
+                    } catch (anchorError) {
+                        console.warn('No se pudo iniciar descarga por enlace directo:', anchorError);
+                    }
+                }
+            }
+
+            return false;
+        };
+
         function updateDistribucionesForSalon(salonId) {
 
             selectDistribucion.innerHTML = '';
@@ -2487,11 +2593,14 @@
             }
 
             if (!personas || personas <= 0) {
+                const t = document.createElement('div');
+                t.className = 'select-group-title';
+                t.innerText = 'SALONES DISPONIBLES';
+                salonOptionsList.appendChild(t);
 
-                salonOptionsList.innerHTML = '<div style="padding:15px; font-size:12px; color:#999;">Ingrese cantidad.</div>';
-
+                const ordered = [...salonesDB].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+                ordered.forEach(s => renderOption({ ...s, capReal: s.capacidad || 0 }, true));
                 return;
-
             }
 
             let recomendados = [], otros = [];
@@ -2634,6 +2743,8 @@
 
                     qty.value = '1';
 
+                    qty.inputMode = 'numeric';
+
                     qty.className = 'service-qty';
 
                     qty.disabled = true;
@@ -2652,7 +2763,11 @@
 
                     });
 
+                    qty.addEventListener('keydown', preventInvalidNumberKeys);
+
                     qty.addEventListener('input', () => {
+
+                        qty.value = sanitizeIntegerInput(qty.value);
 
                         const value = parseInt(qty.value, 10);
 
@@ -2688,11 +2803,18 @@
             const functionAttempts = [
                 `${PUBLIC_API_BASE}/public-catalog`,
                 `${PUBLIC_API_BASE_ALT}/public-catalog`,
+                `https://${PROJECT_ID}.supabase.co/functions/v1/server/public-catalog`,
+                `https://${PROJECT_ID}.supabase.co/functions/v1/public-catalog`,
             ];
+
+            const functionHeaders = {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${PUBLIC_ANON_KEY}`,
+            };
 
             for (const url of functionAttempts) {
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(url, { headers: functionHeaders });
                     const text = await response.text();
                     let data = null;
                     try { data = text ? JSON.parse(text) : null; } catch (e) { /* no-op */ }
@@ -2783,7 +2905,18 @@
             }
         }
 
-        inputCantidad.addEventListener('input', updateSalonRecommendations);
+        inputCantidad.addEventListener('keydown', preventInvalidNumberKeys);
+
+        inputCantidad.addEventListener('input', () => {
+            inputCantidad.value = sanitizeIntegerInput(inputCantidad.value);
+            updateSalonRecommendations();
+        });
+
+        inputTelefono.addEventListener('keydown', preventInvalidNumberKeys);
+
+        inputTelefono.addEventListener('input', () => {
+            inputTelefono.value = sanitizePhoneInput(inputTelefono.value);
+        });
 
         selectDistribucion.addEventListener('change', updateSalonRecommendations);
 
@@ -2817,7 +2950,11 @@
 
             const email = document.getElementById('email').value.trim();
 
-            const telefono = document.getElementById('telefono').value.trim();
+            const telefonoInput = document.getElementById('telefono');
+
+            telefonoInput.value = sanitizePhoneInput(telefonoInput.value);
+
+            const telefono = telefonoInput.value;
 
             const fechaInicio = document.getElementById('fecha_inicio').value;
 
@@ -2827,7 +2964,11 @@
 
             const horaFin = document.getElementById('hora_fin').value;
 
-            const cantidad = parseInt(document.getElementById('cantidad').value, 10);
+            const cantidadInput = document.getElementById('cantidad');
+
+            cantidadInput.value = sanitizeIntegerInput(cantidadInput.value);
+
+            const cantidad = parseInt(cantidadInput.value, 10);
 
             const distribucionId = parseInt(selectDistribucion.value, 10) || 0;
 
@@ -2837,7 +2978,7 @@
 
             const observaciones = document.getElementById('observaciones').value.trim();
 
-            if (!nombre || !email || !telefono) {
+            if (!hasNonWhitespaceValue(nombre) || !hasNonWhitespaceValue(email) || !telefono) {
 
                 setStatus('Complete nombre, email y telefono del cliente.', true);
 
@@ -2889,6 +3030,8 @@
 
                     const qtyInput = checkbox.closest('.service-item').querySelector('input[type="number"]');
 
+                    qtyInput.value = sanitizeIntegerInput(qtyInput.value);
+
                     const cantidadServicio = parseInt(qtyInput.value, 10) || 1;
 
                     return { id_servicio: serviceId, cantidad: cantidadServicio };
@@ -2927,41 +3070,55 @@
 
                 setStatus('Enviando solicitud y generando presupuesto...', false);
 
-                const response = await fetch(`${PUBLIC_API_BASE}/public-reserva`, {
+                const submitAttempts = [
+                    `${PUBLIC_API_BASE}/public-reserva`,
+                    `${PUBLIC_API_BASE_ALT}/public-reserva`,
+                    `https://${PROJECT_ID}.supabase.co/functions/v1/server/public-reserva`,
+                    `https://${PROJECT_ID}.supabase.co/functions/v1/public-reserva`,
+                ];
 
-                    method: 'POST',
+                let data = null;
+                const submitErrors = [];
+                const submitHeaders = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${PUBLIC_ANON_KEY}`,
+                };
 
-                    headers: { 'Content-Type': 'application/json' },
+                for (const endpoint of submitAttempts) {
+                    try {
+                        const response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: submitHeaders,
+                            body: JSON.stringify(payload)
+                        });
 
-                    body: JSON.stringify(payload)
+                        const parsed = await parseJsonResponse(response);
 
-                });
+                        if (response.ok) {
+                            data = parsed;
+                            break;
+                        }
 
-                const data = await response.json();
-
-                if (!response.ok) {
-
-                    throw new Error(data?.error || 'No se pudo enviar el formulario.');
-
+                        submitErrors.push(parsed?.error || `HTTP ${response.status} en ${endpoint}`);
+                    } catch (error) {
+                        submitErrors.push(`${endpoint}: ${error?.message || 'Error de red'}`);
+                    }
                 }
 
-                if (data?.downloadUrl) {
-
-                    const link = document.createElement('a');
-
-                    link.href = data.downloadUrl;
-
-                    link.download = `presupuesto-reserva-${data.reservaId || 'evento'}.pdf`;
-
-                    document.body.appendChild(link);
-
-                    link.click();
-
-                    document.body.removeChild(link);
-
+                if (!data) {
+                    throw new Error(submitErrors.join(' | ') || 'No se pudo enviar el formulario.');
                 }
 
-                setStatus('Solicitud enviada. El presupuesto se esta descargando.', false);
+                const downloadStarted = await downloadGeneratedPresupuesto(data);
+
+                if (downloadStarted) {
+                    setStatus('Solicitud enviada. El presupuesto se está descargando.', false);
+                } else {
+                    const detalleBackend = data?.pdfError || data?.uploadError || data?.signedError || '';
+                    const detalle = detalleBackend ? ` Detalle: ${detalleBackend}` : '';
+                    setStatus(`Solicitud enviada, pero no se pudo descargar el presupuesto automáticamente.${detalle}`, true);
+                    console.warn('Respuesta de public-reserva sin archivo descargable:', data);
+                }
 
                 formTesis.reset();
 

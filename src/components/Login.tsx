@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../utils/supabase/client';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+import { hasNonWhitespaceValue } from '../utils/formSanitizers';
 
 type LoginProps = {
   onLoginSuccess: () => void;
@@ -21,9 +22,17 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setError('');
     setLoading(true);
 
+    const emailSanitizado = email.trim();
+
+    if (!hasNonWhitespaceValue(emailSanitizado) || !hasNonWhitespaceValue(password)) {
+      setError('Complete email y contraseña validos');
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
+        email: emailSanitizado,
         password,
       });
 
@@ -59,8 +68,17 @@ export function Login({ onLoginSuccess }: LoginProps) {
     setRecoveryMessage('');
     setLoading(true);
 
+    const recoveryEmailSanitizado = recoveryEmail.trim();
+
+    if (!hasNonWhitespaceValue(recoveryEmailSanitizado)) {
+      setRecoverySent(false);
+      setRecoveryMessage('Ingrese un email valido');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmail, {
+      const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmailSanitizado, {
         redirectTo: window.location.origin,
       });
 

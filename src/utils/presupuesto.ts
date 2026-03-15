@@ -23,6 +23,7 @@ export type PresupuestoPayload = {
   totalSalon: number;
   cantidadPersonas: number;
   servicios: PresupuestoServicio[];
+  storagePath?: string;
 };
 
 const PRESUPUESTOS_BUCKET = 'presupuestos';
@@ -119,17 +120,12 @@ export async function generatePresupuestoDocumento({
   cliente,
   fechaInicio,
   fechaFin,
-  tipoEvento,
   totalSalon,
   cantidadPersonas,
   servicios,
+  storagePath: storagePathInput,
 }: PresupuestoPayload) {
   ensurePdfFonts();
-
-  const capacidadMaxima =
-    distribucion?.capacidad && distribucion.capacidad > 0
-      ? distribucion.capacidad
-      : salon.capacidad;
 
   const totalServicios = servicios.reduce((acc, { servicio, cantidad }) => {
     const unit = Number(servicio.precio) || 0;
@@ -154,7 +150,6 @@ export async function generatePresupuestoDocumento({
                   ['Nombre:', cliente.nombre],
                   ['Email:', cliente.email || 'No informado'],
                   ['Telefono:', cliente.telefono || 'No informado'],
-                  ['Tipo de evento:', tipoEvento?.trim() || 'Evento'],
                 ],
               },
               layout: 'noBorders',
@@ -166,15 +161,12 @@ export async function generatePresupuestoDocumento({
               table: {
                 widths: ['auto', '*'],
                 body: [
-                  ['Fecha:', formatDate(fechaInicio)],
+                  ['Fecha de inicio:', formatDate(fechaInicio)],
+                  ['Fecha de fin:', formatDate(fechaFin)],
                   ['Horario:', `${formatTime(fechaInicio)} a ${formatTime(fechaFin)}`],
                   ['Salon:', salon.nombre],
                   ['Distribucion:', distribucion?.nombre || 'Sin distribucion definida'],
                   ['Cantidad de asistentes:', String(cantidadPersonas)],
-                  [
-                    'Capacidad maxima:',
-                    String(capacidadMaxima),
-                  ],
                 ],
               },
               layout: 'noBorders',
@@ -261,14 +253,14 @@ export async function generatePresupuestoDocumento({
     }
   });
 
-  const storagePath = `reservas/reserva-${reservaId}.pdf`;
+  const storagePath = storagePathInput || `reservas/reserva-${reservaId}.pdf`;
 
   const { error: uploadError } = await supabase.storage
     .from(PRESUPUESTOS_BUCKET)
     .upload(storagePath, pdfBuffer, {
       cacheControl: '3600',
       contentType: 'application/pdf',
-      upsert: true,
+      upsert: false,
     });
 
   if (uploadError) {

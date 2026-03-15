@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, Reserva, Salon } from '../utils/supabase/client';
+import { supabase, Perfil, Reserva, Salon } from '../utils/supabase/client';
 import { Calendar as CalendarIcon, TrendingUp, Building2, AlertCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { ReservaModal } from './ReservaModal';
 
@@ -10,7 +10,11 @@ const ESTADO_COLORS = {
   Cancelado: '#B0B7C3',
 };
 
-export function Dashboard() {
+type DashboardProps = {
+  perfil: Perfil;
+};
+
+export function Dashboard({ perfil }: DashboardProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [salones, setSalones] = useState<Salon[]>([]);
@@ -375,6 +379,7 @@ export function Dashboard() {
       {showModal && selectedReserva && (
         <ReservaModal
           reserva={selectedReserva}
+          canDelete={perfil.rol === 'ADMIN'}
           onClose={handleModalClose}
         />
       )}

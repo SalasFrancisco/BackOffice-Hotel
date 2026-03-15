@@ -1,0 +1,34 @@
+.bell-ringing {
+  transform-origin: top center;
+  animation: bell-ringing 1.15s ease-in-out infinite;
+}
+
+@keyframes bell-ringing {
+  0%,
+  45%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(14deg);
+  }
+
+  18% {
+    transform: rotate(-12deg);
+  }
+
+  26% {
+    transform: rotate(10deg);
+  }
+
+  34% {
+    transform: rotate(-8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bell-ringing {
+    animation: none;
+  }
+}

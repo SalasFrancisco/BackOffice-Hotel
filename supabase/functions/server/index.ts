@@ -791,7 +791,19 @@ const publicReservaHandler = async (c) => {
       return c.json({ error: "Cantidad de personas invalida" }, 400);
     }
 
-    if (new Date(fechaFin) <= new Date(fechaInicio)) {
+    const fechaInicioDate = new Date(fechaInicio);
+    const fechaFinDate = new Date(fechaFin);
+    if (Number.isNaN(fechaInicioDate.getTime()) || Number.isNaN(fechaFinDate.getTime())) {
+      return c.json({ error: "Formato de fecha invalido" }, 400);
+    }
+
+    const now = new Date();
+    now.setSeconds(0, 0);
+    if (fechaInicioDate < now) {
+      return c.json({ error: "La fecha de inicio no puede ser anterior al momento actual" }, 400);
+    }
+
+    if (fechaFinDate <= fechaInicioDate) {
       return c.json({ error: "La fecha de fin debe ser posterior a la fecha de inicio" }, 400);
     }
 
@@ -832,22 +844,21 @@ const publicReservaHandler = async (c) => {
       }
     }
 
-    if (totalPersonas > salonData.capacidad) {
-      return c.json(
-        {
-          error: `La capacidad maxima del salon seleccionado es de ${salonData.capacidad} personas`,
-        },
-        400,
-      );
-    }
+    const exceedsSalonCapacity = totalPersonas > salonData.capacidad;
+    const exceedsDistribucionCapacity = Boolean(
+      distribucionData && totalPersonas > distribucionData.capacidad,
+    );
 
-    if (distribucionData && totalPersonas > distribucionData.capacidad) {
-      return c.json(
-        {
-          error: `La distribucion elegida permite hasta ${distribucionData.capacidad} personas`,
-        },
-        400,
-      );
+    if (exceedsSalonCapacity || exceedsDistribucionCapacity) {
+      console.warn("Reserva creada con advertencia de capacidad", {
+        salonId: salonData.id,
+        distribucionId: distribucionData?.id ?? null,
+        totalPersonas,
+        salonCapacidad: salonData.capacidad,
+        distribucionCapacidad: distribucionData?.capacidad ?? null,
+        exceedsSalonCapacity,
+        exceedsDistribucionCapacity,
+      });
     }
 
     const observacionesParts = [
@@ -1003,6 +1014,11 @@ const publicReservaHandler = async (c) => {
       pdfGenerated,
       uploaded,
       signed,
+      capacityWarning: exceedsSalonCapacity || exceedsDistribucionCapacity,
+      capacityWarningDetail: {
+        exceedsSalonCapacity,
+        exceedsDistribucionCapacity,
+      },
     };
 
     if (pdfError) responseBody.pdfError = pdfError;

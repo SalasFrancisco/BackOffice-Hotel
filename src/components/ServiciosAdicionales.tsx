@@ -173,6 +173,14 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   // ===== SERVICIOS =====
   
   const handleCreateServicio = () => {
+    if (categorias.length === 0) {
+      setMessage({
+        type: 'error',
+        text: 'No se puede crear un servicio sin una categoría previa',
+      });
+      return;
+    }
+
     setEditingServicio(null);
     setServicioNombre('');
     setServicioDescripcion('');

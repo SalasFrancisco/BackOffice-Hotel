@@ -1,21 +1,78 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
 import { generatePresupuestoDocumento } from '../utils/presupuesto';
-import { AlertCircle, CheckCircle, Package } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle, Package } from 'lucide-react';
 import {
   hasNonWhitespaceValue,
   preventInvalidNumberKeys,
   sanitizeIntegerInput,
   sanitizePhoneInput,
 } from '../utils/formSanitizers';
+import {
+  getReservaPendingConflictIds,
+  ReservaPendingConflictComparable,
+} from '../utils/reservaPendingConflict';
+import { deletePresupuestoFile } from '../utils/reservaDeletion';
 
 type ReservaFormProps = {
   reserva?: Reserva | null;
   onClose: (success?: boolean) => void;
 };
 
+const HORARIO_OPCIONES = Array.from({ length: 48 }, (_, index) => {
+  const hora = String(Math.floor(index / 2)).padStart(2, '0');
+  const minutos = index % 2 === 0 ? '00' : '30';
+  return `${hora}:${minutos}`;
+});
+
+const formatShortDateInput = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 6);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 6)}`;
+};
+
+const isoDateToShortDate = (isoDate: string): string => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return '';
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year.slice(-2)}`;
+};
+
+const parseShortDateToIso = (value: string): string | null => {
+  const match = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const fullYear = 2000 + Number(yearText);
+
+  if (!Number.isInteger(day) || !Number.isInteger(month) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const candidate = new Date(fullYear, month - 1, day);
+  if (
+    candidate.getFullYear() !== fullYear
+    || candidate.getMonth() !== month - 1
+    || candidate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(fullYear).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
 export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   const CLIENTE_PDF_NOMBRE = 'Reserva sin cliente';
+  const CAPACITY_WARNING_STYLES = {
+    borderColor: '#f5c57a',
+    backgroundColor: '#fff8ed',
+    textColor: '#8a4b08',
+  };
+  const DATE_TIME_FIELD_CLASS =
+    'w-full px-3 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 
   const [salones, setSalones] = useState<Salon[]>([]);
   const [distribuciones, setDistribuciones] = useState<Distribucion[]>([]);
@@ -34,13 +91,23 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   const [telefonoCliente, setTelefonoCliente] = useState(sanitizePhoneInput(reserva?.cliente_telefono || ''));
   const [idSalon, setIdSalon] = useState(reserva?.id_salon || 0);
   const [idDistribucion, setIdDistribucion] = useState(reserva?.id_distribucion || 0);
-  const [fechaInicio, setFechaInicio] = useState(
-    reserva ? new Date(reserva.fecha_inicio).toISOString().slice(0, 16) : ''
+  const initialFechaInicio = reserva ? new Date(reserva.fecha_inicio).toISOString().slice(0, 16) : '';
+  const initialFechaFin = reserva ? new Date(reserva.fecha_fin).toISOString().slice(0, 16) : '';
+  const [fechaInicioDate, setFechaInicioDate] = useState(
+    initialFechaInicio ? isoDateToShortDate(initialFechaInicio.slice(0, 10)) : '',
   );
-  const [fechaFin, setFechaFin] = useState(
-    reserva ? new Date(reserva.fecha_fin).toISOString().slice(0, 16) : ''
+  const [fechaInicioHora, setFechaInicioHora] = useState(
+    initialFechaInicio ? initialFechaInicio.slice(11, 16) : '',
+  );
+  const [fechaFinDate, setFechaFinDate] = useState(
+    initialFechaFin ? isoDateToShortDate(initialFechaFin.slice(0, 10)) : '',
+  );
+  const [fechaFinHora, setFechaFinHora] = useState(
+    initialFechaFin ? initialFechaFin.slice(11, 16) : '',
   );
   const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
+  const fechaInicioPickerRef = useRef<HTMLInputElement | null>(null);
+  const fechaFinPickerRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setEstado(reserva?.estado || 'Pendiente');
@@ -50,11 +117,35 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     reserva?.cantidad_personas ? reserva.cantidad_personas.toString() : ''
   );
 
+  const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
+  const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
+
   const currentSalon = salones.find(s => s.id === idSalon) || null;
   const currentDistribucion = idDistribucion
     ? distribuciones.find(d => d.id === idDistribucion) || null
     : null;
   const totalPersonasNumber = parseInt(cantidadPersonas, 10) || 0;
+  const exceedsSalonCapacity = Boolean(
+    currentSalon && totalPersonasNumber > currentSalon.capacidad,
+  );
+  const exceedsDistribucionCapacity = Boolean(
+    currentDistribucion && totalPersonasNumber > currentDistribucion.capacidad,
+  );
+  const hasCapacityWarning = totalPersonasNumber > 0 && (
+    exceedsSalonCapacity || exceedsDistribucionCapacity
+  );
+
+  const capacityWarningDetails: string[] = [];
+  if (exceedsSalonCapacity && currentSalon) {
+    capacityWarningDetails.push(`supera la capacidad del salon (${currentSalon.capacidad} personas)`);
+  }
+  if (exceedsDistribucionCapacity && currentDistribucion) {
+    capacityWarningDetails.push(`supera la capacidad de la distribucion seleccionada (${currentDistribucion.capacidad} personas)`);
+  }
+
+  const capacityWarningText = hasCapacityWarning
+    ? `Advertencia: la cantidad ingresada ${capacityWarningDetails.join(' y ')}. Podes guardar la reserva igualmente.`
+    : '';
 
   useEffect(() => {
     loadInitialData();
@@ -68,16 +159,6 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       setIdDistribucion(0);
     }
   }, [idSalon]);
-
-  useEffect(() => {
-    const total = parseInt(cantidadPersonas, 10);
-    if (!idDistribucion || !total || total <= 0) return;
-
-    const selectedDist = distribuciones.find(d => d.id === idDistribucion);
-    if (selectedDist && total > selectedDist.capacidad) {
-      setIdDistribucion(0);
-    }
-  }, [cantidadPersonas, idDistribucion, distribuciones]);
 
   const loadInitialData = async () => {
     try {
@@ -180,17 +261,40 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
 
   const selectTodosCategoria = (categoriaId: number) => {
     const serviciosCategoria = servicios.filter(s => s.id_categoria === categoriaId);
-    const newMap = new Map(selectedServicios);
-    serviciosCategoria.forEach(s => {
-      if (!newMap.has(s.id)) {
-        newMap.set(s.id, 1);
+    setSelectedServicios((prev) => {
+      const newMap = new Map(prev);
+      const todosSeleccionados = serviciosCategoria.every((servicio) => newMap.has(servicio.id));
+
+      if (todosSeleccionados) {
+        serviciosCategoria.forEach((servicio) => {
+          newMap.delete(servicio.id);
+        });
+      } else {
+        serviciosCategoria.forEach((servicio) => {
+          if (!newMap.has(servicio.id)) {
+            newMap.set(servicio.id, 1);
+          }
+        });
       }
+
+      return newMap;
     });
-    setSelectedServicios(newMap);
   };
 
   const getServiciosByCategoria = (categoriaId: number) => {
     return servicios.filter(s => s.id_categoria === categoriaId);
+  };
+
+  const openNativeDatePicker = (pickerRef: { current: HTMLInputElement | null }) => {
+    const picker = pickerRef.current;
+    if (!picker) return;
+
+    if (typeof picker.showPicker === 'function') {
+      picker.showPicker();
+      return;
+    }
+
+    picker.click();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -202,6 +306,12 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     const telefonoClienteSanitizado = sanitizePhoneInput(telefonoCliente);
     const cantidadPersonasSanitizada = sanitizeIntegerInput(cantidadPersonas);
     const observacionesSanitizadas = observaciones.trim();
+    const fechaInicioIso = fechaInicioIsoFromInput;
+    const fechaFinIso = fechaFinIsoFromInput;
+    const fechaInicio = (
+      fechaInicioIso && fechaInicioHora ? `${fechaInicioIso}T${fechaInicioHora}` : ''
+    );
+    const fechaFin = fechaFinIso && fechaFinHora ? `${fechaFinIso}T${fechaFinHora}` : '';
 
     // Validations
     if (
@@ -217,6 +327,11 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       return;
     }
 
+    if (!fechaInicioIso || !fechaFinIso) {
+      setMessage({ type: 'error', text: 'Use formato de fecha dd/mm/aa en inicio y fin.' });
+      return;
+    }
+
     const totalPersonas = parseInt(cantidadPersonasSanitizada, 10);
     if (!totalPersonas || totalPersonas <= 0) {
       setMessage({ type: 'error', text: 'Ingrese una cantidad de personas valida' });
@@ -228,19 +343,11 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       ? distribuciones.find(d => d.id === idDistribucion) || null
       : null;
 
-    if (selectedSalon && totalPersonas > selectedSalon.capacidad) {
-      setMessage({
-        type: 'error',
-        text: `La capacidad maxima del salon seleccionado es de ${selectedSalon.capacidad} personas`,
-      });
-      return;
-    }
+    const now = new Date();
+    now.setSeconds(0, 0);
 
-    if (selectedDistribucionData && totalPersonas > selectedDistribucionData.capacidad) {
-      setMessage({
-        type: 'error',
-        text: `La distribucion elegida permite hasta ${selectedDistribucionData.capacidad} personas`,
-      });
+    if (new Date(fechaInicio) < now) {
+      setMessage({ type: 'error', text: 'La fecha de inicio no puede ser anterior al momento actual' });
       return;
     }
 
@@ -251,6 +358,37 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
 
     try {
       setLoading(true);
+
+      if (!reserva && estado !== 'Cancelado') {
+        const { data: pendingReservasData, error: pendingReservasError } = await supabase
+          .from('reservas')
+          .select('id, id_salon, estado, fecha_inicio, fecha_fin')
+          .eq('id_salon', idSalon)
+          .eq('estado', 'Pendiente');
+
+        if (pendingReservasError) throw pendingReservasError;
+
+        const nuevaReservaComparable: ReservaPendingConflictComparable = {
+          id: 0,
+          id_salon: idSalon,
+          estado,
+          fecha_inicio: new Date(fechaInicio).toISOString(),
+          fecha_fin: new Date(fechaFin).toISOString(),
+        };
+
+        const pendingConflictIds = getReservaPendingConflictIds(
+          nuevaReservaComparable,
+          (pendingReservasData || []) as ReservaPendingConflictComparable[],
+        );
+
+        if (pendingConflictIds.length > 0) {
+          setMessage({
+            type: 'error',
+            text: `No se puede crear la reserva: coincide con reserva(s) pendiente(s) del mismo salon y fecha (${pendingConflictIds.map((id) => `#${id}`).join(', ')}).`,
+          });
+          return;
+        }
+      }
 
       const { data: userData } = await supabase.auth.getUser();
       // Obtener precio base del salon seleccionado
@@ -328,7 +466,7 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
 
       let presupuestoErrorMessage: string | null = null;
 
-      if (!reserva && reservaId) {
+      if (reservaId) {
         if (!selectedSalon) {
           presupuestoErrorMessage =
             'No se encontro el salon seleccionado para generar el presupuesto.';
@@ -341,6 +479,10 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
             .filter((item): item is { servicio: Servicio; cantidad: number } => item !== null);
 
           try {
+            if (reserva?.presupuesto_url) {
+              await deletePresupuestoFile(reserva.presupuesto_url);
+            }
+
             await generatePresupuestoDocumento({
               reservaId,
               salon: selectedSalon,
@@ -356,6 +498,9 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               totalSalon: monto,
               cantidadPersonas: totalPersonas,
               servicios: serviciosDetalle,
+              storagePath: reserva
+                ? `reservas/reserva-${reservaId}-${Date.now()}.pdf`
+                : `reservas/reserva-${reservaId}.pdf`,
             });
           } catch (error: any) {
             presupuestoErrorMessage =
@@ -368,7 +513,9 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       if (presupuestoErrorMessage) {
         setMessage({
           type: 'error',
-          text: `Reserva creada, pero no se pudo generar el presupuesto: ${presupuestoErrorMessage}`,
+          text: reserva
+            ? `Reserva actualizada, pero no se pudo regenerar el presupuesto: ${presupuestoErrorMessage}`
+            : `Reserva creada, pero no se pudo generar el presupuesto: ${presupuestoErrorMessage}`,
         });
       } else {
         setMessage({
@@ -486,11 +633,6 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
                 </option>
               ))}
             </select>
-            {currentSalon && totalPersonasNumber > currentSalon.capacidad && (
-              <p className="text-xs text-red-600 mt-1">
-                La capacidad del salon es de {currentSalon.capacidad} personas.
-              </p>
-            )}
           </div>
 
           <div>
@@ -505,13 +647,8 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
             >
               <option value={0}>Sin distribucion especifica</option>
               {distribuciones.map(dist => (
-                <option
-                  key={dist.id}
-                  value={dist.id}
-                  disabled={totalPersonasNumber > dist.capacidad}
-                >
+                <option key={dist.id} value={dist.id}>
                   {dist.nombre} - Cap: {dist.capacidad} personas
-                  {totalPersonasNumber > dist.capacidad ? ' (capacidad insuficiente)' : ''}
                 </option>
 
               ))}
@@ -519,11 +656,6 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
             {idSalon && distribuciones.length === 0 && (
               <p className="text-xs text-gray-500 mt-1">
                 Este salon no tiene distribuciones configuradas
-              </p>
-            )}
-            {currentDistribucion && totalPersonasNumber > currentDistribucion.capacidad && (
-              <p className="text-xs text-red-600 mt-1">
-                La distribucion elegida admite hasta {currentDistribucion.capacidad} personas.
               </p>
             )}
           </div>
@@ -546,32 +678,138 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           </div>
         </div>
 
-        {/* Fecha y Hora */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-700 mb-2">
-              Fecha y Hora de Inicio <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="datetime-local"
-              value={fechaInicio}
-              onChange={(e) => setFechaInicio(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        {hasCapacityWarning && (
+          <div
+            className="flex items-start gap-2 p-3 rounded-lg"
+            style={{
+              border: `1px solid ${CAPACITY_WARNING_STYLES.borderColor}`,
+              backgroundColor: CAPACITY_WARNING_STYLES.backgroundColor,
+            }}
+          >
+            <AlertCircle
+              className="w-5 h-5 flex-shrink-0"
+              style={{ color: CAPACITY_WARNING_STYLES.textColor }}
             />
+            <p className="text-sm" style={{ color: CAPACITY_WARNING_STYLES.textColor }}>
+              {capacityWarningText}
+            </p>
+          </div>
+        )}
+
+        {/* Fecha y Hora */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <label className="block text-sm text-gray-700 mb-2">
+              Inicio <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Fecha</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={fechaInicioDate}
+                    onChange={(e) => setFechaInicioDate(formatShortDateInput(e.target.value))}
+                    inputMode="numeric"
+                    maxLength={8}
+                    placeholder="dd/mm/aa"
+                    required
+                    className={`${DATE_TIME_FIELD_CLASS} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openNativeDatePicker(fechaInicioPickerRef)}
+                    className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Seleccionar fecha"
+                    aria-label="Seleccionar fecha de inicio"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                  </button>
+                  <input
+                    ref={fechaInicioPickerRef}
+                    type="date"
+                    value={fechaInicioIsoFromInput || ''}
+                    onChange={(e) => setFechaInicioDate(isoDateToShortDate(e.target.value))}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Horario</label>
+                <select
+                  value={fechaInicioHora}
+                  onChange={(e) => setFechaInicioHora(e.target.value)}
+                  required
+                  className={DATE_TIME_FIELD_CLASS}
+                >
+                  <option value="">Seleccionar horario</option>
+                  {HORARIO_OPCIONES.map((horario) => (
+                    <option key={`inicio-${horario}`} value={horario}>
+                      {horario}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
-          <div>
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
             <label className="block text-sm text-gray-700 mb-2">
-              Fecha y Hora de Fin <span className="text-red-500">*</span>
+              Fin <span className="text-red-500">*</span>
             </label>
-            <input
-              type="datetime-local"
-              value={fechaFin}
-              onChange={(e) => setFechaFin(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Fecha</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={fechaFinDate}
+                    onChange={(e) => setFechaFinDate(formatShortDateInput(e.target.value))}
+                    inputMode="numeric"
+                    maxLength={8}
+                    placeholder="dd/mm/aa"
+                    required
+                    className={`${DATE_TIME_FIELD_CLASS} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openNativeDatePicker(fechaFinPickerRef)}
+                    className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title="Seleccionar fecha"
+                    aria-label="Seleccionar fecha de fin"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                  </button>
+                  <input
+                    ref={fechaFinPickerRef}
+                    type="date"
+                    value={fechaFinIsoFromInput || ''}
+                    onChange={(e) => setFechaFinDate(isoDateToShortDate(e.target.value))}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">Horario</label>
+                <select
+                  value={fechaFinHora}
+                  onChange={(e) => setFechaFinHora(e.target.value)}
+                  required
+                  className={DATE_TIME_FIELD_CLASS}
+                >
+                  <option value="">Seleccionar horario</option>
+                  {HORARIO_OPCIONES.map((horario) => (
+                    <option key={`fin-${horario}`} value={horario}>
+                      {horario}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -739,12 +977,6 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           </button>
         </div>
       </form>
-
-      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-sm text-blue-800">
-          <strong>Nota:</strong> El sistema valida automáticamente que no haya solapamientos de reservas en el mismo salón. Si intenta crear una reserva que se solapa con otra existente (no cancelada), recibirá un error.
-        </p>
-      </div>
     </div>
   );
 }

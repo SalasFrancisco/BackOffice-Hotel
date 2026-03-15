@@ -9,6 +9,7 @@ import {
   sanitizeDecimalInput,
   sanitizeIntegerInput,
 } from '../utils/formSanitizers';
+import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 
 type SalonesProps = {
   perfil: Perfil;
@@ -163,6 +164,21 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
     if (!confirmDelete.salonId) return;
 
     try {
+      const { data: reservasAsociadas, error: reservasError } = await supabase
+        .from('reservas')
+        .select('id, presupuesto_url')
+        .eq('id_salon', confirmDelete.salonId);
+
+      if (reservasError) throw reservasError;
+
+      const reservasDelSalon = reservasAsociadas || [];
+      for (const reserva of reservasDelSalon) {
+        await deleteReservaWithPresupuesto({
+          id: reserva.id,
+          presupuesto_url: reserva.presupuesto_url,
+        });
+      }
+
       const { error: deleteError } = await supabase
         .from('salones')
         .delete()
@@ -170,7 +186,10 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
 
       if (deleteError) throw deleteError;
 
-      setMessage({ type: 'success', text: 'Salón eliminado correctamente' });
+      const reservasEliminadasText = reservasDelSalon.length > 0
+        ? ` y ${reservasDelSalon.length} reserva(s) asociada(s)`
+        : '';
+      setMessage({ type: 'success', text: `Salón eliminado correctamente${reservasEliminadasText}` });
       setConfirmDelete({ open: false, salonId: null });
       loadSalones();
       setTimeout(() => setMessage(null), 3000);
@@ -385,7 +404,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
         onOpenChange={(open) => setConfirmDelete({ open, salonId: null })}
         onConfirm={confirmDeleteSalon}
         title="Eliminar Salón"
-        description="¿Está seguro de eliminar este salón? Esta acción no se puede deshacer."
+        description="¿Está seguro de eliminar este salón? También se eliminarán las reservas asociadas y sus presupuestos."
         confirmText="Eliminar"
         cancelText="Cancelar"
       />

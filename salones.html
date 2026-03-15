@@ -560,6 +560,130 @@
 
         }
 
+        .form-group .datetime-field {
+
+            padding: 10px 12px;
+
+            border: 1px solid #d9d9d9;
+
+            border-radius: 8px;
+
+            background: #fafafa;
+
+            border-bottom: 1px solid #d9d9d9;
+
+        }
+
+        .form-group .datetime-field:focus {
+
+            border-color: var(--primary);
+
+            box-shadow: 0 0 0 3px rgba(161, 148, 148, 0.2);
+
+        }
+
+        .form-group input.datetime-field::-webkit-calendar-picker-indicator {
+
+            cursor: pointer;
+
+            opacity: 0.75;
+
+        }
+
+        .date-input-with-picker {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+        }
+
+        .date-input-with-picker .datetime-field {
+
+            flex: 1;
+
+        }
+
+        .date-picker-btn {
+
+            width: 40px;
+
+            height: 40px;
+
+            border: 1px solid #d9d9d9;
+
+            border-radius: 8px;
+
+            background: #fafafa;
+
+            color: #666;
+
+            cursor: pointer;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            transition: 0.2s;
+
+        }
+
+        .date-picker-btn:hover {
+
+            background: #f0f0f0;
+
+            color: #333;
+
+        }
+
+        .date-picker-btn:focus {
+
+            outline: none;
+
+            border-color: var(--primary);
+
+            box-shadow: 0 0 0 3px rgba(161, 148, 148, 0.2);
+
+        }
+
+        .native-date-picker {
+
+            position: absolute;
+
+            width: 0;
+
+            height: 0;
+
+            opacity: 0;
+
+            pointer-events: none;
+
+        }
+
+        .capacity-warning {
+
+            display: none;
+
+            margin: -4px 0 14px;
+
+            padding: 10px 12px;
+
+            border: 1px solid #f5c57a;
+
+            background: #fff8ed;
+
+            color: #8a4b08;
+
+            font-size: 12px;
+
+            line-height: 1.4;
+
+        }
+
         /* Selector Inteligente */
 
         .custom-select-wrapper {
@@ -886,6 +1010,8 @@
 
             min-width: 350px;
 
+            position: relative;
+
         }
 
         .salon-name {
@@ -1022,6 +1148,8 @@
 
             border-radius: 6px;
 
+            overflow: hidden;
+
         }
 
         .salon-swiper img {
@@ -1043,6 +1171,58 @@
             text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 
             transform: scale(0.8);
+
+        }
+
+        .salon-slider .swiper-button-next,
+
+        .salon-slider .swiper-button-prev {
+
+            width: 38px;
+
+            height: 38px;
+
+            margin-top: -19px;
+
+            border-radius: 50%;
+
+            background: rgba(0, 0, 0, 0.55);
+
+            color: #fff;
+
+            z-index: 10;
+
+            transition: background 0.2s ease;
+
+        }
+
+        .salon-slider .swiper-button-next:hover,
+
+        .salon-slider .swiper-button-prev:hover {
+
+            background: rgba(0, 0, 0, 0.75);
+
+        }
+
+        .salon-slider .swiper-button-next::after,
+
+        .salon-slider .swiper-button-prev::after {
+
+            font-size: 14px;
+
+            font-weight: 700;
+
+        }
+
+        .salon-slider .swiper-button-prev {
+
+            left: 12px;
+
+        }
+
+        .salon-slider .swiper-button-next {
+
+            right: 12px;
 
         }
 
@@ -1571,19 +1751,45 @@
 
                     </div>
 
+                    <div id="capacityWarning" class="capacity-warning"></div>
+
                     <div class="form-row">
 
-                        <div class="form-group half"><label>Fecha Inicio</label><input type="date" id="fecha_inicio" required></div>
+                        <div class="form-group half">
+                            <label>Fecha Inicio</label>
+                            <div class="date-input-with-picker">
+                                <input type="text" id="fecha_inicio" class="datetime-field" inputmode="numeric" maxlength="8" placeholder="dd/mm/aa" required>
+                                <button type="button" id="fecha_inicio_btn" class="date-picker-btn" aria-label="Seleccionar fecha de inicio"><i class="far fa-calendar-alt"></i></button>
+                                <input type="date" id="fecha_inicio_picker" class="native-date-picker" tabindex="-1" aria-hidden="true">
+                            </div>
+                        </div>
 
-                        <div class="form-group half"><label>Hora Inicio</label><input type="time" id="hora_inicio" required></div>
+                        <div class="form-group half">
+                            <label>Hora Inicio</label>
+                            <select id="hora_inicio" class="datetime-field" required>
+                                <option value="">Seleccione horario</option>
+                            </select>
+                        </div>
 
                     </div>
 
                     <div class="form-row">
 
-                        <div class="form-group half"><label>Fecha Fin</label><input type="date" id="fecha_fin" required></div>
+                        <div class="form-group half">
+                            <label>Fecha Fin</label>
+                            <div class="date-input-with-picker">
+                                <input type="text" id="fecha_fin" class="datetime-field" inputmode="numeric" maxlength="8" placeholder="dd/mm/aa" required>
+                                <button type="button" id="fecha_fin_btn" class="date-picker-btn" aria-label="Seleccionar fecha de fin"><i class="far fa-calendar-alt"></i></button>
+                                <input type="date" id="fecha_fin_picker" class="native-date-picker" tabindex="-1" aria-hidden="true">
+                            </div>
+                        </div>
 
-                        <div class="form-group half"><label>Hora Fin</label><input type="time" id="hora_fin" required></div>
+                        <div class="form-group half">
+                            <label>Hora Fin</label>
+                            <select id="hora_fin" class="datetime-field" required>
+                                <option value="">Seleccione horario</option>
+                            </select>
+                        </div>
 
                     </div>
 
@@ -2261,7 +2467,7 @@
 
                     <li><a href="#"><i class="fas fa-phone"></i> +54 351 420 2124</a></li>
 
-                    <li><a href="#"><i class="fab fa-whatsapp"></i> +54 351 610 8751</a></li>
+                    <li><a href="https://api.whatsapp.com/send?phone=543516108751" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> +54 351 610 8751</a></li>
 
                     <li><a href="#"><i class="fas fa-map-marker-alt"></i> Duarte Quirós 1300, Córdoba, Argentina</a>
 
@@ -2367,7 +2573,7 @@
 
     </footer>
 
-    <a href="#" class="whatsapp-float"><i class="fab fa-whatsapp"></i></a>
+    <a href="https://api.whatsapp.com/send?phone=543516108751" class="whatsapp-float" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i></a>
 
     <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 
@@ -2393,7 +2599,16 @@
 
         salonSwipers.forEach(slider => {
 
-            new Swiper(slider, { loop: true, effect: 'fade', navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' } });
+            const sliderContainer = slider.closest('.salon-slider');
+            const nextButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-next') : null;
+            const prevButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-prev') : null;
+
+            new Swiper(slider, {
+                loop: true,
+                effect: 'fade',
+                fadeEffect: { crossFade: true },
+                navigation: { nextEl: nextButton, prevEl: prevButton }
+            });
 
         });
 
@@ -2436,6 +2651,24 @@
 
         const inputTelefono = document.getElementById('telefono');
 
+        const capacityWarning = document.getElementById('capacityWarning');
+
+        const inputFechaInicio = document.getElementById('fecha_inicio');
+
+        const inputFechaFin = document.getElementById('fecha_fin');
+
+        const inputFechaInicioPicker = document.getElementById('fecha_inicio_picker');
+
+        const inputFechaFinPicker = document.getElementById('fecha_fin_picker');
+
+        const inputFechaInicioBtn = document.getElementById('fecha_inicio_btn');
+
+        const inputFechaFinBtn = document.getElementById('fecha_fin_btn');
+
+        const horaInicioSelect = document.getElementById('hora_inicio');
+
+        const horaFinSelect = document.getElementById('hora_fin');
+
         const invalidNumberKeys = new Set(['e', 'E', '+', '-', ' ']);
 
         const hasNonWhitespaceValue = (value) => value.trim().length > 0;
@@ -2444,10 +2677,83 @@
 
         const sanitizePhoneInput = (value) => value.replace(/\D/g, '');
 
+        const formatShortDateInput = (value) => {
+            const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
+            if (digits.length <= 2) return digits;
+            if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+            return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 6)}`;
+        };
+
+        const parseShortDateToIso = (value) => {
+            const normalized = String(value || '').trim();
+            const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+            if (!match) return null;
+
+            const day = Number(match[1]);
+            const month = Number(match[2]);
+            const year = 2000 + Number(match[3]);
+
+            if (!Number.isInteger(day) || !Number.isInteger(month) || month < 1 || month > 12 || day < 1 || day > 31) {
+                return null;
+            }
+
+            const candidate = new Date(year, month - 1, day);
+            if (
+                candidate.getFullYear() !== year
+                || candidate.getMonth() !== month - 1
+                || candidate.getDate() !== day
+            ) {
+                return null;
+            }
+
+            return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        };
+
+        const isoDateToShortDate = (value) => {
+            const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return '';
+            return `${match[3]}/${match[2]}/${match[1].slice(-2)}`;
+        };
+
+        const syncDatePickerValue = (textInput, pickerInput) => {
+            if (!textInput || !pickerInput) return;
+            pickerInput.value = parseShortDateToIso(textInput.value) || '';
+        };
+
+        const openNativeDatePicker = (pickerInput) => {
+            if (!pickerInput) return;
+            if (typeof pickerInput.showPicker === 'function') {
+                pickerInput.showPicker();
+                return;
+            }
+            pickerInput.click();
+        };
+
         const preventInvalidNumberKeys = (event) => {
             if (invalidNumberKeys.has(event.key)) {
                 event.preventDefault();
             }
+        };
+
+        const populateHalfHourOptions = () => {
+            [horaInicioSelect, horaFinSelect].forEach((selectElement) => {
+                if (!selectElement) return;
+
+                selectElement.innerHTML = '<option value="">Seleccione horario</option>';
+
+                for (let hour = 0; hour < 24; hour += 1) {
+                    for (let minutes = 0; minutes < 60; minutes += 30) {
+                        const hourText = String(hour).padStart(2, '0');
+                        const minuteText = String(minutes).padStart(2, '0');
+                        const timeValue = `${hourText}:${minuteText}`;
+
+                        const option = document.createElement('option');
+                        option.value = timeValue;
+                        option.textContent = timeValue;
+                        selectElement.appendChild(option);
+                    }
+                }
+            });
         };
 
         const parseJsonResponse = async (response) => {
@@ -2540,6 +2846,56 @@
             return false;
         };
 
+        const getSelectedSalonData = () => {
+            const salonId = parseInt(hiddenInput.value, 10);
+            if (!salonId) return null;
+            return salonesDB.find(s => Number(s.id) === salonId) || null;
+        };
+
+        const getSelectedDistribucionData = () => {
+            const distribucionId = parseInt(selectDistribucion.value, 10);
+            if (!distribucionId) return null;
+            return catalogDistribuciones.find(d => Number(d.id) === distribucionId) || null;
+        };
+
+        const getCapacityWarningMessage = () => {
+            const personas = parseInt(inputCantidad.value, 10);
+            if (!personas || personas <= 0) return '';
+
+            const salon = getSelectedSalonData();
+            const distribucion = getSelectedDistribucionData();
+            if (!salon && !distribucion) return '';
+
+            const warnings = [];
+
+            if (salon && personas > Number(salon.capacidad || 0)) {
+                warnings.push(`supera la capacidad del salon (${salon.capacidad} personas)`);
+            }
+
+            if (distribucion && personas > Number(distribucion.capacidad || 0)) {
+                warnings.push(`supera la capacidad de la distribucion seleccionada (${distribucion.capacidad} personas)`);
+            }
+
+            if (!warnings.length) return '';
+
+            return `Advertencia: la cantidad ingresada ${warnings.join(' y ')}. Podes enviar el formulario igualmente.`;
+        };
+
+        const updateCapacityWarning = () => {
+            if (!capacityWarning) return;
+
+            const warningMessage = getCapacityWarningMessage();
+
+            if (!warningMessage) {
+                capacityWarning.style.display = 'none';
+                capacityWarning.textContent = '';
+                return;
+            }
+
+            capacityWarning.textContent = warningMessage;
+            capacityWarning.style.display = 'block';
+        };
+
         function updateDistribucionesForSalon(salonId) {
 
             selectDistribucion.innerHTML = '';
@@ -2575,6 +2931,8 @@
             });
 
             selectDistribucion.disabled = distribuciones.length === 0;
+
+            updateCapacityWarning();
 
         }
 
@@ -2838,6 +3196,7 @@
                     updateSalonRecommendations();
                     updateDistribucionesForSalon(null);
                     renderServicios();
+                    updateCapacityWarning();
                     return;
                 } catch (err) {
                     console.warn('Error parsing/using function response for', url, err);
@@ -2897,6 +3256,7 @@
                 updateSalonRecommendations();
                 updateDistribucionesForSalon(null);
                 renderServicios();
+                updateCapacityWarning();
                 return;
             } catch (error) {
                 console.error('Error loading catalog (fallback):', error);
@@ -2910,6 +3270,7 @@
         inputCantidad.addEventListener('input', () => {
             inputCantidad.value = sanitizeIntegerInput(inputCantidad.value);
             updateSalonRecommendations();
+            updateCapacityWarning();
         });
 
         inputTelefono.addEventListener('keydown', preventInvalidNumberKeys);
@@ -2918,11 +3279,54 @@
             inputTelefono.value = sanitizePhoneInput(inputTelefono.value);
         });
 
-        selectDistribucion.addEventListener('change', updateSalonRecommendations);
+        [inputFechaInicio, inputFechaFin].forEach((dateInput) => {
+            if (!dateInput) return;
+            dateInput.addEventListener('input', () => {
+                dateInput.value = formatShortDateInput(dateInput.value);
+                if (dateInput === inputFechaInicio) {
+                    syncDatePickerValue(inputFechaInicio, inputFechaInicioPicker);
+                } else if (dateInput === inputFechaFin) {
+                    syncDatePickerValue(inputFechaFin, inputFechaFinPicker);
+                }
+            });
+        });
+
+        if (inputFechaInicioPicker) {
+            inputFechaInicioPicker.addEventListener('change', () => {
+                inputFechaInicio.value = isoDateToShortDate(inputFechaInicioPicker.value);
+            });
+        }
+
+        if (inputFechaFinPicker) {
+            inputFechaFinPicker.addEventListener('change', () => {
+                inputFechaFin.value = isoDateToShortDate(inputFechaFinPicker.value);
+            });
+        }
+
+        if (inputFechaInicioBtn) {
+            inputFechaInicioBtn.addEventListener('click', () => {
+                syncDatePickerValue(inputFechaInicio, inputFechaInicioPicker);
+                openNativeDatePicker(inputFechaInicioPicker);
+            });
+        }
+
+        if (inputFechaFinBtn) {
+            inputFechaFinBtn.addEventListener('click', () => {
+                syncDatePickerValue(inputFechaFin, inputFechaFinPicker);
+                openNativeDatePicker(inputFechaFinPicker);
+            });
+        }
+
+        selectDistribucion.addEventListener('change', () => {
+            updateSalonRecommendations();
+            updateCapacityWarning();
+        });
 
         salonTrigger.addEventListener('click', () => salonWrapper.classList.toggle('open'));
 
         document.addEventListener('click', (e) => { if (!salonWrapper.contains(e.target)) salonWrapper.classList.remove('open'); });
+
+        populateHalfHourOptions();
 
         loadCatalog();
 
@@ -2956,11 +3360,11 @@
 
             const telefono = telefonoInput.value;
 
-            const fechaInicio = document.getElementById('fecha_inicio').value;
+            const fechaInicioRaw = document.getElementById('fecha_inicio').value;
 
             const horaInicio = document.getElementById('hora_inicio').value;
 
-            const fechaFin = document.getElementById('fecha_fin').value;
+            const fechaFinRaw = document.getElementById('fecha_fin').value;
 
             const horaFin = document.getElementById('hora_fin').value;
 
@@ -2994,12 +3398,20 @@
 
             }
 
-            if (!fechaInicio || !horaInicio || !fechaFin || !horaFin) {
+            if (!fechaInicioRaw || !horaInicio || !fechaFinRaw || !horaFin) {
 
                 setStatus('Complete fecha y horario del evento.', true);
 
                 return;
 
+            }
+
+            const fechaInicioIso = parseShortDateToIso(fechaInicioRaw);
+            const fechaFinIso = parseShortDateToIso(fechaFinRaw);
+
+            if (!fechaInicioIso || !fechaFinIso) {
+                setStatus('Use formato de fecha dd/mm/aa para inicio y fin.', true);
+                return;
             }
 
             if (!cantidad || cantidad <= 0) {
@@ -3010,9 +3422,20 @@
 
             }
 
-            const startDate = new Date(`${fechaInicio}T${horaInicio}`);
+            const startDate = new Date(`${fechaInicioIso}T${horaInicio}`);
 
-            const endDate = new Date(`${fechaFin}T${horaFin}`);
+            const endDate = new Date(`${fechaFinIso}T${horaFin}`);
+
+            const now = new Date();
+            now.setSeconds(0, 0);
+
+            if (startDate < now) {
+
+                setStatus('La fecha y hora de inicio no pueden ser anteriores al momento actual.', true);
+
+                return;
+
+            }
 
             if (endDate <= startDate) {
 
@@ -3132,6 +3555,8 @@
 
                 renderServicios();
 
+                updateCapacityWarning();
+
             } catch (error) {
 
                 setStatus(error.message || 'Ocurrio un error inesperado.', true);
@@ -3149,6 +3574,3 @@
 </body>
 
 </html>
-
-
-

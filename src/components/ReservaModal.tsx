@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase, Reserva, ReservaServicio } from '../utils/supabase/client';
-import { X, Trash2, Edit, CheckCircle, AlertCircle, Package } from 'lucide-react';
+import { X, Trash2, CheckCircle, AlertCircle, Package } from 'lucide-react';
+import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 
 type ReservaModalProps = {
   reserva: Reserva;
+  canDelete: boolean;
   onClose: () => void;
 };
 
@@ -14,7 +16,7 @@ const ESTADO_COLORS = {
   Cancelado: '#B0B7C3',
 };
 
-export function ReservaModal({ reserva, onClose }: ReservaModalProps) {
+export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [reservaServicios, setReservaServicios] = useState<ReservaServicio[]>([]);
@@ -66,18 +68,15 @@ export function ReservaModal({ reserva, onClose }: ReservaModalProps) {
   };
 
   const handleDelete = async () => {
+    if (!canDelete) return;
+
     if (!confirm('¿Está seguro de eliminar esta reserva?')) return;
 
     try {
       setLoading(true);
       setMessage(null);
 
-      const { error } = await supabase
-        .from('reservas')
-        .delete()
-        .eq('id', reserva.id);
-
-      if (error) throw error;
+      await deleteReservaWithPresupuesto(reserva);
 
       setMessage({ type: 'success', text: 'Reserva eliminada correctamente' });
       setTimeout(() => {
@@ -268,14 +267,16 @@ export function ReservaModal({ reserva, onClose }: ReservaModalProps) {
 
         {/* Footer */}
         <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={handleDelete}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <Trash2 className="w-4 h-4" />
-            Eliminar Reserva
-          </button>
+          {canDelete ? (
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              Eliminar Reserva
+            </button>
+          ) : <div />}
           
           <button
             onClick={onClose}

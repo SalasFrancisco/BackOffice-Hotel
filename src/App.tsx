@@ -262,17 +262,17 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
 
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard perfil={perfil} />;
       case 'reservas':
-        return <Reservas />;
+        return <Reservas perfil={perfil} />;
       case 'salones':
         return <Salones perfil={perfil} onEditSalon={handleEditSalon} />;
       case 'servicios':
         return <ServiciosAdicionales perfil={perfil} />;
       case 'usuarios':
-        return perfil.rol === 'ADMIN' ? <Usuarios /> : <Dashboard />;
+        return perfil.rol === 'ADMIN' ? <Usuarios /> : <Dashboard perfil={perfil} />;
       default:
-        return <Dashboard />;
+        return <Dashboard perfil={perfil} />;
     }
   };
 

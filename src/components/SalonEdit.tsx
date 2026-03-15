@@ -22,6 +22,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showDistDialog, setShowDistDialog] = useState(false);
   const [editingDist, setEditingDist] = useState<Distribucion | null>(null);
+  const [distMessage, setDistMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Form fields - Salon
   const [nombre, setNombre] = useState('');
@@ -147,6 +148,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     setEditingDist(dist);
     setDistNombre(dist.nombre);
     setDistCapacidad(dist.capacidad.toString());
+    setDistMessage(null);
     setShowDistDialog(true);
   };
 
@@ -154,18 +156,19 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     setEditingDist(null);
     setDistNombre('');
     setDistCapacidad('');
+    setDistMessage(null);
     setShowDistDialog(true);
   };
 
   const handleSaveDist = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
+    setDistMessage(null);
 
     const distNombreSanitizado = distNombre.trim();
     const distCapacidadSanitizada = sanitizeIntegerInput(distCapacidad);
 
     if (!hasNonWhitespaceValue(distNombreSanitizado) || !distCapacidadSanitizada) {
-      setMessage({ type: 'error', text: 'Complete todos los campos de la distribucion' });
+      setDistMessage({ type: 'error', text: 'Complete todos los campos de la distribucion' });
       return;
     }
 
@@ -173,12 +176,12 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     const capacidadDistribucion = parseInt(distCapacidadSanitizada, 10);
 
     if (!capacidadDistribucion || capacidadDistribucion <= 0) {
-      setMessage({ type: 'error', text: 'Ingrese una capacidad valida para la distribucion' });
+      setDistMessage({ type: 'error', text: 'Ingrese una capacidad valida para la distribucion' });
       return;
     }
 
     if (capacidadDistribucion > capacidadSalon) {
-      setMessage({
+      setDistMessage({
         type: 'error',
         text: `La distribucion no puede superar la capacidad del salon (${capacidadSalon} personas)`,
       });
@@ -216,11 +219,12 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
       setShowDistDialog(false);
       setEditingDist(null);
+      setDistMessage(null);
       loadData();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error('Error saving distribucion:', err);
-      setMessage({ type: 'error', text: err.message });
+      setDistMessage({ type: 'error', text: err.message });
     } finally {
       setSavingDist(false);
     }
@@ -442,12 +446,39 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       </div>
 
       {/* Dialog for Create/Edit Distribution */}
-      <Dialog open={showDistDialog} onOpenChange={setShowDistDialog}>
+      <Dialog
+        open={showDistDialog}
+        onOpenChange={(open) => {
+          setShowDistDialog(open);
+          if (!open) {
+            setDistMessage(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingDist ? 'Editar Distribución' : 'Nueva Distribución'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSaveDist} className="space-y-4 p-2">
+            {distMessage && (
+              <div
+                className={`flex items-start gap-2 p-3 rounded-lg ${
+                  distMessage.type === 'success'
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-red-50 border border-red-200'
+                }`}
+              >
+                {distMessage.type === 'success' ? (
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                )}
+                <p className={`text-sm ${distMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+                  {distMessage.text}
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre de la Distribución <span className="text-red-500">*</span>
@@ -484,7 +515,10 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
               <button
                 type="button"
-                onClick={() => setShowDistDialog(false)}
+                onClick={() => {
+                  setShowDistDialog(false);
+                  setDistMessage(null);
+                }}
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancelar
@@ -513,4 +547,3 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     </div>
   );
 }
-

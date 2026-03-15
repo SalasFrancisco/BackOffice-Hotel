@@ -55,6 +55,29 @@ export type ReservaServicio = {
   servicio?: Servicio;
 };
 
+export type NotificacionTipo =
+  | 'RESERVA_NUEVA'
+  | 'RESERVA_EDITADA'
+  | 'ESTADO_CAMBIADO'
+  | 'RESERVA_ELIMINADA';
+
+export type Notificacion = {
+  id: number;
+  tipo: NotificacionTipo;
+  titulo: string;
+  mensaje: string;
+  reserva_id?: number | null;
+  metadata?: Record<string, unknown> | null;
+  creado_en: string;
+};
+
+export type NotificacionLeida = {
+  id: number;
+  id_notificacion: number;
+  user_id: string;
+  leido_en: string;
+};
+
 export type Reserva = {
   id: number;
   cliente_nombre?: string | null;

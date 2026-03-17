@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase, Reserva, ReservaServicio } from '../utils/supabase/client';
 import { X, Trash2, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
+import { ConfirmDialog } from './ConfirmDialog';
 
 type ReservaModalProps = {
   reserva: Reserva;
@@ -21,6 +22,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [reservaServicios, setReservaServicios] = useState<ReservaServicio[]>([]);
   const [loadingServicios, setLoadingServicios] = useState(true);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
 
   useEffect(() => {
     loadServicios();
@@ -67,10 +69,13 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!canDelete) return;
+    setShowDeleteConfirmDialog(true);
+  };
 
-    if (!confirm('¿Está seguro de eliminar esta reserva?')) return;
+  const confirmDelete = async () => {
+    setShowDeleteConfirmDialog(false);
 
     try {
       setLoading(true);
@@ -286,6 +291,18 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirmDialog}
+        onOpenChange={setShowDeleteConfirmDialog}
+        onConfirm={confirmDelete}
+        title="Eliminar reserva"
+        description="¿Está seguro de eliminar esta reserva? También se eliminará el presupuesto asociado."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+      />
     </div>
   );
 }
+

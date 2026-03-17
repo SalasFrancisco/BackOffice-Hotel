@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { generatePresupuestoDocumento } from '../utils/presupuesto';
+import { buildPresupuestoFileName, generatePresupuestoDocumento } from '../utils/presupuesto';
 import { AlertCircle, CalendarDays, CheckCircle, Package } from 'lucide-react';
 import {
   hasNonWhitespaceValue,
@@ -17,6 +17,7 @@ import { deletePresupuestoFile } from '../utils/reservaDeletion';
 type ReservaFormProps = {
   reserva?: Reserva | null;
   onClose: (success?: boolean) => void;
+  onDirtyChange?: (isDirty: boolean) => void;
 };
 
 const HORARIO_OPCIONES = Array.from({ length: 48 }, (_, index) => {
@@ -64,7 +65,7 @@ const parseShortDateToIso = (value: string): string | null => {
   return `${String(fullYear).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 };
 
-export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
+export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProps) {
   const CLIENTE_PDF_NOMBRE = 'Reserva sin cliente';
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
@@ -116,6 +117,50 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
   const [cantidadPersonas, setCantidadPersonas] = useState(
     reserva?.cantidad_personas ? reserva.cantidad_personas.toString() : ''
   );
+  const [initialFormSnapshot, setInitialFormSnapshot] = useState<string | null>(null);
+
+  const selectedServiciosSnapshot = useMemo(
+    () => Array.from(selectedServicios.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([servicioId, cantidad]) => `${servicioId}:${cantidad}`)
+      .join('|'),
+    [selectedServicios],
+  );
+
+  const currentFormSnapshot = useMemo(
+    () => JSON.stringify({
+      nombreCliente,
+      emailCliente,
+      telefonoCliente,
+      idSalon,
+      idDistribucion,
+      fechaInicioDate,
+      fechaInicioHora,
+      fechaFinDate,
+      fechaFinHora,
+      estado,
+      observaciones,
+      cantidadPersonas,
+      selectedServicios: selectedServiciosSnapshot,
+    }),
+    [
+      nombreCliente,
+      emailCliente,
+      telefonoCliente,
+      idSalon,
+      idDistribucion,
+      fechaInicioDate,
+      fechaInicioHora,
+      fechaFinDate,
+      fechaFinHora,
+      estado,
+      observaciones,
+      cantidadPersonas,
+      selectedServiciosSnapshot,
+    ],
+  );
+
+  const isFormDirty = initialFormSnapshot !== null && currentFormSnapshot !== initialFormSnapshot;
 
   const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
   const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
@@ -159,6 +204,25 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       setIdDistribucion(0);
     }
   }, [idSalon]);
+
+  useEffect(() => {
+    setInitialFormSnapshot(null);
+    onDirtyChange?.(false);
+  }, [reserva?.id, onDirtyChange]);
+
+  useEffect(() => {
+    if (loadingData || initialFormSnapshot !== null) return;
+    setInitialFormSnapshot(currentFormSnapshot);
+  }, [loadingData, initialFormSnapshot, currentFormSnapshot]);
+
+  useEffect(() => {
+    if (loadingData) {
+      onDirtyChange?.(false);
+      return;
+    }
+
+    onDirtyChange?.(isFormDirty);
+  }, [loadingData, isFormDirty, onDirtyChange]);
 
   const loadInitialData = async () => {
     try {
@@ -342,6 +406,11 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
     const selectedDistribucionData = idDistribucion
       ? distribuciones.find(d => d.id === idDistribucion) || null
       : null;
+    const tipoEventoNombre = hasNonWhitespaceValue(observacionesSanitizadas)
+      ? observacionesSanitizadas.split('\n')[0].trim()
+      : null;
+    const fechaInicioIsoString = new Date(fechaInicio).toISOString();
+    const fechaFinIsoString = new Date(fechaFin).toISOString();
 
     const now = new Date();
     now.setSeconds(0, 0);
@@ -372,8 +441,8 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
           id: 0,
           id_salon: idSalon,
           estado,
-          fecha_inicio: new Date(fechaInicio).toISOString(),
-          fecha_fin: new Date(fechaFin).toISOString(),
+          fecha_inicio: fechaInicioIsoString,
+          fecha_fin: fechaFinIsoString,
         };
 
         const pendingConflictIds = getReservaPendingConflictIds(
@@ -400,8 +469,8 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
         cliente_telefono: telefonoClienteSanitizado,
         id_salon: idSalon,
         id_distribucion: idDistribucion || null,
-        fecha_inicio: new Date(fechaInicio).toISOString(),
-        fecha_fin: new Date(fechaFin).toISOString(),
+        fecha_inicio: fechaInicioIsoString,
+        fecha_fin: fechaFinIsoString,
         estado,
         monto,
         cantidad_personas: totalPersonas,
@@ -483,6 +552,12 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
               await deletePresupuestoFile(reserva.presupuesto_url);
             }
 
+            const fileName = buildPresupuestoFileName({
+              nombreBase: nombreClienteSanitizado || CLIENTE_PDF_NOMBRE,
+              fechaInicio: fechaInicioIsoString,
+              fallbackEvento: selectedSalon.nombre,
+            });
+
             await generatePresupuestoDocumento({
               reservaId,
               salon: selectedSalon,
@@ -492,15 +567,13 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
                 email: emailClienteSanitizado || null,
                 telefono: telefonoClienteSanitizado || null,
               },
-              fechaInicio: new Date(fechaInicio).toISOString(),
-              fechaFin: new Date(fechaFin).toISOString(),
-              tipoEvento: hasNonWhitespaceValue(observacionesSanitizadas) ? observacionesSanitizadas.split('\n')[0] : null,
+              fechaInicio: fechaInicioIsoString,
+              fechaFin: fechaFinIsoString,
+              tipoEvento: tipoEventoNombre,
               totalSalon: monto,
               cantidadPersonas: totalPersonas,
               servicios: serviciosDetalle,
-              storagePath: reserva
-                ? `reservas/reserva-${reservaId}-${Date.now()}.pdf`
-                : `reservas/reserva-${reservaId}.pdf`,
+              storagePath: `reservas/${reservaId}/${fileName}`,
             });
           } catch (error: any) {
             presupuestoErrorMessage =
@@ -511,6 +584,8 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
       }
 
       if (presupuestoErrorMessage) {
+        setInitialFormSnapshot(currentFormSnapshot);
+        onDirtyChange?.(false);
         setMessage({
           type: 'error',
           text: reserva
@@ -518,6 +593,8 @@ export function ReservaForm({ reserva, onClose }: ReservaFormProps) {
             : `Reserva creada, pero no se pudo generar el presupuesto: ${presupuestoErrorMessage}`,
         });
       } else {
+        setInitialFormSnapshot(currentFormSnapshot);
+        onDirtyChange?.(false);
         setMessage({
           type: 'success',
           text: reserva ? 'Reserva actualizada correctamente' : 'Reserva creada correctamente',

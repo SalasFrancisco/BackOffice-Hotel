@@ -62,85 +62,43 @@ create policy users_insert_notificaciones_leidas on public.notificaciones_leidas
 create policy users_delete_notificaciones_leidas on public.notificaciones_leidas
   for delete using (auth.uid() = user_id);
 
--- 3) TRIGGERS AUTOMÁTICOS SOBRE RESERVAS
+-- 3) TRIGGERS AUTOMATICOS SOBRE RESERVAS
 create or replace function public.generar_notificacion_reserva()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v_tipo text;
-  v_titulo text;
-  v_mensaje text;
-  v_reserva_id bigint;
-  v_metadata jsonb;
 begin
-  if TG_OP = 'INSERT' then
-    v_tipo := 'RESERVA_NUEVA';
-    v_titulo := 'Nueva reserva';
-    v_mensaje := format(
-      'Se creó la reserva #%s de %s en estado %s.',
-      NEW.id,
-      coalesce(NEW.cliente_nombre, 'Sin nombre'),
-      NEW.estado
-    );
-    v_reserva_id := NEW.id;
-    v_metadata := jsonb_build_object(
-      'cliente_nombre', NEW.cliente_nombre,
-      'estado', NEW.estado,
-      'id_salon', NEW.id_salon
-    );
-  elsif TG_OP = 'UPDATE' then
-    if NEW.estado is distinct from OLD.estado then
-      v_tipo := 'ESTADO_CAMBIADO';
-      v_titulo := 'Cambio de estado';
-      v_mensaje := format(
-        'La reserva #%s cambió de estado: %s -> %s.',
-        NEW.id,
-        OLD.estado,
-        NEW.estado
-      );
-      v_metadata := jsonb_build_object(
-        'estado_anterior', OLD.estado,
-        'estado_nuevo', NEW.estado
-      );
-    else
-      v_tipo := 'RESERVA_EDITADA';
-      v_titulo := 'Reserva modificada';
-      v_mensaje := format(
-        'Se modificó la reserva #%s de %s.',
-        NEW.id,
-        coalesce(NEW.cliente_nombre, 'Sin nombre')
-      );
-      v_metadata := jsonb_build_object(
-        'id_salon', NEW.id_salon,
-        'id_distribucion', NEW.id_distribucion
-      );
-    end if;
-    v_reserva_id := NEW.id;
-  elsif TG_OP = 'DELETE' then
-    v_tipo := 'RESERVA_ELIMINADA';
-    v_titulo := 'Reserva eliminada';
-    v_mensaje := format(
-      'Se eliminó la reserva #%s de %s.',
-      OLD.id,
-      coalesce(OLD.cliente_nombre, 'Sin nombre')
-    );
-    v_reserva_id := null;
-    v_metadata := jsonb_build_object(
-      'reserva_id_eliminada', OLD.id,
-      'cliente_nombre', OLD.cliente_nombre,
-      'estado', OLD.estado
-    );
+  -- Solo notificar altas provenientes del formulario publico de salones.
+  -- En el flujo actual esas reservas se insertan con creado_por NULL.
+  if TG_OP <> 'INSERT' then
+    return NEW;
+  end if;
+
+  if NEW.creado_por is not null then
+    return NEW;
   end if;
 
   insert into public.notificaciones (tipo, titulo, mensaje, reserva_id, metadata)
-  values (v_tipo, v_titulo, v_mensaje, v_reserva_id, v_metadata);
-
-  if TG_OP = 'DELETE' then
-    return OLD;
-  end if;
+  values (
+    'RESERVA_NUEVA',
+    'Nueva reserva desde Salones',
+    format(
+      'Se creo la reserva #%s de %s en estado %s.',
+      NEW.id,
+      coalesce(NEW.cliente_nombre, 'Sin nombre'),
+      NEW.estado
+    ),
+    NEW.id,
+    jsonb_build_object(
+      'cliente_nombre', NEW.cliente_nombre,
+      'estado', NEW.estado,
+      'id_salon', NEW.id_salon,
+      'origen', 'salones_form',
+      'canal', 'web_publica'
+    )
+  );
 
   return NEW;
 end;
@@ -152,11 +110,4 @@ after insert on public.reservas
 for each row execute function public.generar_notificacion_reserva();
 
 drop trigger if exists reservas_notify_update on public.reservas;
-create trigger reservas_notify_update
-after update on public.reservas
-for each row execute function public.generar_notificacion_reserva();
-
 drop trigger if exists reservas_notify_delete on public.reservas;
-create trigger reservas_notify_delete
-after delete on public.reservas
-for each row execute function public.generar_notificacion_reserva();

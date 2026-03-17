@@ -474,6 +474,26 @@
 
         }
 
+        .form-disclaimer {
+
+            margin: 8px 0 0;
+
+            padding: 10px 12px;
+
+            border: 1px solid #f0dfb0;
+
+            background: #fff9ea;
+
+            color: #7a5a14;
+
+            font-size: 11px;
+
+            line-height: 1.45;
+
+            text-align: left;
+
+        }
+
         .services-container {
 
             border: 1px solid #eee;
@@ -1808,6 +1828,10 @@
                             rows="3"></textarea></div>
 
                     <div id="formStatus" style="font-size:12px; margin: 10px 0;"></div>
+
+                    <div class="form-disclaimer">
+                        Importante: la informacion enviada por este formulario es orientativa. El presupuesto y la reserva final quedaran sujetos a validacion y confirmacion del hotel.
+                    </div>
 
                     <button type="submit" class="btn-submit">ENVIAR FORMULARIO</button>
 
@@ -3461,6 +3485,10 @@
 
                 });
 
+            const tipoEvento = hasNonWhitespaceValue(observaciones)
+                ? observaciones.split('\n')[0].trim()
+                : null;
+
             const payload = {
 
                 nombre,
@@ -3472,6 +3500,8 @@
                 fecha_inicio: startDate.toISOString(),
 
                 fecha_fin: endDate.toISOString(),
+
+                tipo_evento: tipoEvento,
 
                 cantidad,
 

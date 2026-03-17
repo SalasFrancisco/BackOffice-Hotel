@@ -27,7 +27,9 @@ export type PresupuestoPayload = {
 };
 
 const PRESUPUESTOS_BUCKET = 'presupuestos';
+const LOCAL_LOGO_PATH = `${import.meta.env.BASE_URL}QuintoCente.png`;
 let pdfFontsReady = false;
+let logoDataUrlCache: string | null | undefined;
 
 const ensurePdfFonts = () => {
   if (pdfFontsReady) return;
@@ -44,6 +46,42 @@ const ensurePdfFonts = () => {
 
   (pdfMake as any).vfs = fontsSource;
   pdfFontsReady = true;
+};
+
+const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error('No se pudo convertir el logo a data URL.'));
+    };
+    reader.onerror = () => reject(new Error('No se pudo leer el logo del hotel.'));
+    reader.readAsDataURL(blob);
+  });
+
+const loadLogoDataUrl = async (): Promise<string | null> => {
+  if (logoDataUrlCache !== undefined) {
+    return logoDataUrlCache;
+  }
+
+  try {
+    const response = await fetch(LOCAL_LOGO_PATH, { cache: 'force-cache' });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    logoDataUrlCache = dataUrl;
+    return dataUrl;
+  } catch (error) {
+    console.warn(`No se pudo cargar el logo local (${LOCAL_LOGO_PATH}):`, error);
+    logoDataUrlCache = null;
+    return null;
+  }
 };
 
 const formatCurrency = (value: number) =>
@@ -68,6 +106,44 @@ const formatTime = (isoDate: string) => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+const sanitizeFileNamePart = (value: string) =>
+  (value || '')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/g, '')
+    .slice(0, 80);
+
+const formatDateForFileName = (isoDate: string) => {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return 'sin-fecha';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}-${month}-${year}`;
+};
+
+export const buildPresupuestoFileName = ({
+  nombreBase,
+  tipoEvento,
+  fechaInicio,
+  fallbackEvento,
+}: {
+  nombreBase?: string | null;
+  tipoEvento?: string | null;
+  fechaInicio: string;
+  fallbackEvento?: string | null;
+}) => {
+  const evento =
+    sanitizeFileNamePart(nombreBase || '') ||
+    sanitizeFileNamePart(tipoEvento || '') ||
+    sanitizeFileNamePart(fallbackEvento || '') ||
+    'Evento';
+  const fecha = formatDateForFileName(fechaInicio);
+  return `${evento} - ${fecha}.pdf`;
 };
 
 const buildServiciosBody = (servicios: PresupuestoServicio[]) => {
@@ -126,6 +202,7 @@ export async function generatePresupuestoDocumento({
   storagePath: storagePathInput,
 }: PresupuestoPayload) {
   ensurePdfFonts();
+  const logoDataUrl = await loadLogoDataUrl();
 
   const totalServicios = servicios.reduce((acc, { servicio, cantidad }) => {
     const unit = Number(servicio.precio) || 0;
@@ -134,11 +211,21 @@ export async function generatePresupuestoDocumento({
 
   const totalGeneral = totalSalon + totalServicios;
 
+  const headerContent = logoDataUrl
+    ? [
+        { image: logoDataUrl, fit: [190, 80], alignment: 'center', margin: [0, 0, 0, 8] },
+        { text: 'Presupuesto de Evento', style: 'header', alignment: 'center' },
+        { text: `Reserva #${reservaId}`, style: 'subheader', alignment: 'center', margin: [0, 4, 0, 20] },
+      ]
+    : [
+        { text: 'Presupuesto de Evento', style: 'header', alignment: 'center' },
+        { text: `Reserva #${reservaId}`, style: 'subheader', alignment: 'center', margin: [0, 0, 0, 20] },
+      ];
+
   const docDefinition: TDocumentDefinitions = {
     pageMargins: [40, 50, 40, 60],
     content: [
-      { text: 'Presupuesto de Evento', style: 'header' },
-      { text: `Reserva #${reservaId}`, style: 'subheader', margin: [0, 0, 0, 20] },
+      ...headerContent,
       {
         columns: [
           [
@@ -163,7 +250,8 @@ export async function generatePresupuestoDocumento({
                 body: [
                   ['Fecha de inicio:', formatDate(fechaInicio)],
                   ['Fecha de fin:', formatDate(fechaFin)],
-                  ['Horario:', `${formatTime(fechaInicio)} a ${formatTime(fechaFin)}`],
+                  ['Horario de inicio:', formatTime(fechaInicio)],
+                  ['Horario de fin:', formatTime(fechaFin)],
                   ['Salon:', salon.nombre],
                   ['Distribucion:', distribucion?.nombre || 'Sin distribucion definida'],
                   ['Cantidad de asistentes:', String(cantidadPersonas)],

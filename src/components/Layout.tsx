@@ -23,6 +23,21 @@ type LayoutProps = {
   onLogout: () => void;
 };
 
+const SALONES_NOTIFICATION_ORIGIN = "salones_form";
+
+const getNotificationOrigin = (notification: Notificacion): string | null => {
+  const metadata = notification.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const origin = (metadata as Record<string, unknown>).origen;
+  return typeof origin === "string" ? origin : null;
+};
+
+const isNotificationFromSalonesForm = (notification: Notificacion): boolean =>
+  getNotificationOrigin(notification) === SALONES_NOTIFICATION_ORIGIN;
+
 export function Layout({
   children,
   currentPage,
@@ -64,7 +79,9 @@ export function Layout({
 
       if (notificacionesErrorRaw) throw notificacionesErrorRaw;
 
-      const notificationsList = notificacionesData || [];
+      const notificationsList = (notificacionesData || []).filter(
+        isNotificationFromSalonesForm,
+      );
       if (notificationsList.length === 0) {
         setNotificaciones([]);
         return;
@@ -124,6 +141,9 @@ export function Layout({
         { event: "INSERT", schema: "public", table: "notificaciones" },
         (payload) => {
           const newNotification = payload.new as Notificacion;
+          if (!isNotificationFromSalonesForm(newNotification)) {
+            return;
+          }
           if (knownNotificationIdsRef.current.has(newNotification.id)) {
             return;
           }
@@ -283,7 +303,9 @@ export function Layout({
             <div className="relative flex-shrink-0" ref={notificationsRef}>
               <button
                 onClick={() => setNotificationsOpen((prev) => !prev)}
-                className="relative mt-0.5 inline-flex h-8 w-8 items-center justify-center text-gray-700 hover:text-blue-600 transition-colors"
+                className={`relative mt-0.5 inline-flex h-8 w-8 items-center justify-center text-gray-700 hover:text-blue-600 transition-colors ${
+                  unreadCount > 0 ? "bell-ringing-wrapper" : ""
+                }`}
                 title={
                   unreadCount > 0
                     ? `${unreadCount} notificación(es) sin leer`
@@ -294,6 +316,14 @@ export function Layout({
                   <BellRing className="h-5 w-5 bell-ringing" />
                 ) : (
                   <Bell className="h-5 w-5" />
+                )}
+                {unreadCount > 0 && (
+                  <span
+                    className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-4 text-white"
+                    aria-hidden="true"
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
                 )}
               </button>
 

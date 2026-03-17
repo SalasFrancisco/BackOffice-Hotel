@@ -58,6 +58,78 @@ const formatTime = (isoDate: string) => {
   });
 };
 
+const sanitizeFileNamePart = (value: string) =>
+  (value || "")
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/g, "")
+    .slice(0, 80);
+
+const formatDateForFileName = (isoDate: string) => {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "sin-fecha";
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear());
+  return `${day}-${month}-${year}`;
+};
+
+const buildPresupuestoFileName = (input: {
+  nombreBase?: string | null;
+  tipoEvento?: string | null;
+  fechaInicio: string;
+  fallbackEvento?: string | null;
+}) => {
+  const evento =
+    sanitizeFileNamePart(input.nombreBase || "") ||
+    sanitizeFileNamePart(input.tipoEvento || "") ||
+    sanitizeFileNamePart(input.fallbackEvento || "") ||
+    "Evento";
+  const fecha = formatDateForFileName(input.fechaInicio);
+  return `${evento} - ${fecha}.pdf`;
+};
+
+const PUBLIC_RESERVA_NOTIFICATION_ORIGIN = "salones_form";
+
+const LOCAL_LOGO_URL = new URL("./assets/QuintoCente.png", import.meta.url);
+let logoDataUrlCache: string | null | undefined = undefined;
+
+const bytesToBase64 = (bytes: Uint8Array) => {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
+const bytesToDataUrl = (bytes: Uint8Array, mimeType = "image/png") => {
+  const base64 = bytesToBase64(bytes);
+  return `data:${mimeType};base64,${base64}`;
+};
+
+const loadLogoDataUrl = async (): Promise<string | null> => {
+  if (logoDataUrlCache !== undefined) {
+    return logoDataUrlCache;
+  }
+
+  try {
+    const logoBytes = await Deno.readFile(LOCAL_LOGO_URL);
+    const dataUrl = bytesToDataUrl(logoBytes, "image/png");
+    logoDataUrlCache = dataUrl;
+    return dataUrl;
+  } catch (error) {
+    console.warn(`No se pudo cargar el logo local (${LOCAL_LOGO_URL.pathname}):`, error);
+    logoDataUrlCache = null;
+    return null;
+  }
+};
+
 type PublicServicioPayload = {
   id_servicio: number;
   cantidad: number;
@@ -131,17 +203,19 @@ const buildServiciosBody = (servicios: PresupuestoServicio[]) => {
   ];
 };
 
-const buildPresupuestoPdf = async (input: {
-  reservaId: number;
-  salon: { nombre: string; descripcion?: string | null; precio_base: number; capacidad: number };
-  distribucion?: { nombre: string; capacidad: number } | null;
-  cliente: { nombre: string; email?: string | null; telefono?: string | null };
-  fechaInicio: string;
-  fechaFin: string;
-  tipoEvento?: string | null;
-  cantidadPersonas: number;
-  servicios: PresupuestoServicio[];
-}) => {
+const buildPresupuestoPdf = async (
+  input: {
+    reservaId: number;
+    salon: { nombre: string; descripcion?: string | null; precio_base: number; capacidad: number };
+    distribucion?: { nombre: string; capacidad: number } | null;
+    cliente: { nombre: string; email?: string | null; telefono?: string | null };
+    fechaInicio: string;
+    fechaFin: string;
+    tipoEvento?: string | null;
+    cantidadPersonas: number;
+    servicios: PresupuestoServicio[];
+  },
+) => {
   // Import pdfmake and its fonts lazily so the function can boot when PDF generation
   // is not required (e.g. public-catalog). If import fails, surface a clear error.
   let pdfMake: any;
@@ -195,12 +269,23 @@ const buildPresupuestoPdf = async (input: {
   }, 0);
 
   const totalGeneral = input.salon.precio_base + totalServicios;
+  const logoDataUrl = await loadLogoDataUrl();
+
+  const headerContent = logoDataUrl
+    ? [
+        { image: logoDataUrl, fit: [190, 80], alignment: "center", margin: [0, 0, 0, 8] },
+        { text: "Presupuesto de Evento", style: "header", alignment: "center" },
+        { text: `Reserva #${input.reservaId}`, style: "subheader", alignment: "center", margin: [0, 4, 0, 20] },
+      ]
+    : [
+        { text: "Presupuesto de Evento", style: "header", alignment: "center" },
+        { text: `Reserva #${input.reservaId}`, style: "subheader", alignment: "center", margin: [0, 0, 0, 20] },
+      ];
 
   const docDefinition = {
     pageMargins: [40, 50, 40, 60],
     content: [
-      { text: "Presupuesto de Evento", style: "header" },
-      { text: `Reserva #${input.reservaId}`, style: "subheader", margin: [0, 0, 0, 20] },
+      ...headerContent,
       {
         columns: [
           [
@@ -224,8 +309,10 @@ const buildPresupuestoPdf = async (input: {
               table: {
                 widths: ["auto", "*"],
                 body: [
-                  ["Fecha:", formatDate(input.fechaInicio)],
-                  ["Horario:", `${formatTime(input.fechaInicio)} a ${formatTime(input.fechaFin)}`],
+                  ["Fecha de inicio:", formatDate(input.fechaInicio)],
+                  ["Fecha de fin:", formatDate(input.fechaFin)],
+                  ["Horario de inicio:", formatTime(input.fechaInicio)],
+                  ["Horario de fin:", formatTime(input.fechaFin)],
                   ["Salon:", input.salon.nombre],
                   ["Distribucion:", input.distribucion?.nombre || "Sin distribucion definida"],
                   ["Cantidad de asistentes:", String(input.cantidadPersonas)],
@@ -756,6 +843,52 @@ const publicCatalogHandler = async (c) => {
 app.get("/make-server-484a241a/public-catalog", publicCatalogHandler);
 app.get("/server/make-server-484a241a/public-catalog", publicCatalogHandler);
 
+const registerPublicReservaNotification = async (
+  supabaseAdmin: SupabaseClient,
+  input: {
+    reservaId: number;
+    clienteNombre: string;
+    estado: string;
+    salonId: number;
+  },
+) => {
+  try {
+    const { error: deleteError } = await supabaseAdmin
+      .from("notificaciones")
+      .delete()
+      .eq("reserva_id", input.reservaId)
+      .eq("tipo", "RESERVA_NUEVA");
+
+    if (deleteError) {
+      console.warn("No se pudo limpiar notificaciones previas de la reserva:", deleteError);
+    }
+
+    const { error: insertError } = await supabaseAdmin
+      .from("notificaciones")
+      .insert([
+        {
+          tipo: "RESERVA_NUEVA",
+          titulo: "Nueva reserva desde Salones",
+          mensaje: `Se creo la reserva #${input.reservaId} de ${input.clienteNombre} en estado ${input.estado}.`,
+          reserva_id: input.reservaId,
+          metadata: {
+            cliente_nombre: input.clienteNombre,
+            estado: input.estado,
+            id_salon: input.salonId,
+            origen: PUBLIC_RESERVA_NOTIFICATION_ORIGIN,
+            canal: "web_publica",
+          },
+        },
+      ]);
+
+    if (insertError) {
+      console.warn("No se pudo registrar notificacion de reserva publica:", insertError);
+    }
+  } catch (error) {
+    console.warn("Error inesperado registrando notificacion de reserva publica:", error);
+  }
+};
+
 const publicReservaHandler = async (c) => {
   try {
     const body = (await c.req.json()) as PublicReservaPayload;
@@ -891,6 +1024,13 @@ const publicReservaHandler = async (c) => {
       return c.json({ error: reservaError?.message ?? "No se pudo crear la reserva" }, 500);
     }
 
+    await registerPublicReservaNotification(supabaseAdmin, {
+      reservaId: reservaData.id,
+      clienteNombre: (nombre || "Sin nombre").trim() || "Sin nombre",
+      estado: "Pendiente",
+      salonId: salonData.id,
+    });
+
     const selectedServicios = Array.isArray(servicios) ? servicios : [];
     const serviciosIds = selectedServicios
       .map((item) => Number(item?.id_servicio))
@@ -943,6 +1083,12 @@ const publicReservaHandler = async (c) => {
     let uploadErrorMsg: string | undefined = undefined;
     let signed = false;
     let signedErrorMsg: string | undefined = undefined;
+    const fileName = buildPresupuestoFileName({
+      nombreBase: nombre?.trim() || null,
+      fechaInicio,
+      fallbackEvento: salonData.nombre,
+    });
+    const storagePath = `reservas/${reservaData.id}/${fileName}`;
 
     try {
       const pdfBuffer = await buildPresupuestoPdf({
@@ -965,8 +1111,6 @@ const publicReservaHandler = async (c) => {
         cantidadPersonas: totalPersonas,
         servicios: serviciosDetalle,
       });
-
-      const storagePath = `reservas/reserva-${reservaData.id}.pdf`;
 
       const { error: uploadError } = await supabaseAdmin.storage
         .from("presupuestos")
@@ -1010,6 +1154,7 @@ const publicReservaHandler = async (c) => {
     const responseBody: Record<string, unknown> = {
       success: true,
       reservaId: reservaData.id,
+      fileName,
       downloadUrl,
       pdfGenerated,
       uploaded,

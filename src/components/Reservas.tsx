@@ -3,6 +3,7 @@ import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
 import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
+import { ConfirmDialog } from './ConfirmDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import {
@@ -13,6 +14,7 @@ import {
 
 type ReservasProps = {
   perfil: Perfil;
+  onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
 };
 
 type SortKey = 'id' | 'cliente' | 'salon' | 'fechaInicio' | 'fechaFin' | 'estado' | 'monto';
@@ -25,7 +27,7 @@ const ESTADO_COLORS = {
   Cancelado: '#B0B7C3',
 };
 
-export function Reservas({ perfil }: ReservasProps) {
+export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
     backgroundColor: '#fff8ed',
@@ -42,9 +44,12 @@ export function Reservas({ perfil }: ReservasProps) {
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [editingReserva, setEditingReserva] = useState<Reserva | null>(null);
+  const [isReservaFormDirty, setIsReservaFormDirty] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [openingPresupuestoId, setOpeningPresupuestoId] = useState<number | null>(null);
   const [deletingReservaId, setDeletingReservaId] = useState<number | null>(null);
+  const [reservaToDelete, setReservaToDelete] = useState<Reserva | null>(null);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('fechaInicio');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [reservasPendientes, setReservasPendientes] = useState<ReservaPendingConflictComparable[]>([]);
@@ -53,6 +58,14 @@ export function Reservas({ perfil }: ReservasProps) {
   useEffect(() => {
     loadReservas();
   }, [filterEstado]);
+
+  useEffect(() => {
+    onUnsavedChangesChange?.(showDialog && isReservaFormDirty);
+  }, [showDialog, isReservaFormDirty, onUnsavedChangesChange]);
+
+  useEffect(() => () => {
+    onUnsavedChangesChange?.(false);
+  }, [onUnsavedChangesChange]);
 
   const loadReservas = async () => {
     try {
@@ -99,10 +112,12 @@ export function Reservas({ perfil }: ReservasProps) {
     }
 
     setEditingReserva(reserva);
+    setIsReservaFormDirty(false);
     setShowDialog(true);
   };
 
   const handleCreateNew = () => {
+    setIsReservaFormDirty(false);
     setEditingReserva(null);
     setShowDialog(true);
   };
@@ -110,6 +125,7 @@ export function Reservas({ perfil }: ReservasProps) {
   const handleDialogClose = (success?: boolean) => {
     setShowDialog(false);
     setEditingReserva(null);
+    setIsReservaFormDirty(false);
     if (success) {
       loadReservas();
     }
@@ -198,13 +214,17 @@ export function Reservas({ perfil }: ReservasProps) {
     }
   };
 
-  const handleDeleteReserva = async (reserva: Reserva) => {
+  const handleDeleteReserva = (reserva: Reserva) => {
     if (!isAdmin) return;
+    setReservaToDelete(reserva);
+    setShowDeleteConfirmDialog(true);
+  };
 
-    const shouldDelete = confirm(
-      '¿Está seguro de eliminar esta reserva? También se eliminará el presupuesto asociado.',
-    );
-    if (!shouldDelete) return;
+  const confirmDeleteReserva = async () => {
+    if (!reservaToDelete) return;
+    const reserva = reservaToDelete;
+    setShowDeleteConfirmDialog(false);
+    setReservaToDelete(null);
 
     try {
       setDeletingReservaId(reserva.id);
@@ -223,6 +243,13 @@ export function Reservas({ perfil }: ReservasProps) {
       setTimeout(() => setMessage(null), 3000);
     } finally {
       setDeletingReservaId((currentId) => (currentId === reserva.id ? null : currentId));
+    }
+  };
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    setShowDeleteConfirmDialog(open);
+    if (!open) {
+      setReservaToDelete(null);
     }
   };
 
@@ -376,6 +403,7 @@ export function Reservas({ perfil }: ReservasProps) {
             <ReservaForm
               reserva={editingReserva}
               onClose={handleDialogClose}
+              onDirtyChange={setIsReservaFormDirty}
             />
           </div>
         </div>
@@ -602,6 +630,7 @@ export function Reservas({ perfil }: ReservasProps) {
                                 <ReservaForm
                                   reserva={editingReserva}
                                   onClose={handleDialogClose}
+                                  onDirtyChange={setIsReservaFormDirty}
                                 />
                               </div>
                             </div>
@@ -620,6 +649,18 @@ export function Reservas({ perfil }: ReservasProps) {
       <div className="mt-4 text-sm text-gray-600">
         Mostrando {filteredReservas.length} de {reservas.length} reservas
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirmDialog}
+        onOpenChange={handleDeleteDialogOpenChange}
+        onConfirm={confirmDeleteReserva}
+        title="Eliminar reserva"
+        description="¿Está seguro de eliminar esta reserva? También se eliminará el presupuesto asociado."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="destructive"
+      />
     </div>
   );
 }
+

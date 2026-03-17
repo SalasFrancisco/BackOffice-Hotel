@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { AlertCircle, CheckCircle, Shield, User, Plus, Edit } from 'lucide-react';
+import { AlertCircle, CheckCircle, Shield, User, Plus, Edit, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
 
@@ -14,6 +14,7 @@ export function Usuarios() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [loadingEditUserId, setLoadingEditUserId] = useState<string | null>(null);
   const [editingPerfil, setEditingPerfil] = useState<Perfil | null>(null);
   
   // Campos del formulario de alta
@@ -164,6 +165,9 @@ export function Usuarios() {
   };
 
   const handleEditClick = async (perfil: Perfil) => {
+    if (loadingEditUserId) return;
+    setLoadingEditUserId(perfil.user_id);
+
     setEditingPerfil(perfil);
     setEditNombre(perfil.nombre);
     setEditRol(perfil.rol);
@@ -188,9 +192,10 @@ export function Usuarios() {
     } catch (err) {
       console.error('Error loading user email:', err);
       setEditEmail('');
+    } finally {
+      setLoadingEditUserId(null);
+      setShowEditDialog(true);
     }
-    
-    setShowEditDialog(true);
   };
 
   const handleEditUser = async (e: React.FormEvent) => {
@@ -348,10 +353,15 @@ export function Usuarios() {
                   </span>
                   <button
                     onClick={() => handleEditClick(perfil)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    disabled={loadingEditUserId !== null}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:cursor-wait disabled:opacity-70"
                     title="Editar usuario"
                   >
-                    <Edit className="w-4 h-4" />
+                    {loadingEditUserId === perfil.user_id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Edit className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>

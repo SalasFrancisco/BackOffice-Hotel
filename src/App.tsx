@@ -8,6 +8,8 @@ import { Salones } from './components/Salones';
 import { SalonEdit } from './components/SalonEdit';
 import { ServiciosAdicionales } from './components/ServiciosAdicionales';
 import { Usuarios } from './components/Usuarios';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { InfoDialog } from './components/InfoDialog';
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -24,6 +26,11 @@ export default function App() {
   });
   const [editingSalonId, setEditingSalonId] = useState<number | null>(null);
   const [rlsError, setRlsError] = useState(false);
+  const [hasUnsavedFormChanges, setHasUnsavedFormChanges] = useState(false);
+  const [pendingNavigationPage, setPendingNavigationPage] = useState<string | null>(null);
+  const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
+  const [copySqlFeedbackMessage, setCopySqlFeedbackMessage] = useState('');
+  const [showCopySqlFeedbackDialog, setShowCopySqlFeedbackDialog] = useState(false);
 
   useEffect(() => {
     checkSession();
@@ -122,8 +129,32 @@ export default function App() {
   };
 
   const handleNavigate = (page: string) => {
+    if (page === currentPage) return;
+
+    if (hasUnsavedFormChanges) {
+      setPendingNavigationPage(page);
+      setShowUnsavedChangesDialog(true);
+      return;
+    }
+
     setCurrentPage(page);
     setEditingSalonId(null);
+  };
+
+  const confirmNavigationWithoutSaving = () => {
+    if (!pendingNavigationPage) return;
+    setCurrentPage(pendingNavigationPage);
+    setEditingSalonId(null);
+    setHasUnsavedFormChanges(false);
+    setPendingNavigationPage(null);
+    setShowUnsavedChangesDialog(false);
+  };
+
+  const handleUnsavedDialogOpenChange = (open: boolean) => {
+    setShowUnsavedChangesDialog(open);
+    if (!open) {
+      setPendingNavigationPage(null);
+    }
   };
 
   const handleEditSalon = (salonId: number) => {
@@ -193,10 +224,16 @@ export default function App() {
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-gray-900">SQL a ejecutar:</h4>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const sql = document.getElementById('fix-sql')?.textContent || '';
-                    navigator.clipboard.writeText(sql);
-                    alert('SQL copiado al portapapeles');
+                    try {
+                      await navigator.clipboard.writeText(sql);
+                      setCopySqlFeedbackMessage('SQL copiado al portapapeles.');
+                    } catch (clipboardError) {
+                      console.error('Error copying SQL to clipboard:', clipboardError);
+                      setCopySqlFeedbackMessage('No se pudo copiar el SQL. Copialo manualmente.');
+                    }
+                    setShowCopySqlFeedbackDialog(true);
                   }}
                   className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
@@ -264,7 +301,12 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
       case 'dashboard':
         return <Dashboard perfil={perfil} />;
       case 'reservas':
-        return <Reservas perfil={perfil} />;
+        return (
+          <Reservas
+            perfil={perfil}
+            onUnsavedChangesChange={setHasUnsavedFormChanges}
+          />
+        );
       case 'salones':
         return <Salones perfil={perfil} onEditSalon={handleEditSalon} />;
       case 'servicios':
@@ -277,13 +319,34 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
   };
 
   return (
-    <Layout
-      currentPage={currentPage}
-      onNavigate={handleNavigate}
-      perfil={perfil}
-      onLogout={handleLogout}
-    >
-      {renderPage()}
-    </Layout>
+    <>
+      <Layout
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        perfil={perfil}
+        onLogout={handleLogout}
+      >
+        {renderPage()}
+      </Layout>
+
+      <ConfirmDialog
+        open={showUnsavedChangesDialog}
+        onOpenChange={handleUnsavedDialogOpenChange}
+        onConfirm={confirmNavigationWithoutSaving}
+        title="Cambios sin guardar"
+        description="¿Está seguro que quiere cambiar de pestaña sin guardar los cambios?"
+        confirmText="Cambiar pestaña"
+        cancelText="Continuar editando"
+        variant="default"
+      />
+
+      <InfoDialog
+        open={showCopySqlFeedbackDialog}
+        onOpenChange={setShowCopySqlFeedbackDialog}
+        title="Portapapeles"
+        description={copySqlFeedbackMessage}
+        actionText="Cerrar"
+      />
+    </>
   );
 }

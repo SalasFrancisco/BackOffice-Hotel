@@ -494,6 +494,222 @@
 
         }
 
+        body.status-modal-open {
+
+            overflow: hidden;
+
+        }
+
+        .status-modal-overlay {
+
+            position: fixed;
+
+            inset: 0;
+
+            padding: 24px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background: rgba(18, 14, 14, 0.36);
+
+            backdrop-filter: blur(6px);
+
+            -webkit-backdrop-filter: blur(6px);
+
+            z-index: 2600;
+
+            opacity: 0;
+
+            visibility: hidden;
+
+            pointer-events: none;
+
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+
+        }
+
+        .status-modal-overlay.is-open {
+
+            opacity: 1;
+
+            visibility: visible;
+
+            pointer-events: auto;
+
+        }
+
+        .status-modal-card {
+
+            width: min(480px, 100%);
+
+            position: relative;
+
+            padding: 28px 24px 22px;
+
+            border-radius: 14px;
+
+            background: #fff;
+
+            border: 1px solid #eadfdf;
+
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+
+            text-align: center;
+
+        }
+
+        .status-modal-close {
+
+            position: absolute;
+
+            top: 10px;
+
+            right: 10px;
+
+            width: 32px;
+
+            height: 32px;
+
+            border: 1px solid #ddd;
+
+            border-radius: 50%;
+
+            background: #fff;
+
+            color: #666;
+
+            font-size: 12px;
+
+            cursor: pointer;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+
+        }
+
+        .status-modal-close:hover {
+
+            background: #f5f5f5;
+
+            color: #333;
+
+            border-color: #cfcfcf;
+
+        }
+
+        .status-modal-close:focus {
+
+            outline: none;
+
+            border-color: var(--primary);
+
+            box-shadow: 0 0 0 3px rgba(161, 148, 148, 0.2);
+
+        }
+
+        .status-modal-icon {
+
+            width: 62px;
+
+            height: 62px;
+
+            border-radius: 50%;
+
+            margin: 0 auto 14px;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            font-size: 28px;
+
+            border: 1px solid transparent;
+
+            background: #f0f0f0;
+
+            color: #666;
+
+        }
+
+        .status-modal-title {
+
+            font-family: 'Poppins', sans-serif;
+
+            font-size: 18px;
+
+            font-weight: 600;
+
+            color: #222;
+
+            margin-bottom: 8px;
+
+        }
+
+        .status-modal-message {
+
+            font-size: 14px;
+
+            line-height: 1.55;
+
+            color: #4b4b4b;
+
+            margin: 0;
+
+            white-space: pre-line;
+
+        }
+
+        .status-modal-card[data-state="loading"] .status-modal-icon {
+
+            color: #8a4b08;
+
+            border-color: #f5c57a;
+
+            background: #fff8ed;
+
+        }
+
+        .status-modal-card[data-state="success"] .status-modal-icon {
+
+            color: #1a7f37;
+
+            border-color: #b9e2c5;
+
+            background: #edf8f1;
+
+        }
+
+        .status-modal-card[data-state="error"] .status-modal-icon {
+
+            color: #b00020;
+
+            border-color: #f2c6cf;
+
+            background: #fff0f3;
+
+        }
+
+        .status-modal-card[data-state="info"] .status-modal-icon {
+
+            color: #295d91;
+
+            border-color: #bfd4e8;
+
+            background: #eef5fc;
+
+        }
+
         .services-container {
 
             border: 1px solid #eee;
@@ -1610,6 +1826,34 @@
 
             }
 
+            .status-modal-overlay {
+
+                padding: 16px;
+
+            }
+
+            .status-modal-card {
+
+                width: 100%;
+
+                border-radius: 12px;
+
+                padding: 24px 18px 20px;
+
+            }
+
+            .status-modal-title {
+
+                font-size: 17px;
+
+            }
+
+            .status-modal-message {
+
+                font-size: 13px;
+
+            }
+
         }
 
     </style>
@@ -2599,6 +2843,27 @@
 
     <a href="https://api.whatsapp.com/send?phone=543516108751" class="whatsapp-float" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i></a>
 
+    <div id="statusModalOverlay" class="status-modal-overlay" aria-hidden="true">
+        <div
+            id="statusModalCard"
+            class="status-modal-card"
+            data-state="info"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="statusModalTitle"
+            aria-describedby="statusModalMessage"
+        >
+            <button type="button" id="statusModalClose" class="status-modal-close" aria-label="Cerrar mensaje">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="statusModalIcon" class="status-modal-icon" aria-hidden="true">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <h4 id="statusModalTitle" class="status-modal-title">Informacion</h4>
+            <p id="statusModalMessage" class="status-modal-message"></p>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
 
     <script>
@@ -3362,13 +3627,123 @@
 
         const submitButton = formTesis.querySelector('button[type="submit"]');
 
-        const setStatus = (text, isError) => {
+        const statusModalOverlay = document.getElementById('statusModalOverlay');
+
+        const statusModalCard = document.getElementById('statusModalCard');
+
+        const statusModalClose = document.getElementById('statusModalClose');
+
+        const statusModalIcon = document.getElementById('statusModalIcon');
+
+        const statusModalTitle = document.getElementById('statusModalTitle');
+
+        const statusModalMessage = document.getElementById('statusModalMessage');
+
+        let statusModalLocked = false;
+
+        let statusModalAutoCloseTimer = null;
+
+        const STATUS_CONFIG = {
+            loading: {
+                iconClass: 'fas fa-circle-notch fa-spin',
+                title: 'Procesando solicitud',
+                color: '#8a4b08',
+            },
+            success: {
+                iconClass: 'fas fa-check-circle',
+                title: 'Solicitud enviada',
+                color: '#1a7f37',
+            },
+            error: {
+                iconClass: 'fas fa-exclamation-triangle',
+                title: 'No se pudo completar la accion',
+                color: '#b00020',
+            },
+            info: {
+                iconClass: 'fas fa-info-circle',
+                title: 'Informacion',
+                color: '#295d91',
+            },
+        };
+
+        const clearStatusModalTimer = () => {
+            if (!statusModalAutoCloseTimer) return;
+            window.clearTimeout(statusModalAutoCloseTimer);
+            statusModalAutoCloseTimer = null;
+        };
+
+        const closeStatusModal = () => {
+            if (statusModalLocked) return;
+            clearStatusModalTimer();
+            statusModalOverlay.classList.remove('is-open');
+            statusModalOverlay.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('status-modal-open');
+        };
+
+        const openStatusModal = ({ statusType, text, title, lock, autoCloseMs }) => {
+            const normalizedType = STATUS_CONFIG[statusType] ? statusType : 'info';
+            const config = STATUS_CONFIG[normalizedType];
+
+            clearStatusModalTimer();
+            statusModalLocked = Boolean(lock);
+
+            statusModalCard.dataset.state = normalizedType;
+            statusModalIcon.innerHTML = `<i class="${config.iconClass}"></i>`;
+            statusModalTitle.textContent = title || config.title;
+            statusModalMessage.textContent = text || '';
+            statusModalClose.style.display = statusModalLocked ? 'none' : 'inline-flex';
+
+            statusModalOverlay.classList.add('is-open');
+            statusModalOverlay.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('status-modal-open');
+
+            if (!statusModalLocked && autoCloseMs > 0) {
+                statusModalAutoCloseTimer = window.setTimeout(() => {
+                    closeStatusModal();
+                }, autoCloseMs);
+            }
+        };
+
+        const normalizeStatusType = (value) => {
+            if (typeof value === 'string') return value;
+            if (value === true) return 'error';
+            if (value === false) return 'success';
+            return 'info';
+        };
+
+        const setStatus = (text, typeOrIsError = 'info', options = {}) => {
+            const statusType = normalizeStatusType(typeOrIsError);
+            const config = STATUS_CONFIG[statusType] || STATUS_CONFIG.info;
+            const shouldLock = options.lock === true || statusType === 'loading';
+            const autoCloseMs = Number.isFinite(options.autoCloseMs)
+                ? options.autoCloseMs
+                : (statusType === 'success' || statusType === 'info' ? 4500 : 0);
 
             formStatus.textContent = text;
+            formStatus.style.color = config.color;
 
-            formStatus.style.color = isError ? '#b00020' : '#1a7f37';
-
+            openStatusModal({
+                statusType,
+                text,
+                title: options.title,
+                lock: shouldLock,
+                autoCloseMs,
+            });
         };
+
+        statusModalClose.addEventListener('click', closeStatusModal);
+
+        statusModalOverlay.addEventListener('click', (event) => {
+            if (event.target === statusModalOverlay) {
+                closeStatusModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeStatusModal();
+            }
+        });
 
         formTesis.addEventListener('submit', async function (e) {
 
@@ -3521,7 +3896,10 @@
 
                 submitButton.disabled = true;
 
-                setStatus('Enviando solicitud y generando presupuesto...', false);
+                setStatus('Se esta generando el presupuesto y enviando la solicitud...', 'loading', {
+                    title: 'Procesando solicitud',
+                    lock: true,
+                });
 
                 const submitAttempts = [
                     `${PUBLIC_API_BASE}/public-reserva`,
@@ -3565,11 +3943,16 @@
                 const downloadStarted = await downloadGeneratedPresupuesto(data);
 
                 if (downloadStarted) {
-                    setStatus('Solicitud enviada. El presupuesto se está descargando.', false);
+                    setStatus('Solicitud enviada. El presupuesto se esta descargando.', 'success', {
+                        title: 'Solicitud enviada',
+                        autoCloseMs: 5000,
+                    });
                 } else {
                     const detalleBackend = data?.pdfError || data?.uploadError || data?.signedError || '';
                     const detalle = detalleBackend ? ` Detalle: ${detalleBackend}` : '';
-                    setStatus(`Solicitud enviada, pero no se pudo descargar el presupuesto automáticamente.${detalle}`, true);
+                    setStatus(`Solicitud enviada, pero no se pudo descargar el presupuesto automaticamente.${detalle}`, 'error', {
+                        title: 'Solicitud enviada con incidencia',
+                    });
                     console.warn('Respuesta de public-reserva sin archivo descargable:', data);
                 }
 
@@ -3589,7 +3972,9 @@
 
             } catch (error) {
 
-                setStatus(error.message || 'Ocurrio un error inesperado.', true);
+                setStatus(error.message || 'Ocurrio un error inesperado.', 'error', {
+                    title: 'Error al enviar la solicitud',
+                });
 
             } finally {
 

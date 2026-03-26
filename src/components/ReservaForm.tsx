@@ -13,6 +13,10 @@ import {
   ReservaPendingConflictComparable,
 } from '../utils/reservaPendingConflict';
 import { deletePresupuestoFile } from '../utils/reservaDeletion';
+import {
+  getAllowedReservaEstadoTransitions,
+  isReservaEstadoTransitionAllowed,
+} from '../utils/reservaEstadoTransitions';
 
 type ReservaFormProps = {
   reserva?: Reserva | null;
@@ -191,6 +195,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const capacityWarningText = hasCapacityWarning
     ? `Advertencia: la cantidad ingresada ${capacityWarningDetails.join(' y ')}. Podes guardar la reserva igualmente.`
     : '';
+  const allowedEstadoTransitions = reserva
+    ? getAllowedReservaEstadoTransitions(reserva.estado)
+    : ['Pendiente'];
 
   useEffect(() => {
     loadInitialData();
@@ -422,6 +429,14 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
     if (new Date(fechaFin) <= new Date(fechaInicio)) {
       setMessage({ type: 'error', text: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+      return;
+    }
+
+    if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
+      setMessage({
+        type: 'error',
+        text: 'Transicion no permitida. Pendiente solo puede pasar a Confirmado o Cancelado, para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+      });
       return;
     }
 
@@ -902,10 +917,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                 onChange={(e) => setEstado(e.target.value as Reserva['estado'])}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="Pendiente">Pendiente</option>
-                <option value="Confirmado">Confirmado</option>
-                <option value="Pagado">Pagado</option>
-                <option value="Cancelado">Cancelado</option>
+                {allowedEstadoTransitions.map((optionEstado) => (
+                  <option key={optionEstado} value={optionEstado}>
+                    {optionEstado}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

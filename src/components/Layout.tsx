@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+﻿import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   BellRing,
@@ -18,7 +18,7 @@ import "../styles/notifications.css";
 type LayoutProps = {
   children: ReactNode;
   currentPage: string;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, options?: { reservaId?: number | null }) => void;
   perfil: Perfil | null;
   onLogout: () => void;
 };
@@ -199,8 +199,8 @@ export function Layout({
 
   const unreadCount = useMemo(() => notificaciones.length, [notificaciones]);
 
-  const markAsRead = async (notificationId: number) => {
-    if (!perfil?.user_id) return;
+  const markAsRead = async (notificationId: number): Promise<boolean> => {
+    if (!perfil?.user_id) return false;
 
     try {
       const { error } = await supabase
@@ -215,12 +215,20 @@ export function Layout({
       setNotificaciones((prev) =>
         prev.filter((item) => item.id !== notificationId),
       );
+      return true;
     } catch (err: any) {
       console.error("Error marking notification as read:", err);
       setNotificationsError(
         err?.message || "No se pudo marcar la notificación como leída.",
       );
+      return false;
     }
+  };
+
+  const handleNotificationClick = async (notification: Notificacion) => {
+    await markAsRead(notification.id);
+    setNotificationsOpen(false);
+    onNavigate("reservas", { reservaId: notification.reserva_id ?? null });
   };
 
   const markAllAsRead = async () => {
@@ -248,7 +256,7 @@ export function Layout({
     } catch (err: any) {
       console.error("Error marking all notifications as read:", err);
       setNotificationsError(
-        err?.message || "No se pudieron marcar las notificaciones como leídas.",
+        err?.message || "No se pudieron marcar las notificaciones como leÃ­das.",
       );
     }
   };
@@ -283,7 +291,7 @@ export function Layout({
             <button
               onClick={() => setLiveToast(null)}
               className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-gray-100"
-              title="Cerrar notificación"
+              title="Cerrar notificaciÃ³n"
             >
               <X className="w-4 h-4" />
             </button>
@@ -308,7 +316,7 @@ export function Layout({
                 }`}
                 title={
                   unreadCount > 0
-                    ? `${unreadCount} notificación(es) sin leer`
+                    ? `${unreadCount} notificaciÃ³n(es) sin leer`
                     : "Notificaciones"
                 }
               >
@@ -361,7 +369,21 @@ export function Layout({
                       </div>
                     ) : (
                       notificaciones.map((item) => (
-                        <div key={item.id} className="px-3 py-2 bg-blue-50/40">
+                        <div
+                          key={item.id}
+                          className="px-3 py-2 bg-blue-50/40 cursor-pointer hover:bg-blue-100 transition-colors"
+                          onClick={() => {
+                            void handleNotificationClick(item);
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              void handleNotificationClick(item);
+                            }
+                          }}
+                        >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-xs text-gray-900">
@@ -375,7 +397,10 @@ export function Layout({
                               </p>
                             </div>
                             <button
-                              onClick={() => markAsRead(item.id)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void markAsRead(item.id);
+                              }}
                               className="inline-flex h-6 w-6 items-center justify-center rounded text-blue-600 hover:bg-blue-100"
                               title="Marcar como leída"
                             >
@@ -422,7 +447,7 @@ export function Layout({
             className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span className="text-sm">Cerrar Sesión</span>
+            <span className="text-sm">Cerrar SesiÃ³n</span>
           </button>
         </div>
       </aside>
@@ -432,3 +457,4 @@ export function Layout({
     </div>
   );
 }
+

@@ -11,6 +11,11 @@ import { Usuarios } from './components/Usuarios';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { InfoDialog } from './components/InfoDialog';
 
+type NavigationRequest = {
+  page: string;
+  reservaId?: number | null;
+};
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
@@ -27,7 +32,8 @@ export default function App() {
   const [editingSalonId, setEditingSalonId] = useState<number | null>(null);
   const [rlsError, setRlsError] = useState(false);
   const [hasUnsavedFormChanges, setHasUnsavedFormChanges] = useState(false);
-  const [pendingNavigationPage, setPendingNavigationPage] = useState<string | null>(null);
+  const [pendingNavigationRequest, setPendingNavigationRequest] = useState<NavigationRequest | null>(null);
+  const [reservaHighlightRequest, setReservaHighlightRequest] = useState<{ reservaId: number; nonce: number } | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [copySqlFeedbackMessage, setCopySqlFeedbackMessage] = useState('');
   const [showCopySqlFeedbackDialog, setShowCopySqlFeedbackDialog] = useState(false);
@@ -128,32 +134,45 @@ export default function App() {
     setCurrentPage('dashboard');
   };
 
-  const handleNavigate = (page: string) => {
-    if (page === currentPage) return;
+  const executeNavigation = ({ page, reservaId }: NavigationRequest) => {
+    setCurrentPage(page);
+    setEditingSalonId(null);
 
-    if (hasUnsavedFormChanges) {
-      setPendingNavigationPage(page);
+    if (page === 'reservas' && reservaId) {
+      setReservaHighlightRequest({ reservaId, nonce: Date.now() });
+    } else if (page !== 'reservas') {
+      setReservaHighlightRequest(null);
+    }
+  };
+
+  const handleNavigate = (page: string, options?: { reservaId?: number | null }) => {
+    const request: NavigationRequest = { page, reservaId: options?.reservaId ?? null };
+    const isPageChange = page !== currentPage;
+    const hasReservaTarget = Boolean(options?.reservaId);
+
+    if (!isPageChange && !hasReservaTarget) return;
+
+    if (isPageChange && hasUnsavedFormChanges) {
+      setPendingNavigationRequest(request);
       setShowUnsavedChangesDialog(true);
       return;
     }
 
-    setCurrentPage(page);
-    setEditingSalonId(null);
+    executeNavigation(request);
   };
 
   const confirmNavigationWithoutSaving = () => {
-    if (!pendingNavigationPage) return;
-    setCurrentPage(pendingNavigationPage);
-    setEditingSalonId(null);
+    if (!pendingNavigationRequest) return;
+    executeNavigation(pendingNavigationRequest);
     setHasUnsavedFormChanges(false);
-    setPendingNavigationPage(null);
+    setPendingNavigationRequest(null);
     setShowUnsavedChangesDialog(false);
   };
 
   const handleUnsavedDialogOpenChange = (open: boolean) => {
     setShowUnsavedChangesDialog(open);
     if (!open) {
-      setPendingNavigationPage(null);
+      setPendingNavigationRequest(null);
     }
   };
 
@@ -305,6 +324,7 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
           <Reservas
             perfil={perfil}
             onUnsavedChangesChange={setHasUnsavedFormChanges}
+            highlightRequest={reservaHighlightRequest}
           />
         );
       case 'salones':

@@ -3,6 +3,10 @@ import { supabase, Reserva, ReservaServicio } from '../utils/supabase/client';
 import { X, Trash2, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import { ConfirmDialog } from './ConfirmDialog';
+import {
+  getAllowedReservaEstadoTransitions,
+  isReservaEstadoTransitionAllowed,
+} from '../utils/reservaEstadoTransitions';
 
 type ReservaModalProps = {
   reserva: Reserva;
@@ -23,6 +27,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
   const [reservaServicios, setReservaServicios] = useState<ReservaServicio[]>([]);
   const [loadingServicios, setLoadingServicios] = useState(true);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const allowedEstados = getAllowedReservaEstadoTransitions(reserva.estado);
 
   useEffect(() => {
     loadServicios();
@@ -46,6 +51,14 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
   };
 
   const handleChangeEstado = async (nuevoEstado: Reserva['estado']) => {
+    if (!isReservaEstadoTransitionAllowed(reserva.estado, nuevoEstado)) {
+      setMessage({
+        type: 'error',
+        text: 'Transicion no permitida. Pendiente solo puede pasar a Confirmado o Cancelado, para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+      });
+      return;
+    }
+
     try {
       setLoading(true);
       setMessage(null);
@@ -255,7 +268,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
           <div>
             <p className="text-sm text-gray-600 mb-2">Cambiar Estado</p>
             <div className="flex gap-2 flex-wrap">
-              {(['Pendiente', 'Confirmado', 'Pagado', 'Cancelado'] as const).map(estado => (
+              {allowedEstados.map(estado => (
                 <button
                   key={estado}
                   onClick={() => handleChangeEstado(estado)}

@@ -1,9 +1,10 @@
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
 import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { ConfirmDialog } from './ConfirmDialog';
+import { InfoDialog } from './InfoDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import {
@@ -15,6 +16,10 @@ import {
 type ReservasProps = {
   perfil: Perfil;
   onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
+  highlightRequest?: {
+    reservaId: number;
+    nonce: number;
+  } | null;
 };
 
 type SortKey = 'id' | 'cliente' | 'salon' | 'fechaInicio' | 'fechaFin' | 'estado' | 'monto';
@@ -27,7 +32,7 @@ const ESTADO_COLORS = {
   Cancelado: '#B0B7C3',
 };
 
-export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
+export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: ReservasProps) {
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
     backgroundColor: '#fff8ed',
@@ -53,6 +58,10 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
   const [sortBy, setSortBy] = useState<SortKey>('fechaInicio');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [reservasPendientes, setReservasPendientes] = useState<ReservaPendingConflictComparable[]>([]);
+  const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
+  const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
+  const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
   const isAdmin = perfil.rol === 'ADMIN';
 
   useEffect(() => {
@@ -66,6 +75,25 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
   useEffect(() => () => {
     onUnsavedChangesChange?.(false);
   }, [onUnsavedChangesChange]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!highlightRequest?.reservaId) return;
+    const normalizedReservaId = Number(highlightRequest.reservaId);
+    if (!Number.isFinite(normalizedReservaId)) return;
+
+    setSearchTerm('');
+    setFilterEstado(null);
+    setPendingHighlight({ reservaId: normalizedReservaId, nonce: highlightRequest.nonce });
+    loadReservas();
+  }, [highlightRequest]);
 
   const loadReservas = async () => {
     try {
@@ -347,6 +375,44 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
       : <ChevronDown className="w-3.5 h-3.5 text-blue-600" />;
   };
 
+  const handleOpenWarningDialog = (reserva: Reserva, warningMessages: string[]) => {
+    if (warningMessages.length === 0) return;
+
+    setWarningDialog({
+      title: `Advertencias de la reserva #${reserva.id}`,
+      description: warningMessages.map((message) => `- ${message}`).join('\n'),
+    });
+  };
+
+  useEffect(() => {
+    if (!pendingHighlight || loading) return;
+
+    const targetId = Number(pendingHighlight.reservaId);
+    if (!Number.isFinite(targetId)) {
+      setPendingHighlight(null);
+      return;
+    }
+
+    const targetExists = sortedReservas.some((item) => Number(item.id) === targetId);
+    if (!targetExists) return;
+
+    setHighlightedReservaId(targetId);
+    setPendingHighlight(null);
+
+    window.setTimeout(() => {
+      const row = document.getElementById(`reserva-row-${targetId}`);
+      row?.scrollIntoView({ behavior: 'auto', block: 'center' });
+    }, 0);
+
+    if (highlightTimeoutRef.current) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedReservaId(null);
+    }, 1000);
+  }, [pendingHighlight, sortedReservas, loading]);
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
@@ -529,17 +595,26 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
                 </tr>
               ) : (
                 sortedReservas.map(reserva => {
+                  const reservaRowId = Number(reserva.id);
                   const capacityWarningText = getReservaCapacityWarningText(reserva);
                   const pendingConflictIds = getReservaPendingConflictIds(reserva, reservasPendientes);
                   const pendingConflictText = getReservaPendingConflictText(pendingConflictIds);
-                  const warningMessages = [capacityWarningText, pendingConflictText].filter(Boolean);
+                  const warningMessages = [capacityWarningText, pendingConflictText].filter(
+                    (message): message is string => Boolean(message),
+                  );
                   const warningText = warningMessages.join(' ');
                   const hasWarning = warningMessages.length > 0;
                   const isEditingCurrentRow = showDialog && editingReserva?.id === reserva.id;
+                  const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
 
                   return (
                     <Fragment key={reserva.id}>
-                      <tr className="hover:bg-gray-50">
+                      <tr
+                        id={`reserva-row-${reservaRowId}`}
+                        className={`transition-colors duration-700 ${
+                          isHighlightedRow ? 'bg-yellow-200 hover:bg-yellow-200' : 'hover:bg-gray-50'
+                        }`}
+                      >
                         <td className="px-6 py-4 text-sm text-gray-900">#{reserva.id}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {reserva.cliente_nombre || 'Sin nombre'}
@@ -561,9 +636,11 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             {hasWarning && (
-                              <span
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border"
-                                title={warningText}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWarningDialog(reserva, warningMessages)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                                title="Ver advertencias"
                                 aria-label={warningText}
                                 style={{
                                   color: CAPACITY_WARNING_STYLES.textColor,
@@ -572,7 +649,7 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
                                 }}
                               >
                                 <AlertTriangle className="w-4 h-4" />
-                              </span>
+                              </button>
                             )}
                             {reserva.presupuesto_url && (
                               <button
@@ -659,6 +736,18 @@ export function Reservas({ perfil, onUnsavedChangesChange }: ReservasProps) {
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="destructive"
+      />
+
+      <InfoDialog
+        open={warningDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWarningDialog(null);
+          }
+        }}
+        title={warningDialog?.title || 'Advertencias'}
+        description={warningDialog?.description || ''}
+        actionText="Cerrar"
       />
     </div>
   );

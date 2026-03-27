@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil, Reserva, Salon } from '../utils/supabase/client';
-import { Calendar as CalendarIcon, TrendingUp, Building2, AlertCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, X, CheckCircle2, Wallet, ReceiptText } from 'lucide-react';
 import { ReservaModal } from './ReservaModal';
 
 const ESTADO_COLORS = {
@@ -28,10 +28,18 @@ export function Dashboard({ perfil }: DashboardProps) {
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
 
   // KPIs
-  const [reservasMes, setReservasMes] = useState(0);
-  const [salonMasReservado, setSalonMasReservado] = useState('');
-  const [salonesActivos, setSalonesActivos] = useState(0);
-  const [eventosActivos, setEventosActivos] = useState(0);
+  const [totalSolicitudes, setTotalSolicitudes] = useState(0);
+  const [totalConfirmadas, setTotalConfirmadas] = useState(0);
+  const [porcentajeConfirmacion, setPorcentajeConfirmacion] = useState(0);
+  const [capitalObtenido, setCapitalObtenido] = useState(0);
+  const [ticketPromedioPagado, setTicketPromedioPagado] = useState(0);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 2,
+    }).format(value);
 
   useEffect(() => {
     loadData();
@@ -42,7 +50,6 @@ export function Dashboard({ perfil }: DashboardProps) {
       setLoading(true);
       setError('');
 
-      const now = new Date();
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
       const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
@@ -54,7 +61,6 @@ export function Dashboard({ perfil }: DashboardProps) {
 
       if (salonesError) throw salonesError;
       setSalones(salonesData || []);
-      setSalonesActivos(salonesData?.length || 0);
 
       // Load reservas for current month (for calendar)
       let query = supabase
@@ -79,53 +85,36 @@ export function Dashboard({ perfil }: DashboardProps) {
       if (reservasError) throw reservasError;
       setReservas(reservasData || []);
 
-      // KPI: Reservas este mes
-      const { count: countMes } = await supabase
+      // KPIs de negocio (globales)
+      const { data: reservasMetricasData, error: reservasMetricasError } = await supabase
         .from('reservas')
-        .select('*', { count: 'exact', head: true })
-        .gte('fecha_inicio', startOfMonth)
-        .lte('fecha_inicio', endOfMonth)
-        .neq('estado', 'Cancelado');
+        .select('id, estado, monto');
 
-      setReservasMes(countMes || 0);
+      if (reservasMetricasError) throw reservasMetricasError;
 
-      // KPI: Salón más reservado en el último trimestre
-      const threeMonthsAgo = new Date(now);
-      threeMonthsAgo.setMonth(now.getMonth() - 3);
-      
-      const { data: reservasTrimestreData } = await supabase
-        .from('reservas')
-        .select('id_salon, salon:salones(nombre)')
-        .gte('fecha_inicio', threeMonthsAgo.toISOString())
-        .neq('estado', 'Cancelado');
+      const reservasMetricas = reservasMetricasData || [];
+      const totalSolicitudesCalc = reservasMetricas.length;
+      const totalConfirmadasCalc = reservasMetricas.filter(
+        (reservaMetrica) => reservaMetrica.estado === 'Confirmado' || reservaMetrica.estado === 'Pagado',
+      ).length;
+      const porcentajeConfirmacionCalc = totalSolicitudesCalc > 0
+        ? (totalConfirmadasCalc / totalSolicitudesCalc) * 100
+        : 0;
 
-      if (reservasTrimestreData && reservasTrimestreData.length > 0) {
-        const conteoSalones: Record<string, number> = {};
-        reservasTrimestreData.forEach((r: any) => {
-          const salonNombre = r.salon?.nombre || 'Sin nombre';
-          conteoSalones[salonNombre] = (conteoSalones[salonNombre] || 0) + 1;
-        });
-        
-        const masReservado = Object.entries(conteoSalones).sort((a, b) => b[1] - a[1])[0];
-        setSalonMasReservado(masReservado ? `${masReservado[0]} (${masReservado[1]} reservas)` : 'N/A');
-      } else {
-        setSalonMasReservado('N/A');
-      }
+      const reservasPagadas = reservasMetricas.filter((reservaMetrica) => reservaMetrica.estado === 'Pagado');
+      const capitalObtenidoCalc = reservasPagadas.reduce(
+        (acc, reservaMetrica) => acc + Number(reservaMetrica.monto || 0),
+        0,
+      );
+      const ticketPromedioCalc = reservasPagadas.length > 0
+        ? capitalObtenidoCalc / reservasPagadas.length
+        : 0;
 
-      // KPI: Eventos activos (eventos que están ocurriendo hoy)
-      const todayStart = new Date(now);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(now);
-      todayEnd.setHours(23, 59, 59, 999);
-
-      const { data: eventosHoyData } = await supabase
-        .from('reservas')
-        .select('*')
-        .lte('fecha_inicio', todayEnd.toISOString())
-        .gte('fecha_fin', todayStart.toISOString())
-        .neq('estado', 'Cancelado');
-
-      setEventosActivos(eventosHoyData?.length || 0);
+      setTotalSolicitudes(totalSolicitudesCalc);
+      setTotalConfirmadas(totalConfirmadasCalc);
+      setPorcentajeConfirmacion(porcentajeConfirmacionCalc);
+      setCapitalObtenido(capitalObtenidoCalc);
+      setTicketPromedioPagado(ticketPromedioCalc);
 
     } catch (err: any) {
       console.error('Error loading dashboard:', err);
@@ -195,8 +184,8 @@ export function Dashboard({ perfil }: DashboardProps) {
       <div className="p-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => (
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
             ))}
           </div>
@@ -210,45 +199,36 @@ export function Dashboard({ perfil }: DashboardProps) {
       <h2 className="text-gray-900 mb-6">Dashboard</h2>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <CalendarIcon className="w-6 h-6 text-blue-600" />
+              <CheckCircle2 className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Reservas Este Mes</p>
-          <p className="text-3xl text-gray-900">{reservasMes}</p>
+          <p className="text-gray-600 text-sm mb-1">Reservas Confirmadas / Solicitadas</p>
+          <p className="text-3xl text-gray-900">{totalConfirmadas} / {totalSolicitudes}</p>
+          <p className="text-sm text-blue-700 mt-1">{porcentajeConfirmacion.toFixed(1)}% de conversion</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
+              <Wallet className="w-6 h-6 text-purple-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Salón Más Reservado (Trimestre)</p>
-          <p className="text-lg text-gray-900">{salonMasReservado}</p>
+          <p className="text-gray-600 text-sm mb-1">Capital Obtenido (Reservas Pagadas)</p>
+          <p className="text-3xl text-gray-900">{formatCurrency(capitalObtenido)}</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-green-600" />
+              <ReceiptText className="w-6 h-6 text-green-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Salones Activos</p>
-          <p className="text-3xl text-gray-900">{salonesActivos}</p>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <CalendarIcon className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm mb-1">Eventos Hoy</p>
-          <p className="text-3xl text-gray-900">{eventosActivos}</p>
+          <p className="text-gray-600 text-sm mb-1">Ticket Promedio (Pagadas)</p>
+          <p className="text-3xl text-gray-900">{formatCurrency(ticketPromedioPagado)}</p>
         </div>
       </div>
 

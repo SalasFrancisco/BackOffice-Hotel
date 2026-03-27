@@ -105,6 +105,15 @@ const buildPresupuestoFileName = (input: {
 };
 
 const PUBLIC_RESERVA_NOTIFICATION_ORIGIN = "salones_form";
+const RESERVA_EXPIRATION_NOTIFICATION_ORIGIN = "reserva_vencimiento_auto";
+const RESERVA_AUTO_CANCEL_DAYS = 7;
+const RESERVA_EXPIRATION_WARNING_DAYS = [3, 2, 1] as const;
+const RESERVA_ALERTA_INACTIVIDAD = "vencimiento_inactividad";
+const RESERVA_ALERTA_INACTIVIDAD_LEGACY = "vencimiento";
+const RESERVA_ALERTA_INICIO_EVENTO = "vencimiento_inicio_evento";
+const RESERVA_ALERTA_CANCELACION_AUTOMATICA = "cancelacion_automatica";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PRESUPUESTOS_BUCKET = "presupuestos";
 
 const SALONES_HEADER_LOGO_URL = "https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png";
 const LOCAL_LOGO_URL = new URL("./assets/QuintoCente.png", import.meta.url);
@@ -727,10 +736,197 @@ async function requireAdmin(
   return { userId } as const;
 }
 
+async function requireBackofficeUser(
+  supabaseAdmin: SupabaseClient,
+  accessToken: string,
+  actionDescription: string,
+) {
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+
+  if (userError) {
+    console.error("Failed to resolve user from access token", userError);
+    return { status: 401, body: { error: "Invalid authorization token" } } as const;
+  }
+
+  const user = userData?.user;
+
+  if (!user) {
+    return { status: 401, body: { error: "Invalid authorization token" } } as const;
+  }
+
+  const userId = user.id;
+
+  const { data: perfil, error: perfilError } = await supabaseAdmin
+    .from("perfiles")
+    .select("rol")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (perfilError) {
+    console.error("Error verifying perfil:", perfilError);
+    return { status: 500, body: { error: "Failed to verify user profile" } } as const;
+  }
+
+  if (!perfil) {
+    console.warn(
+      `User ${user.email ?? userId} attempted to ${actionDescription} but no perfil row was found.`,
+    );
+    return {
+      status: 403,
+      body: { error: `Back-office profile not found for user ${user.email ?? userId}` },
+    } as const;
+  }
+
+  const normalizedPerfilRole = normalizeRole(perfil.rol);
+  if (normalizedPerfilRole !== "ADMIN" && normalizedPerfilRole !== "OPERADOR") {
+    console.warn(
+      `User ${user.email ?? userId} attempted to ${actionDescription} with role "${perfil.rol}".`,
+    );
+    return {
+      status: 403,
+      body: { error: `Only back-office users can ${actionDescription}` },
+    } as const;
+  }
+
+  return { userId, rol: normalizedPerfilRole } as const;
+}
+
 function extractAccessToken(header?: string) {
   const token = header?.split(" ")[1];
   return token && token.length > 0 ? token : null;
 }
+
+const isMissingStorageFileError = (message: string) => {
+  const normalized = String(message || "").toLowerCase();
+  return normalized.includes("not found")
+    || normalized.includes("does not exist")
+    || normalized.includes("no such")
+    || normalized.includes("404");
+};
+
+const normalizePresupuestoStoragePath = (rawPath?: string | null) => {
+  let path = String(rawPath || "").trim();
+  if (!path) return null;
+
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      const parsedUrl = new URL(path);
+      path = parsedUrl.pathname || "";
+    } catch {
+      // keep original path when URL parsing fails
+    }
+  }
+
+  path = path.split("?")[0]?.split("#")[0] || path;
+
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // ignore malformed URI sequences and continue with raw value
+  }
+
+  const marker = "/presupuestos/";
+  const markerIndex = path.toLowerCase().indexOf(marker);
+  if (markerIndex >= 0) {
+    path = path.slice(markerIndex + marker.length);
+  }
+
+  path = path
+    .replace(/^\/+/, "")
+    .replace(/^storage\/v1\/object\/(?:public|sign|authenticated)\/presupuestos\//i, "")
+    .replace(/^object\/(?:public|sign|authenticated)\/presupuestos\//i, "")
+    .replace(/^presupuestos\//i, "")
+    .trim();
+
+  return path || null;
+};
+
+const buildPresupuestoStorageCandidates = (rawPath?: string | null) => {
+  const candidates = new Set<string>();
+  const raw = String(rawPath || "").trim();
+
+  if (!raw) return [];
+
+  const normalized = normalizePresupuestoStoragePath(raw);
+  if (normalized) {
+    candidates.add(normalized);
+  }
+
+  const rawWithoutQuery = raw.split("?")[0]?.split("#")[0] || raw;
+  if (rawWithoutQuery && !/^https?:\/\//i.test(rawWithoutQuery)) {
+    candidates.add(rawWithoutQuery.replace(/^\/+/, "").replace(/^presupuestos\//i, ""));
+  }
+
+  return Array.from(candidates).filter(Boolean);
+};
+
+const deletePresupuestoFromStorage = async (
+  supabaseAdmin: SupabaseClient,
+  rawPaths: Array<string | null | undefined>,
+) => {
+  const storagePaths = Array.from(
+    new Set(rawPaths.flatMap((rawPath) => buildPresupuestoStorageCandidates(rawPath))),
+  );
+
+  if (!storagePaths.length) {
+    return { deleted: false as const };
+  }
+
+  for (const storagePath of storagePaths) {
+    const { error: storageError } = await supabaseAdmin.storage
+      .from(PRESUPUESTOS_BUCKET)
+      .remove([storagePath]);
+
+    if (!storageError) {
+      return { deleted: true as const, storagePath };
+    }
+
+    const storageErrorMessage = storageError.message || String(storageError);
+    if (isMissingStorageFileError(storageErrorMessage)) {
+      continue;
+    }
+
+    return {
+      deleted: false as const,
+      error: `No se pudo eliminar el presupuesto asociado (${storageErrorMessage}).`,
+    };
+  }
+
+  return { deleted: false as const };
+};
+
+const toValidDate = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getReservaExpirationBaseDate = (
+  reserva: { creado_en?: string | null; actualizado_en?: string | null },
+) => toValidDate(reserva.actualizado_en) || toValidDate(reserva.creado_en);
+
+const asMetadataObject = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<string, unknown>;
+};
+
+const getMetadataString = (metadata: Record<string, unknown>, key: string) => {
+  const value = metadata[key];
+  return typeof value === "string" ? value : "";
+};
+
+const getMetadataNumber = (metadata: Record<string, unknown>, key: string) => {
+  const value = metadata[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 app.post("/make-server-484a241a/create-user", async (c) => {
   try {
@@ -1029,6 +1225,417 @@ app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
     return c.json({ error: error?.message ?? "Internal server error" }, 500);
   }
 });
+
+const deleteReservaHandler = async (c: any) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const adminCheck = await requireAdmin(supabaseAdmin, accessToken, "delete reservations");
+
+    if ("status" in adminCheck) {
+      return c.json(adminCheck.body, adminCheck.status);
+    }
+
+    const body = await c.req.json();
+    const reservaId = Number(body?.reservaId);
+    const presupuestoPathFromBody = typeof body?.presupuestoPath === "string"
+      ? body.presupuestoPath.trim()
+      : "";
+
+    if (!Number.isFinite(reservaId) || reservaId <= 0) {
+      return c.json({ error: "Missing required field: reservaId" }, 400);
+    }
+
+    const { data: reservaData, error: reservaError } = await supabaseAdmin
+      .from("reservas")
+      .select("id, presupuesto_url")
+      .eq("id", reservaId)
+      .maybeSingle();
+
+    if (reservaError) {
+      return c.json({ error: reservaError.message }, 400);
+    }
+
+    if (!reservaData) {
+      return c.json({ error: "Reserva no encontrada" }, 404);
+    }
+
+    const deleteStorageResult = await deletePresupuestoFromStorage(supabaseAdmin, [
+      presupuestoPathFromBody,
+      typeof reservaData.presupuesto_url === "string" ? reservaData.presupuesto_url : "",
+    ]);
+
+    if ("error" in deleteStorageResult && deleteStorageResult.error) {
+      return c.json({ error: deleteStorageResult.error }, 400);
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("reservas")
+      .delete()
+      .eq("id", reservaId);
+
+    if (deleteError) {
+      return c.json({ error: deleteError.message }, 400);
+    }
+
+    return c.json({
+      success: true,
+      reservaId,
+      presupuestoDeleted: deleteStorageResult.deleted,
+    });
+  } catch (error) {
+    console.error("Error in delete-reserva endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+};
+
+app.post("/make-server-484a241a/delete-reserva", deleteReservaHandler);
+app.post("/server/make-server-484a241a/delete-reserva", deleteReservaHandler);
+
+const processReservaVencimientoHandler = async (c: any) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const accessCheck = await requireBackofficeUser(
+      supabaseAdmin,
+      accessToken,
+      "process reservation expirations",
+    );
+
+    if ("status" in accessCheck) {
+      return c.json(accessCheck.body, accessCheck.status);
+    }
+
+    const now = new Date();
+
+    const { data: reservasPendientes, error: reservasError } = await supabaseAdmin
+      .from("reservas")
+      .select("id, cliente_nombre, estado, fecha_inicio, creado_en, actualizado_en")
+      .eq("estado", "Pendiente");
+
+    if (reservasError) {
+      return c.json({ error: reservasError.message }, 500);
+    }
+
+    const reservas = reservasPendientes || [];
+    if (reservas.length === 0) {
+      return c.json({
+        success: true,
+        pendingCount: 0,
+        cancelledCount: 0,
+        notificationsCreated: 0,
+      });
+    }
+
+    const reservaIds = reservas.map((reserva) => reserva.id);
+
+    const { data: notificacionesExistentes, error: notificacionesError } = await supabaseAdmin
+      .from("notificaciones")
+      .select("id, reserva_id, metadata")
+      .in("reserva_id", reservaIds)
+      .eq("tipo", "ESTADO_CAMBIADO");
+
+    if (notificacionesError) {
+      return c.json({ error: notificacionesError.message }, 500);
+    }
+
+    const existingByReserva = new Map<
+      number,
+      Array<{ id: number; metadata: Record<string, unknown> }>
+    >();
+
+    for (const notification of notificacionesExistentes || []) {
+      if (!notification?.reserva_id) continue;
+
+      const metadata = asMetadataObject(notification.metadata);
+      const origin = getMetadataString(metadata, "origen");
+      if (origin !== RESERVA_EXPIRATION_NOTIFICATION_ORIGIN) continue;
+
+      const list = existingByReserva.get(notification.reserva_id) || [];
+      list.push({
+        id: notification.id,
+        metadata,
+      });
+      existingByReserva.set(notification.reserva_id, list);
+    }
+
+    const staleWarningNotificationIds = new Set<number>();
+    const warningNotificationsToInsert: Array<Record<string, unknown>> = [];
+    const autoCancelNotificationsToInsert: Array<Record<string, unknown>> = [];
+    const cancelCandidatesByReservaId = new Map<
+      number,
+      {
+        reason: "inicio_evento" | "inactividad_7_dias";
+        cycleKey: string;
+        clienteNombre: string;
+      }
+    >();
+
+    for (const reserva of reservas) {
+      const baseDate = getReservaExpirationBaseDate(reserva);
+      const startDate = toValidDate(reserva.fecha_inicio);
+      const inactivityCycleKey = baseDate?.toISOString() || "";
+      const startCycleKey = startDate?.toISOString() || "";
+      const clienteNombre = (reserva.cliente_nombre || "Sin nombre").trim() || "Sin nombre";
+
+      const existingNotifications = existingByReserva.get(reserva.id) || [];
+
+      for (const existingNotification of existingNotifications) {
+        const alertType = getMetadataString(existingNotification.metadata, "alerta");
+        const notificationCycleKey = getMetadataString(existingNotification.metadata, "cycle_key");
+        const isInactividadAlert = alertType === RESERVA_ALERTA_INACTIVIDAD
+          || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY;
+        const isInicioAlert = alertType === RESERVA_ALERTA_INICIO_EVENTO;
+
+        if (isInactividadAlert && notificationCycleKey !== inactivityCycleKey) {
+          staleWarningNotificationIds.add(existingNotification.id);
+          continue;
+        }
+
+        if (isInicioAlert && notificationCycleKey !== startCycleKey) {
+          staleWarningNotificationIds.add(existingNotification.id);
+        }
+      }
+
+      let inactivityDaysRemaining: number | null = null;
+      let inactivityExpired = false;
+
+      if (baseDate) {
+        const expiresAt = new Date(baseDate.getTime() + (RESERVA_AUTO_CANCEL_DAYS * DAY_MS));
+        const remainingMs = expiresAt.getTime() - now.getTime();
+
+        if (remainingMs <= 0) {
+          inactivityExpired = true;
+        } else {
+          inactivityDaysRemaining = Math.ceil(remainingMs / DAY_MS);
+        }
+      }
+
+      let startDaysRemaining: number | null = null;
+      let startReached = false;
+
+      if (startDate) {
+        const remainingStartMs = startDate.getTime() - now.getTime();
+        if (remainingStartMs <= 0) {
+          startReached = true;
+        } else {
+          startDaysRemaining = Math.ceil(remainingStartMs / DAY_MS);
+        }
+      }
+
+      if (startReached) {
+        cancelCandidatesByReservaId.set(reserva.id, {
+          reason: "inicio_evento",
+          cycleKey: startCycleKey,
+          clienteNombre,
+        });
+        continue;
+      }
+
+      if (inactivityExpired) {
+        cancelCandidatesByReservaId.set(reserva.id, {
+          reason: "inactividad_7_dias",
+          cycleKey: inactivityCycleKey,
+          clienteNombre,
+        });
+        continue;
+      }
+
+      if (
+        inactivityDaysRemaining !== null
+        && RESERVA_EXPIRATION_WARNING_DAYS.includes(inactivityDaysRemaining as 1 | 2 | 3)
+      ) {
+        const warningAlreadyExists = existingNotifications.some((notification) => {
+          const alertType = getMetadataString(notification.metadata, "alerta");
+          const notificationCycleKey = getMetadataString(notification.metadata, "cycle_key");
+          const notificationDays = getMetadataNumber(notification.metadata, "dias_restantes");
+          const isInactividadAlert = alertType === RESERVA_ALERTA_INACTIVIDAD
+            || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY;
+
+          return isInactividadAlert
+            && notificationCycleKey === inactivityCycleKey
+            && notificationDays === inactivityDaysRemaining;
+        });
+
+        if (!warningAlreadyExists) {
+          const title = inactivityDaysRemaining === 1
+            ? `Reserva #${reserva.id}: ultimo dia para confirmar o modificar`
+            : `Reserva #${reserva.id}: vence en ${inactivityDaysRemaining} dias por inactividad`;
+          const message = inactivityDaysRemaining === 1
+            ? `Ultimo dia para confirmar o modificar la reserva #${reserva.id} de ${clienteNombre}. Si no hay cambios, se cancelara automaticamente por inactividad.`
+            : `La reserva #${reserva.id} de ${clienteNombre} se cancelara automaticamente en ${inactivityDaysRemaining} dias si continua pendiente y sin modificaciones.`;
+
+          warningNotificationsToInsert.push({
+            tipo: "ESTADO_CAMBIADO",
+            titulo: title,
+            mensaje: message,
+            reserva_id: reserva.id,
+            metadata: {
+              origen: RESERVA_EXPIRATION_NOTIFICATION_ORIGIN,
+              alerta: RESERVA_ALERTA_INACTIVIDAD,
+              dias_restantes: inactivityDaysRemaining,
+              cycle_key: inactivityCycleKey,
+              regla_dias: RESERVA_AUTO_CANCEL_DAYS,
+              regla_tipo: "inactividad",
+              estado: "Pendiente",
+            },
+          });
+        }
+      }
+
+      if (
+        startDaysRemaining !== null
+        && RESERVA_EXPIRATION_WARNING_DAYS.includes(startDaysRemaining as 1 | 2 | 3)
+      ) {
+        const warningAlreadyExists = existingNotifications.some((notification) => {
+          const alertType = getMetadataString(notification.metadata, "alerta");
+          const notificationCycleKey = getMetadataString(notification.metadata, "cycle_key");
+          const notificationDays = getMetadataNumber(notification.metadata, "dias_restantes");
+
+          return alertType === RESERVA_ALERTA_INICIO_EVENTO
+            && notificationCycleKey === startCycleKey
+            && notificationDays === startDaysRemaining;
+        });
+
+        if (!warningAlreadyExists) {
+          const title = startDaysRemaining === 1
+            ? `Reserva #${reserva.id}: ultimo dia antes de la fecha de inicio`
+            : `Reserva #${reserva.id}: inicia en ${startDaysRemaining} dias y sigue pendiente`;
+          const message = startDaysRemaining === 1
+            ? `Ultimo dia para confirmar la reserva #${reserva.id} de ${clienteNombre}. Si llega la fecha de inicio en estado Pendiente, se cancelara automaticamente.`
+            : `La reserva #${reserva.id} de ${clienteNombre} inicia en ${startDaysRemaining} dias y sigue pendiente. Si llega la fecha de inicio sin confirmarse, se cancelara automaticamente.`;
+
+          warningNotificationsToInsert.push({
+            tipo: "ESTADO_CAMBIADO",
+            titulo: title,
+            mensaje: message,
+            reserva_id: reserva.id,
+            metadata: {
+              origen: RESERVA_EXPIRATION_NOTIFICATION_ORIGIN,
+              alerta: RESERVA_ALERTA_INICIO_EVENTO,
+              dias_restantes: startDaysRemaining,
+              cycle_key: startCycleKey,
+              regla_tipo: "fecha_inicio",
+              estado: "Pendiente",
+            },
+          });
+        }
+      }
+    }
+
+    if (staleWarningNotificationIds.size > 0) {
+      const staleIds = Array.from(staleWarningNotificationIds);
+      const { error: staleDeleteError } = await supabaseAdmin
+        .from("notificaciones")
+        .delete()
+        .in("id", staleIds);
+
+      if (staleDeleteError) {
+        console.warn("No se pudieron limpiar notificaciones de vencimiento antiguas:", staleDeleteError);
+      }
+    }
+
+    let cancelledCount = 0;
+    const reservasToCancel = Array.from(cancelCandidatesByReservaId.keys());
+    if (reservasToCancel.length > 0) {
+      const { data: cancelledRows, error: cancelError } = await supabaseAdmin
+        .from("reservas")
+        .update({ estado: "Cancelado" })
+        .in("id", reservasToCancel)
+        .eq("estado", "Pendiente")
+        .select("id, cliente_nombre");
+
+      if (cancelError) {
+        return c.json({ error: cancelError.message }, 500);
+      }
+
+      const cancelledReservas = cancelledRows || [];
+      cancelledCount = cancelledReservas.length;
+
+      for (const cancelledReserva of cancelledReservas) {
+        const reservaId = cancelledReserva.id;
+        const cancelCandidate = cancelCandidatesByReservaId.get(reservaId);
+        if (!cancelCandidate) continue;
+
+        const cycleKey = cancelCandidate.cycleKey;
+        const existingNotifications = existingByReserva.get(reservaId) || [];
+
+        const cancellationAlreadyExists = existingNotifications.some((notification) => {
+          const alertType = getMetadataString(notification.metadata, "alerta");
+          const notificationCycleKey = getMetadataString(notification.metadata, "cycle_key");
+          const notificationReason = getMetadataString(notification.metadata, "motivo");
+          return alertType === RESERVA_ALERTA_CANCELACION_AUTOMATICA
+            && notificationCycleKey === cycleKey
+            && notificationReason === cancelCandidate.reason;
+        });
+
+        if (cancellationAlreadyExists) {
+          continue;
+        }
+
+        const clienteNombre = cancelCandidate.clienteNombre;
+        const cancellationMessage = cancelCandidate.reason === "inicio_evento"
+          ? `La reserva #${reservaId} de ${clienteNombre} fue cancelada automaticamente porque llego su fecha de inicio y continuaba en estado Pendiente.`
+          : `La reserva #${reservaId} de ${clienteNombre} fue cancelada automaticamente por superar ${RESERVA_AUTO_CANCEL_DAYS} dias en estado Pendiente sin confirmacion ni modificaciones.`;
+
+        autoCancelNotificationsToInsert.push({
+          tipo: "ESTADO_CAMBIADO",
+          titulo: `Reserva #${reservaId} cancelada automaticamente`,
+          mensaje: cancellationMessage,
+          reserva_id: reservaId,
+          metadata: {
+            origen: RESERVA_EXPIRATION_NOTIFICATION_ORIGIN,
+            alerta: RESERVA_ALERTA_CANCELACION_AUTOMATICA,
+            dias_restantes: 0,
+            cycle_key: cycleKey,
+            motivo: cancelCandidate.reason,
+            regla_dias: cancelCandidate.reason === "inactividad_7_dias" ? RESERVA_AUTO_CANCEL_DAYS : null,
+            regla_tipo: cancelCandidate.reason === "inicio_evento" ? "fecha_inicio" : "inactividad",
+            estado: "Cancelado",
+          },
+        });
+      }
+    }
+
+    const notificationsToInsert = [
+      ...warningNotificationsToInsert,
+      ...autoCancelNotificationsToInsert,
+    ];
+
+    if (notificationsToInsert.length > 0) {
+      const { error: insertNotificationsError } = await supabaseAdmin
+        .from("notificaciones")
+        .insert(notificationsToInsert);
+
+      if (insertNotificationsError) {
+        return c.json({ error: insertNotificationsError.message }, 500);
+      }
+    }
+
+    return c.json({
+      success: true,
+      pendingCount: reservas.length,
+      cancelledCount,
+      notificationsCreated: notificationsToInsert.length,
+      warningNotificationsCreated: warningNotificationsToInsert.length,
+      cancellationNotificationsCreated: autoCancelNotificationsToInsert.length,
+    });
+  } catch (error) {
+    console.error("Error in process-reserva-vencimiento endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+};
+
+app.post("/make-server-484a241a/process-reserva-vencimiento", processReservaVencimientoHandler);
+app.post("/server/make-server-484a241a/process-reserva-vencimiento", processReservaVencimientoHandler);
 
 const publicCatalogHandler = async (c) => {
   try {
@@ -1411,6 +2018,8 @@ app.post("/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
+app.post("/delete-reserva", proxyTo("/make-server-484a241a/delete-reserva"));
+app.post("/process-reserva-vencimiento", proxyTo("/make-server-484a241a/process-reserva-vencimiento"));
 app.get("/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
 app.post("/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
 
@@ -1421,6 +2030,8 @@ app.post("/server/get-user-email", proxyTo("/make-server-484a241a/get-user-email
 app.post("/server/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/server/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/server/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
+app.post("/server/delete-reserva", proxyTo("/make-server-484a241a/delete-reserva"));
+app.post("/server/process-reserva-vencimiento", proxyTo("/make-server-484a241a/process-reserva-vencimiento"));
 app.get("/server/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
 app.post("/server/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
 

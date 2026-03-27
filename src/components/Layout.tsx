@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { Notificacion, Perfil, supabase } from "../utils/supabase/client";
+import { projectId } from "../utils/supabase/info";
 import "../styles/notifications.css";
 
 type LayoutProps = {
@@ -24,6 +25,7 @@ type LayoutProps = {
 };
 
 const SALONES_NOTIFICATION_ORIGIN = "salones_form";
+const RESERVA_EXPIRATION_NOTIFICATION_ORIGIN = "reserva_vencimiento_auto";
 
 const getNotificationOrigin = (notification: Notificacion): string | null => {
   const metadata = notification.metadata;
@@ -37,6 +39,76 @@ const getNotificationOrigin = (notification: Notificacion): string | null => {
 
 const isNotificationFromSalonesForm = (notification: Notificacion): boolean =>
   getNotificationOrigin(notification) === SALONES_NOTIFICATION_ORIGIN;
+
+const isNotificationFromReservaExpiration = (
+  notification: Notificacion,
+): boolean =>
+  getNotificationOrigin(notification) ===
+  RESERVA_EXPIRATION_NOTIFICATION_ORIGIN;
+
+const isBackofficeNotification = (notification: Notificacion): boolean =>
+  isNotificationFromSalonesForm(notification) ||
+  isNotificationFromReservaExpiration(notification);
+
+const parseServerResponse = async (response: Response) => {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+};
+
+const processReservaExpirations = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) return;
+
+  const endpoints = [
+    `https://${projectId}.supabase.co/functions/v1/server/process-reserva-vencimiento`,
+    `https://${projectId}.supabase.co/functions/v1/process-reserva-vencimiento`,
+    `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/process-reserva-vencimiento`,
+    `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/process-reserva-vencimiento`,
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        return;
+      }
+
+      const payload = await parseServerResponse(response);
+      const errorMessage = String(payload?.error || "");
+      const isNotFound =
+        response.status === 404 || /not found|404/i.test(errorMessage);
+
+      if (isNotFound) {
+        continue;
+      }
+
+      console.warn(
+        "No se pudo procesar vencimiento automatico de reservas:",
+        payload?.error || `HTTP ${response.status} en ${endpoint}`,
+      );
+      return;
+    } catch {
+      // Try next endpoint variant
+    }
+  }
+};
 
 export function Layout({
   children,
@@ -70,6 +142,8 @@ export function Layout({
       setLoadingNotificaciones(true);
       setNotificationsError("");
 
+      await processReservaExpirations();
+
       const { data: notificacionesData, error: notificacionesErrorRaw } =
         await supabase
           .from("notificaciones")
@@ -80,7 +154,7 @@ export function Layout({
       if (notificacionesErrorRaw) throw notificacionesErrorRaw;
 
       const notificationsList = (notificacionesData || []).filter(
-        isNotificationFromSalonesForm,
+        isBackofficeNotification,
       );
       if (notificationsList.length === 0) {
         setNotificaciones([]);
@@ -141,7 +215,7 @@ export function Layout({
         { event: "INSERT", schema: "public", table: "notificaciones" },
         (payload) => {
           const newNotification = payload.new as Notificacion;
-          if (!isNotificationFromSalonesForm(newNotification)) {
+          if (!isBackofficeNotification(newNotification)) {
             return;
           }
           if (knownNotificationIdsRef.current.has(newNotification.id)) {

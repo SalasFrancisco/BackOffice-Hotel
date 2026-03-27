@@ -2071,8 +2071,6 @@
 
                             rows="3"></textarea></div>
 
-                    <div id="formStatus" style="font-size:12px; margin: 10px 0;"></div>
-
                     <div class="form-disclaimer">
                         Importante: la informacion enviada por este formulario es orientativa. El presupuesto y la reserva final quedaran sujetos a validacion y confirmacion del hotel.
                     </div>
@@ -3623,8 +3621,6 @@
 
         const formTesis = document.getElementById('formTesis');
 
-        const formStatus = document.getElementById('formStatus');
-
         const submitButton = formTesis.querySelector('button[type="submit"]');
 
         const statusModalOverlay = document.getElementById('statusModalOverlay');
@@ -3718,9 +3714,6 @@
             const autoCloseMs = Number.isFinite(options.autoCloseMs)
                 ? options.autoCloseMs
                 : (statusType === 'success' || statusType === 'info' ? 4500 : 0);
-
-            formStatus.textContent = text;
-            formStatus.style.color = config.color;
 
             openStatusModal({
                 statusType,

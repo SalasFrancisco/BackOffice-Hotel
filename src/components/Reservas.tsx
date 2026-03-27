@@ -12,6 +12,10 @@ import {
   getReservaPendingConflictText,
   ReservaPendingConflictComparable,
 } from '../utils/reservaPendingConflict';
+import {
+  getReservaExpirationWarningText,
+  getReservaStartWarningText,
+} from '../utils/reservaExpiration';
 
 type ReservasProps = {
   perfil: Perfil;
@@ -599,7 +603,9 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   const capacityWarningText = getReservaCapacityWarningText(reserva);
                   const pendingConflictIds = getReservaPendingConflictIds(reserva, reservasPendientes);
                   const pendingConflictText = getReservaPendingConflictText(pendingConflictIds);
-                  const warningMessages = [capacityWarningText, pendingConflictText].filter(
+                  const expirationWarningText = getReservaExpirationWarningText(reserva);
+                  const startWarningText = getReservaStartWarningText(reserva);
+                  const warningMessages = [capacityWarningText, pendingConflictText, expirationWarningText, startWarningText].filter(
                     (message): message is string => Boolean(message),
                   );
                   const warningText = warningMessages.join(' ');

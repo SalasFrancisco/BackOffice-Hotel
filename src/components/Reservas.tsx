@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
@@ -56,6 +56,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [isReservaFormDirty, setIsReservaFormDirty] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [openingPresupuestoId, setOpeningPresupuestoId] = useState<number | null>(null);
+  const [sendingPresupuestoId, setSendingPresupuestoId] = useState<number | null>(null);
   const [deletingReservaId, setDeletingReservaId] = useState<number | null>(null);
   const [reservaToDelete, setReservaToDelete] = useState<Reserva | null>(null);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
@@ -163,6 +164,59 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     }
   };
 
+  const showTemporaryMessage = (type: 'success' | 'error', text: string) => {
+    setMessage({ type, text });
+    window.setTimeout(() => setMessage(null), 3000);
+  };
+
+  const buildProtectedFunctionEndpoints = (path: string) => [
+    `https://${projectId}.supabase.co/functions/v1/server/${path}`,
+    `https://${projectId}.supabase.co/functions/v1/${path}`,
+    `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/${path}`,
+    `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/${path}`,
+  ];
+
+  const invokeProtectedFunction = async (path: string, body: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('No hay sesión activa para completar esta acción.');
+    }
+
+    let lastError = `No se pudo completar la solicitud (${path}).`;
+
+    for (const endpoint of buildProtectedFunctionEndpoints(path)) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        const text = await response.text();
+        let payload: any = {};
+
+        try {
+          payload = text ? JSON.parse(text) : {};
+        } catch {
+          payload = { error: text };
+        }
+
+        if (response.ok) {
+          return payload;
+        }
+
+        lastError = payload?.error || `HTTP ${response.status} en ${endpoint}`;
+      } catch (fetchError: any) {
+        lastError = fetchError?.message || String(fetchError);
+      }
+    }
+
+    throw new Error(lastError);
+  };
+
   const handleOpenPresupuesto = async (reserva: Reserva) => {
     if (!reserva.presupuesto_url) return;
     setOpeningPresupuestoId(reserva.id);
@@ -180,6 +234,18 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       }
     } catch (err: any) {
       try {
+        const payload = await invokeProtectedFunction('get-presupuesto-url', {
+          reservaId: reserva.id,
+          presupuestoPath: reserva.presupuesto_url,
+        });
+
+        if (!payload?.signedUrl) {
+          throw new Error('No se pudo obtener la URL del presupuesto.');
+        }
+
+        window.open(payload.signedUrl, '_blank', 'noopener');
+        return;
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token) {
           throw new Error('No hay sesión activa para solicitar la URL del presupuesto.');
@@ -243,6 +309,44 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       }
     } finally {
       setOpeningPresupuestoId((currentId) => (currentId === reserva.id ? null : currentId));
+    }
+  };
+
+  const handleSendPresupuestoEmail = async (reserva: Reserva) => {
+    const clienteEmail = reserva.cliente_email?.trim();
+
+    if (!reserva.presupuesto_url) {
+      showTemporaryMessage('error', 'La reserva no tiene presupuesto generado.');
+      return;
+    }
+
+    if (!clienteEmail) {
+      showTemporaryMessage('error', 'La reserva no tiene un email asociado.');
+      return;
+    }
+
+    try {
+      setSendingPresupuestoId(reserva.id);
+      setMessage(null);
+
+      const payload = await invokeProtectedFunction('send-presupuesto-email', {
+        reservaId: reserva.id,
+        presupuestoPath: reserva.presupuesto_url,
+      });
+
+      const sentTo = typeof payload?.sentTo === 'string' && payload.sentTo.trim()
+        ? payload.sentTo.trim()
+        : clienteEmail;
+
+      showTemporaryMessage('success', `Presupuesto enviado a ${sentTo}.`);
+    } catch (err: any) {
+      console.error('Error sending presupuesto email:', err);
+      showTemporaryMessage(
+        'error',
+        err?.message || 'No se pudo enviar el presupuesto por email. Intente nuevamente.',
+      );
+    } finally {
+      setSendingPresupuestoId((currentId) => (currentId === reserva.id ? null : currentId));
     }
   };
 
@@ -485,7 +589,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por cliente, salon, estado o ID..."
+            placeholder="Buscar por cliente, salón, estado o ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -612,6 +716,15 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   const hasWarning = warningMessages.length > 0;
                   const isEditingCurrentRow = showDialog && editingReserva?.id === reserva.id;
                   const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
+                  const clienteEmail = reserva.cliente_email?.trim() || '';
+                  const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
+                  const sendPresupuestoTitle = sendingPresupuestoId === reserva.id
+                    ? 'Enviando presupuesto...'
+                    : !reserva.presupuesto_url
+                      ? 'La reserva no tiene presupuesto generado'
+                      : !clienteEmail
+                        ? 'La reserva no tiene email asociado'
+                        : `Enviar presupuesto a ${clienteEmail}`;
 
                   return (
                     <Fragment key={reserva.id}>
@@ -658,18 +771,32 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                               </button>
                             )}
                             {reserva.presupuesto_url && (
-                              <button
-                                onClick={() => handleOpenPresupuesto(reserva)}
-                                disabled={openingPresupuestoId === reserva.id}
-                                className={`${ACTION_BUTTON_BASE} text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-100 disabled:bg-indigo-50 disabled:text-indigo-700`}
-                                title={openingPresupuestoId === reserva.id ? 'Abriendo presupuesto...' : 'Ver presupuesto'}
-                              >
-                                {openingPresupuestoId === reserva.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <FileText className={ACTION_ICON_BASE} />
-                                )}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleOpenPresupuesto(reserva)}
+                                  disabled={openingPresupuestoId === reserva.id}
+                                  className={`${ACTION_BUTTON_BASE} text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-100 disabled:bg-indigo-50 disabled:text-indigo-700`}
+                                  title={openingPresupuestoId === reserva.id ? 'Abriendo presupuesto...' : 'Ver presupuesto'}
+                                >
+                                  {openingPresupuestoId === reserva.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <FileText className={ACTION_ICON_BASE} />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleSendPresupuestoEmail(reserva)}
+                                  disabled={!canSendPresupuestoEmail || sendingPresupuestoId === reserva.id}
+                                  className={`${ACTION_BUTTON_BASE} text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-100 disabled:text-gray-400`}
+                                  title={sendPresupuestoTitle}
+                                >
+                                  {sendingPresupuestoId === reserva.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Send className={ACTION_ICON_BASE} />
+                                  )}
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => handleEdit(reserva)}

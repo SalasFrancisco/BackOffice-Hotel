@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase, Perfil } from './utils/supabase/client';
 import { Login } from './components/Login';
 import { Layout } from './components/Layout';
@@ -10,16 +10,46 @@ import { ServiciosAdicionales } from './components/ServiciosAdicionales';
 import { Usuarios } from './components/Usuarios';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { InfoDialog } from './components/InfoDialog';
+import { PasswordRecovery } from './components/PasswordRecovery';
 
 type NavigationRequest = {
   page: string;
   reservaId?: number | null;
 };
 
+const isPasswordRecoveryUrl = () => {
+  const searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.get('recovery') === '1') {
+    return true;
+  }
+
+  const hash = window.location.hash.replace(/^#/, '');
+  if (!hash) {
+    return false;
+  }
+
+  const hashParams = new URLSearchParams(hash);
+  return hashParams.get('type') === 'recovery';
+};
+
+const clearPasswordRecoveryUrl = () => {
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.delete('recovery');
+  nextUrl.hash = '';
+  window.history.replaceState({}, document.title, nextUrl.toString());
+};
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<'login' | 'password-recovery'>(() =>
+    isPasswordRecoveryUrl() ? 'password-recovery' : 'login',
+  );
+  const [authFeedbackMessage, setAuthFeedbackMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const [currentPage, setCurrentPage] = useState(() => {
     const win = window as any;
     const initial = typeof win.__INITIAL_PAGE__ === 'string' ? win.__INITIAL_PAGE__ : '';
@@ -37,15 +67,39 @@ export default function App() {
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [copySqlFeedbackMessage, setCopySqlFeedbackMessage] = useState('');
   const [showCopySqlFeedbackDialog, setShowCopySqlFeedbackDialog] = useState(false);
+  const recoveryFlowActiveRef = useRef(isPasswordRecoveryUrl());
 
   useEffect(() => {
     checkSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+
+      if (event === 'PASSWORD_RECOVERY') {
+        recoveryFlowActiveRef.current = true;
+        setAuthMode('password-recovery');
+        setAuthFeedbackMessage(null);
+        setLoading(false);
+        return;
+      }
+
+      if (recoveryFlowActiveRef.current) {
+        if (event === 'SIGNED_OUT') {
+          recoveryFlowActiveRef.current = false;
+          setAuthMode('login');
+          clearPasswordRecoveryUrl();
+        }
+        setPerfil(null);
+        setLoading(false);
+        return;
+      }
+
       if (session) {
-        loadPerfil(session.user.id);
+        setAuthMode('login');
+        setAuthFeedbackMessage(null);
+        void loadPerfil(session.user.id);
       } else {
+        setAuthMode('login');
         setPerfil(null);
       }
     });
@@ -59,6 +113,11 @@ export default function App() {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       setSession(currentSession);
+
+      if (recoveryFlowActiveRef.current) {
+        setPerfil(null);
+        return;
+      }
 
       if (currentSession) {
         try {
@@ -86,6 +145,8 @@ export default function App() {
           console.error('Error in checkSession:', err);
           setPerfil(null);
         }
+      } else {
+        setPerfil(null);
       }
     } catch (err) {
       console.error('Error checking session:', err);
@@ -184,6 +245,29 @@ export default function App() {
     setEditingSalonId(null);
   };
 
+  const handleBackToLoginFromRecovery = async () => {
+    recoveryFlowActiveRef.current = false;
+    clearPasswordRecoveryUrl();
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      console.warn('Recovery sign out warning:', signOutError);
+    }
+    setSession(null);
+    setPerfil(null);
+    setAuthMode('login');
+    setAuthFeedbackMessage(null);
+  };
+
+  const handlePasswordUpdated = (message: string) => {
+    recoveryFlowActiveRef.current = false;
+    clearPasswordRecoveryUrl();
+    setSession(null);
+    setPerfil(null);
+    setAuthMode('login');
+    setAuthFeedbackMessage({ type: 'success', text: message });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -192,6 +276,16 @@ export default function App() {
           <p className="text-gray-600">Cargando...</p>
         </div>
       </div>
+    );
+  }
+
+  if (authMode === 'password-recovery') {
+    return (
+      <PasswordRecovery
+        hasRecoverySession={Boolean(session)}
+        onBackToLogin={handleBackToLoginFromRecovery}
+        onPasswordUpdated={handlePasswordUpdated}
+      />
     );
   }
 
@@ -307,7 +401,7 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
   }
 
   if (!session || !perfil) {
-    return <Login onLoginSuccess={checkSession} />;
+    return <Login onLoginSuccess={checkSession} authMessage={authFeedbackMessage} />;
   }
 
   const renderPage = () => {

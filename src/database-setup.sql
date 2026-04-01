@@ -372,7 +372,7 @@ on conflict do nothing;
 -- Sample reservations (uncomment after creating users)
 -- insert into public.reservas (cliente_nombre, cliente_email, cliente_telefono, id_salon, fecha_inicio, fecha_fin, estado, monto, observaciones, creado_por) values
 --   ('Cliente Demo', 'demo1@ejemplo.com', '+54 11 1111 1111', 1, '2025-10-20 18:00:00+00', '2025-10-20 23:00:00+00', 'Confirmado', 15000.00, 'Evento corporativo anual', 'UUID-OF-USER'),
---   ('Cliente Demo', 'demo2@ejemplo.com', '+54 11 2222 2222', 2, '2025-10-22 14:00:00+00', '2025-10-22 18:00:00+00', 'Pendiente', 8000.00, 'Reunión de directorio', 'UUID-OF-USER'),
+--   ('Cliente Demo', 'demo2@ejemplo.com', '+54 11 2222 2222', 2, '2025-10-22 14:00:00+00', '2025-10-22 18:00:00+00', 'Pendiente', 8000.00, 'ReuniÃ³n de directorio', 'UUID-OF-USER'),
 --   ('Cliente Demo', 'demo3@ejemplo.com', '+54 11 3333 3333', 3, '2025-10-25 21:00:00+00', '2025-10-26 02:00:00+00', 'Pagado', 6000.00, 'Cena de gala - cruza medianoche', 'UUID-OF-USER');
 
 -- ============================================

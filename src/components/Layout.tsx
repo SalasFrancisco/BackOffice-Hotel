@@ -100,7 +100,7 @@ const processReservaExpirations = async () => {
       }
 
       console.warn(
-        "No se pudo procesar vencimiento automatico de reservas:",
+        "No se pudo procesar vencimiento automático de reservas:",
         payload?.error || `HTTP ${response.status} en ${endpoint}`,
       );
       return;
@@ -330,7 +330,7 @@ export function Layout({
     } catch (err: any) {
       console.error("Error marking all notifications as read:", err);
       setNotificationsError(
-        err?.message || "No se pudieron marcar las notificaciones como leÃ­das.",
+        err?.message || "No se pudieron marcar las notificaciones como leídas.",
       );
     }
   };
@@ -365,7 +365,7 @@ export function Layout({
             <button
               onClick={() => setLiveToast(null)}
               className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-500 hover:bg-gray-100"
-              title="Cerrar notificaciÃ³n"
+              title="Cerrar notificación"
             >
               <X className="w-4 h-4" />
             </button>
@@ -390,7 +390,7 @@ export function Layout({
                 }`}
                 title={
                   unreadCount > 0
-                    ? `${unreadCount} notificaciÃ³n(es) sin leer`
+                    ? `${unreadCount} notificación(es) sin leer`
                     : "Notificaciones"
                 }
               >
@@ -521,7 +521,7 @@ export function Layout({
             className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
           >
             <LogOut className="w-4 h-4" />
-            <span className="text-sm">Cerrar SesiÃ³n</span>
+            <span className="text-sm">Cerrar Sesión</span>
           </button>
         </div>
       </aside>

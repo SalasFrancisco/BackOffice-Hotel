@@ -186,14 +186,14 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
   const capacityWarningDetails: string[] = [];
   if (exceedsSalonCapacity && currentSalon) {
-    capacityWarningDetails.push(`supera la capacidad del salon (${currentSalon.capacidad} personas)`);
+    capacityWarningDetails.push(`supera la capacidad del salón (${currentSalon.capacidad} personas)`);
   }
   if (exceedsDistribucionCapacity && currentDistribucion) {
-    capacityWarningDetails.push(`supera la capacidad de la distribucion seleccionada (${currentDistribucion.capacidad} personas)`);
+    capacityWarningDetails.push(`supera la capacidad de la distribución seleccionada (${currentDistribucion.capacidad} personas)`);
   }
 
   const capacityWarningText = hasCapacityWarning
-    ? `Advertencia: la cantidad ingresada ${capacityWarningDetails.join(' y ')}. Podes guardar la reserva igualmente.`
+    ? `Advertencia: la cantidad ingresada ${capacityWarningDetails.join(' y ')}. Podés guardar la reserva igualmente.`
     : '';
   const allowedEstadoTransitions = reserva
     ? getAllowedReservaEstadoTransitions(reserva.estado)
@@ -435,7 +435,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
       setMessage({
         type: 'error',
-        text: 'Transicion no permitida. Pendiente solo puede pasar a Confirmado o Cancelado, para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+        text: 'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
       });
       return;
     }
@@ -468,7 +468,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         if (pendingConflictIds.length > 0) {
           setMessage({
             type: 'error',
-            text: `No se puede crear la reserva: coincide con reserva(s) pendiente(s) del mismo salon y fecha (${pendingConflictIds.map((id) => `#${id}`).join(', ')}).`,
+            text: `No se puede crear la reserva: coincide con reserva(s) pendiente(s) del mismo salón y fecha (${pendingConflictIds.map((id) => `#${id}`).join(', ')}).`,
           });
           return;
         }
@@ -553,7 +553,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       if (reservaId) {
         if (!selectedSalon) {
           presupuestoErrorMessage =
-            'No se encontro el salon seleccionado para generar el presupuesto.';
+            'No se encontró el salón seleccionado para generar el presupuesto.';
         } else {
           const serviciosDetalle = Array.from(selectedServicios.entries())
             .map(([idServicio, cantidad]) => {
@@ -710,7 +710,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm text-gray-700 mb-2">
-              Salon <span className="text-red-500">*</span>
+              Salón <span className="text-red-500">*</span>
             </label>
             <select
               value={idSalon}
@@ -718,7 +718,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value={0}>Seleccione un salon</option>
+              <option value={0}>Seleccione un salón</option>
               {salones.map(salon => (
                 <option key={salon.id} value={salon.id}>
                   {salon.nombre} - ${salon.precio_base}
@@ -729,7 +729,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
           <div>
             <label className="block text-sm text-gray-700 mb-2">
-              Distribucion
+              Distribución
             </label>
             <select
               value={idDistribucion}
@@ -737,7 +737,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={!idSalon || distribuciones.length === 0}
             >
-              <option value={0}>Sin distribucion especifica</option>
+              <option value={0}>Sin distribución específica</option>
               {distribuciones.map(dist => (
                 <option key={dist.id} value={dist.id}>
                   {dist.nombre} - Cap: {dist.capacidad} personas
@@ -747,7 +747,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             </select>
             {idSalon && distribuciones.length === 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                Este salon no tiene distribuciones configuradas
+                Este salón no tiene distribuciones configuradas
               </p>
             )}
           </div>

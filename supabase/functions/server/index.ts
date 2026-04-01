@@ -1,6 +1,8 @@
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
+import { Buffer } from "node:buffer";
+import nodemailer from "npm:nodemailer@6.9.16";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 // pdfmake is imported dynamically at runtime only when PDF generation is needed
@@ -114,6 +116,7 @@ const RESERVA_ALERTA_INICIO_EVENTO = "vencimiento_inicio_evento";
 const RESERVA_ALERTA_CANCELACION_AUTOMATICA = "cancelacion_automatica";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESUPUESTOS_BUCKET = "presupuestos";
+const PRESUPUESTO_EMAIL_LINK_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 const SALONES_HEADER_LOGO_URL = "https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png";
 const LOCAL_LOGO_URL = new URL("./assets/QuintoCente.png", import.meta.url);
@@ -643,6 +646,292 @@ function createServiceClient(): SupabaseClient {
   });
 }
 
+type SmtpConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  from: string;
+};
+
+type SmtpAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
+function getSmtpConfig(): SmtpConfig {
+  const host = Deno.env.get("SMTP_HOST")?.trim() || "";
+  const portRaw = Deno.env.get("SMTP_PORT")?.trim() || "";
+  const user = Deno.env.get("SMTP_USER")?.trim() || "";
+  const pass = Deno.env.get("SMTP_PASS")?.trim() || "";
+  const fromOverride = Deno.env.get("SMTP_FROM")?.trim() || "";
+  const fromName = Deno.env.get("SMTP_FROM_NAME")?.trim() || "Hotel Back-Office";
+  const secureOverride = Deno.env.get("SMTP_SECURE")?.trim()?.toLowerCase();
+
+  if (!host || !portRaw || !user || !pass) {
+    throw new Error("SMTP environment variables are not fully configured");
+  }
+
+  const port = Number.parseInt(portRaw, 10);
+  if (!Number.isFinite(port) || port <= 0) {
+    throw new Error("SMTP_PORT is invalid");
+  }
+
+  const secure =
+    secureOverride === "true"
+      ? true
+      : secureOverride === "false"
+        ? false
+        : port === 465;
+
+  const from = fromOverride || `${fromName} <${user}>`;
+
+  return {
+    host,
+    port,
+    secure,
+    user,
+    pass,
+    from,
+  };
+}
+
+function getRequestOrigin(c: any): string | null {
+  const originHeader = c.req.header("origin");
+  if (originHeader) {
+    try {
+      return new URL(originHeader).origin;
+    } catch {
+      // ignore invalid origin header and continue
+    }
+  }
+
+  const refererHeader = c.req.header("referer");
+  if (refererHeader) {
+    try {
+      return new URL(refererHeader).origin;
+    } catch {
+      // ignore invalid referer header and continue
+    }
+  }
+
+  return null;
+}
+
+function buildPasswordRecoveryRedirectUrl(c: any, requestedRedirectTo: unknown): string | null {
+  const requestOrigin = getRequestOrigin(c);
+
+  if (typeof requestedRedirectTo === "string" && requestedRedirectTo.trim()) {
+    try {
+      const redirectUrl = new URL(requestedRedirectTo);
+      if (!requestOrigin || redirectUrl.origin === requestOrigin) {
+        redirectUrl.searchParams.set("recovery", "1");
+        return redirectUrl.toString();
+      }
+    } catch {
+      // ignore malformed redirect URL and fall back to the request origin
+    }
+  }
+
+  if (!requestOrigin) {
+    return null;
+  }
+
+  const fallbackUrl = new URL("/", requestOrigin);
+  fallbackUrl.searchParams.set("recovery", "1");
+  return fallbackUrl.toString();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildPasswordRecoveryEmail(actionLink: string) {
+  const safeActionLink = escapeHtml(actionLink);
+
+  return {
+    subject: "Recuperación de contraseña - Hotel Back-Office",
+    text:
+      "Recibimos una solicitud para cambiar tu contraseña.\n\n"
+      + `Usá este enlace para definir una nueva contraseña:\n${actionLink}\n\n`
+      + "Si no solicitaste este cambio, podés ignorar este correo.",
+    html: `
+      <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
+        <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
+          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Recuperación de contraseña</h1>
+          <p style="margin: 0 0 16px; line-height: 1.6;">
+            Recibimos una solicitud para cambiar tu contraseña de acceso al back-office.
+          </p>
+          <p style="margin: 0 0 24px; line-height: 1.6;">
+            Hacé clic en el siguiente botón para definir una nueva contraseña.
+          </p>
+          <a
+            href="${safeActionLink}"
+            style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;"
+          >
+            Cambiar contraseña
+          </a>
+          <p style="margin: 24px 0 8px; line-height: 1.6;">
+            Si el botón no funciona, copiá y pegá este enlace en tu navegador:
+          </p>
+          <p style="margin: 0; line-height: 1.6; word-break: break-all;">
+            <a href="${safeActionLink}" style="color: #2563eb;">${safeActionLink}</a>
+          </p>
+          <p style="margin: 24px 0 0; line-height: 1.6; color: #475569;">
+            Si no solicitaste este cambio, podés ignorar este correo.
+          </p>
+        </div>
+      </div>
+    `.trim(),
+  };
+}
+
+async function sendSmtpEmail(
+  smtpConfig: SmtpConfig,
+  input: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+    attachments?: SmtpAttachment[];
+  },
+) {
+  const transporter = nodemailer.createTransport({
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
+    auth: {
+      user: smtpConfig.user,
+      pass: smtpConfig.pass,
+    },
+  });
+
+  try {
+    await transporter.sendMail({
+      from: smtpConfig.from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+      attachments: input.attachments,
+    });
+  } finally {
+    transporter.close();
+  }
+}
+
+async function sendPasswordRecoveryEmail(smtpConfig: SmtpConfig, to: string, actionLink: string) {
+  const emailContent = buildPasswordRecoveryEmail(actionLink);
+
+  await sendSmtpEmail(smtpConfig, {
+    to,
+    subject: emailContent.subject,
+    text: emailContent.text,
+    html: emailContent.html,
+  });
+}
+
+function buildPresupuestoReservationEmail(input: {
+  reservaId: number;
+  clienteNombre?: string | null;
+  fechaInicio: string;
+  fechaFin: string;
+  downloadUrl: string;
+}) {
+  const clienteNombre = input.clienteNombre?.trim() || "cliente";
+  const safeClienteNombre = escapeHtml(clienteNombre);
+  const safeDownloadUrl = escapeHtml(input.downloadUrl);
+  const fechaInicioLabel = `${formatDate(input.fechaInicio)} ${formatTime(input.fechaInicio)}`;
+  const fechaFinLabel = `${formatDate(input.fechaFin)} ${formatTime(input.fechaFin)}`;
+  const reservaLabel = `#${input.reservaId}`;
+
+  return {
+    subject: `Presupuesto de reserva ${reservaLabel} - Quinto Centenario Hotel`,
+    text:
+      `Hola ${clienteNombre},\n\n`
+      + `Adjuntamos el presupuesto correspondiente a tu reserva ${reservaLabel}.\n`
+      + `Inicio: ${fechaInicioLabel}\n`
+      + `Fin: ${fechaFinLabel}\n\n`
+      + "Tambien podes descargarlo desde el siguiente enlace, valido por 7 dias:\n"
+      + `${input.downloadUrl}\n\n`
+      + "Saludos,\nQuinto Centenario Hotel",
+    html: `
+      <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
+          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Presupuesto de tu reserva</h1>
+          <p style="margin: 0 0 16px; line-height: 1.6;">Hola ${safeClienteNombre},</p>
+          <p style="margin: 0 0 16px; line-height: 1.6;">
+            Adjuntamos el presupuesto correspondiente a tu reserva <strong>${escapeHtml(reservaLabel)}</strong>.
+          </p>
+          <div style="margin: 0 0 20px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Inicio:</strong> ${escapeHtml(fechaInicioLabel)}</p>
+            <p style="margin: 0; line-height: 1.5;"><strong>Fin:</strong> ${escapeHtml(fechaFinLabel)}</p>
+          </div>
+          <p style="margin: 0 0 24px; line-height: 1.6;">
+            También podés descargar el PDF desde el siguiente botón. El enlace estará disponible durante 7 días.
+          </p>
+          <a
+            href="${safeDownloadUrl}"
+            style="display: inline-block; background: #0f766e; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;"
+          >
+            Descargar presupuesto
+          </a>
+          <p style="margin: 24px 0 8px; line-height: 1.6;">
+            Si el botón no funciona, copiá y pegá este enlace en tu navegador:
+          </p>
+          <p style="margin: 0; line-height: 1.6; word-break: break-all;">
+            <a href="${safeDownloadUrl}" style="color: #0f766e;">${safeDownloadUrl}</a>
+          </p>
+          <p style="margin: 24px 0 0; line-height: 1.6; color: #475569;">
+            También vas a encontrar el presupuesto adjunto en este correo.
+          </p>
+        </div>
+      </div>
+    `.trim(),
+  };
+}
+
+async function sendPresupuestoReservationEmail(
+  smtpConfig: SmtpConfig,
+  input: {
+    to: string;
+    reservaId: number;
+    clienteNombre?: string | null;
+    fechaInicio: string;
+    fechaFin: string;
+    downloadUrl: string;
+    attachmentFileName: string;
+    attachmentContent: Buffer;
+  },
+) {
+  const emailContent = buildPresupuestoReservationEmail({
+    reservaId: input.reservaId,
+    clienteNombre: input.clienteNombre,
+    fechaInicio: input.fechaInicio,
+    fechaFin: input.fechaFin,
+    downloadUrl: input.downloadUrl,
+  });
+
+  await sendSmtpEmail(smtpConfig, {
+    to: input.to,
+    subject: emailContent.subject,
+    text: emailContent.text,
+    html: emailContent.html,
+    attachments: [{
+      filename: input.attachmentFileName,
+      content: input.attachmentContent,
+      contentType: "application/pdf",
+    }],
+  });
+}
+
 function normalizeRole(role: unknown) {
   if (typeof role !== "string") return null;
   return role
@@ -860,6 +1149,97 @@ const buildPresupuestoStorageCandidates = (rawPath?: string | null) => {
   return Array.from(candidates).filter(Boolean);
 };
 
+async function createPresupuestoSignedUrl(
+  supabaseAdmin: SupabaseClient,
+  rawPath: string | null | undefined,
+  expiresInSeconds: number,
+) {
+  const storagePaths = buildPresupuestoStorageCandidates(rawPath);
+
+  if (!storagePaths.length) {
+    return {
+      status: 404,
+      error: "La reserva no tiene presupuesto generado",
+    } as const;
+  }
+
+  let lastMissingError = "";
+
+  for (const storagePath of storagePaths) {
+    const { data: signedData, error: signedError } = await supabaseAdmin.storage
+      .from(PRESUPUESTOS_BUCKET)
+      .createSignedUrl(storagePath, expiresInSeconds);
+
+    if (!signedError && signedData?.signedUrl) {
+      return {
+        signedUrl: signedData.signedUrl,
+        storagePath,
+      } as const;
+    }
+
+    const errorMessage = signedError?.message || "No se pudo firmar la URL del presupuesto";
+    if (isMissingStorageFileError(errorMessage)) {
+      lastMissingError = errorMessage;
+      continue;
+    }
+
+    return {
+      status: 500,
+      error: errorMessage,
+    } as const;
+  }
+
+  return {
+    status: 404,
+    error: lastMissingError || "No se encontro el presupuesto en storage",
+  } as const;
+}
+
+async function downloadPresupuestoFile(
+  supabaseAdmin: SupabaseClient,
+  rawPath: string | null | undefined,
+) {
+  const storagePaths = buildPresupuestoStorageCandidates(rawPath);
+
+  if (!storagePaths.length) {
+    return {
+      status: 404,
+      error: "La reserva no tiene presupuesto generado",
+    } as const;
+  }
+
+  let lastMissingError = "";
+
+  for (const storagePath of storagePaths) {
+    const { data: fileData, error: fileError } = await supabaseAdmin.storage
+      .from(PRESUPUESTOS_BUCKET)
+      .download(storagePath);
+
+    if (!fileError && fileData) {
+      return {
+        fileData,
+        storagePath,
+      } as const;
+    }
+
+    const errorMessage = fileError?.message || "No se pudo descargar el presupuesto";
+    if (isMissingStorageFileError(errorMessage)) {
+      lastMissingError = errorMessage;
+      continue;
+    }
+
+    return {
+      status: 500,
+      error: errorMessage,
+    } as const;
+  }
+
+  return {
+    status: 404,
+    error: lastMissingError || "No se encontro el presupuesto en storage",
+  } as const;
+}
+
 const deletePresupuestoFromStorage = async (
   supabaseAdmin: SupabaseClient,
   rawPaths: Array<string | null | undefined>,
@@ -927,6 +1307,83 @@ const getMetadataNumber = (metadata: Record<string, unknown>, key: string) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+app.post("/make-server-484a241a/request-password-reset", async (c) => {
+  try {
+    const supabaseAdmin = createServiceClient();
+    const smtpConfig = getSmtpConfig();
+    const body = await c.req.json();
+    const email = typeof body?.email === "string" ? body.email.trim() : "";
+
+    if (!email) {
+      return c.json({ error: "Missing required field: email" }, 400);
+    }
+
+    const redirectTo = buildPasswordRecoveryRedirectUrl(c, body?.redirectTo);
+    if (!redirectTo) {
+      return c.json({ error: "No se pudo determinar la URL de redirección" }, 400);
+    }
+
+    const { data: linkData, error: generateLinkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: {
+        redirectTo,
+      },
+    });
+
+    if (generateLinkError) {
+      const normalizedErrorMessage = String(generateLinkError.message || "").toLowerCase();
+      const shouldMaskMissingUserError =
+        normalizedErrorMessage.includes("user not found")
+        || normalizedErrorMessage.includes("email not found")
+        || normalizedErrorMessage.includes("email address not authorized")
+        || normalizedErrorMessage.includes("unable to validate email address");
+
+      if (shouldMaskMissingUserError) {
+        return c.json({ success: true });
+      }
+
+      console.error("Error generating password recovery link:", generateLinkError);
+      return c.json(
+        { error: generateLinkError.message || "No se pudo generar el enlace de recuperación" },
+        500,
+      );
+    }
+
+    const recoveryUser = linkData.user;
+    const actionLink = linkData.properties?.action_link;
+
+    if (!recoveryUser?.id || !recoveryUser.email || !actionLink) {
+      return c.json({ success: true });
+    }
+
+    const { data: perfil, error: perfilError } = await supabaseAdmin
+      .from("perfiles")
+      .select("user_id")
+      .eq("user_id", recoveryUser.id)
+      .maybeSingle();
+
+    if (perfilError) {
+      console.error("Error checking perfil for password recovery:", perfilError);
+      return c.json({ error: "No se pudo validar el usuario de recuperación" }, 500);
+    }
+
+    if (!perfil) {
+      return c.json({ success: true });
+    }
+
+    await sendPasswordRecoveryEmail(smtpConfig, recoveryUser.email, actionLink);
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error("Error in request-password-reset endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+});
+
+app.post("/server/make-server-484a241a/request-password-reset", async (c) =>
+  app.fetch(new Request(new URL("/make-server-484a241a/request-password-reset", c.req.url), c.req.raw)));
 
 app.post("/make-server-484a241a/create-user", async (c) => {
   try {
@@ -1207,24 +1664,116 @@ app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
       presupuestoPath = reservaData?.presupuesto_url || "";
     }
 
-    if (!presupuestoPath) {
-      return c.json({ error: "La reserva no tiene presupuesto generado" }, 404);
+    const signedUrlResult = await createPresupuestoSignedUrl(supabaseAdmin, presupuestoPath, 60);
+    if ("error" in signedUrlResult) {
+      return c.json({ error: signedUrlResult.error }, signedUrlResult.status);
     }
 
-    const { data: signedData, error: signedError } = await supabaseAdmin.storage
-      .from("presupuestos")
-      .createSignedUrl(presupuestoPath, 60);
-
-    if (signedError || !signedData?.signedUrl) {
-      return c.json({ error: signedError?.message || "No se pudo firmar la URL del presupuesto" }, 500);
-    }
-
-    return c.json({ signedUrl: signedData.signedUrl });
+    return c.json({ signedUrl: signedUrlResult.signedUrl });
   } catch (error) {
     console.error("Error in get-presupuesto-url endpoint:", error);
     return c.json({ error: error?.message ?? "Internal server error" }, 500);
   }
 });
+
+const sendPresupuestoEmailHandler = async (c: any) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const accessCheck = await requireBackofficeUser(
+      supabaseAdmin,
+      accessToken,
+      "send reservation budgets by email",
+    );
+
+    if ("status" in accessCheck) {
+      return c.json(accessCheck.body, accessCheck.status);
+    }
+
+    const body = await c.req.json();
+    const reservaId = Number(body?.reservaId);
+    const presupuestoPathFromBody = typeof body?.presupuestoPath === "string"
+      ? body.presupuestoPath.trim()
+      : "";
+
+    if (!Number.isFinite(reservaId) || reservaId <= 0) {
+      return c.json({ error: "Missing required field: reservaId" }, 400);
+    }
+
+    const { data: reservaData, error: reservaError } = await supabaseAdmin
+      .from("reservas")
+      .select("id, cliente_nombre, cliente_email, fecha_inicio, fecha_fin, presupuesto_url")
+      .eq("id", reservaId)
+      .maybeSingle();
+
+    if (reservaError) {
+      return c.json({ error: reservaError.message }, 400);
+    }
+
+    if (!reservaData) {
+      return c.json({ error: "Reserva no encontrada" }, 404);
+    }
+
+    const clienteEmail = typeof reservaData.cliente_email === "string"
+      ? reservaData.cliente_email.trim()
+      : "";
+
+    if (!clienteEmail) {
+      return c.json({ error: "La reserva no tiene un correo electrónico asociado" }, 400);
+    }
+
+    const presupuestoPath = presupuestoPathFromBody
+      || (typeof reservaData.presupuesto_url === "string" ? reservaData.presupuesto_url.trim() : "");
+
+    const signedUrlResult = await createPresupuestoSignedUrl(
+      supabaseAdmin,
+      presupuestoPath,
+      PRESUPUESTO_EMAIL_LINK_TTL_SECONDS,
+    );
+    if ("error" in signedUrlResult) {
+      return c.json({ error: signedUrlResult.error }, signedUrlResult.status);
+    }
+
+    const presupuestoFileResult = await downloadPresupuestoFile(supabaseAdmin, presupuestoPath);
+    if ("error" in presupuestoFileResult) {
+      return c.json({ error: presupuestoFileResult.error }, presupuestoFileResult.status);
+    }
+
+    const smtpConfig = getSmtpConfig();
+    const attachmentContent = Buffer.from(await presupuestoFileResult.fileData.arrayBuffer());
+    const attachmentFileName = buildPresupuestoFileName({
+      nombreBase: `Presupuesto ${reservaData.cliente_nombre || `Reserva ${reservaData.id}`}`,
+      fechaInicio: reservaData.fecha_inicio,
+      fallbackEvento: `Reserva ${reservaData.id}`,
+    });
+
+    await sendPresupuestoReservationEmail(smtpConfig, {
+      to: clienteEmail,
+      reservaId: reservaData.id,
+      clienteNombre: reservaData.cliente_nombre,
+      fechaInicio: reservaData.fecha_inicio,
+      fechaFin: reservaData.fecha_fin,
+      downloadUrl: signedUrlResult.signedUrl,
+      attachmentFileName,
+      attachmentContent,
+    });
+
+    return c.json({
+      success: true,
+      sentTo: clienteEmail,
+    });
+  } catch (error) {
+    console.error("Error in send-presupuesto-email endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+};
+
+app.post("/make-server-484a241a/send-presupuesto-email", sendPresupuestoEmailHandler);
+app.post("/server/make-server-484a241a/send-presupuesto-email", sendPresupuestoEmailHandler);
 
 const deleteReservaHandler = async (c: any) => {
   try {
@@ -1467,11 +2016,11 @@ const processReservaVencimientoHandler = async (c: any) => {
 
         if (!warningAlreadyExists) {
           const title = inactivityDaysRemaining === 1
-            ? `Reserva #${reserva.id}: ultimo dia para confirmar o modificar`
-            : `Reserva #${reserva.id}: vence en ${inactivityDaysRemaining} dias por inactividad`;
+            ? `Reserva #${reserva.id}: último día para confirmar o modificar`
+            : `Reserva #${reserva.id}: vence en ${inactivityDaysRemaining} días por inactividad`;
           const message = inactivityDaysRemaining === 1
-            ? `Ultimo dia para confirmar o modificar la reserva #${reserva.id} de ${clienteNombre}. Si no hay cambios, se cancelara automaticamente por inactividad.`
-            : `La reserva #${reserva.id} de ${clienteNombre} se cancelara automaticamente en ${inactivityDaysRemaining} dias si continua pendiente y sin modificaciones.`;
+            ? `Último día para confirmar o modificar la reserva #${reserva.id} de ${clienteNombre}. Si no hay cambios, se cancelará automáticamente por inactividad.`
+            : `La reserva #${reserva.id} de ${clienteNombre} se cancelará automáticamente en ${inactivityDaysRemaining} días si continúa pendiente y sin modificaciones.`;
 
           warningNotificationsToInsert.push({
             tipo: "ESTADO_CAMBIADO",
@@ -1507,11 +2056,11 @@ const processReservaVencimientoHandler = async (c: any) => {
 
         if (!warningAlreadyExists) {
           const title = startDaysRemaining === 1
-            ? `Reserva #${reserva.id}: ultimo dia antes de la fecha de inicio`
-            : `Reserva #${reserva.id}: inicia en ${startDaysRemaining} dias y sigue pendiente`;
+            ? `Reserva #${reserva.id}: último día antes de la fecha de inicio`
+            : `Reserva #${reserva.id}: inicia en ${startDaysRemaining} días y sigue pendiente`;
           const message = startDaysRemaining === 1
-            ? `Ultimo dia para confirmar la reserva #${reserva.id} de ${clienteNombre}. Si llega la fecha de inicio en estado Pendiente, se cancelara automaticamente.`
-            : `La reserva #${reserva.id} de ${clienteNombre} inicia en ${startDaysRemaining} dias y sigue pendiente. Si llega la fecha de inicio sin confirmarse, se cancelara automaticamente.`;
+            ? `Último día para confirmar la reserva #${reserva.id} de ${clienteNombre}. Si llega la fecha de inicio en estado Pendiente, se cancelará automáticamente.`
+            : `La reserva #${reserva.id} de ${clienteNombre} inicia en ${startDaysRemaining} días y sigue pendiente. Si llega la fecha de inicio sin confirmarse, se cancelará automáticamente.`;
 
           warningNotificationsToInsert.push({
             tipo: "ESTADO_CAMBIADO",
@@ -1583,12 +2132,12 @@ const processReservaVencimientoHandler = async (c: any) => {
 
         const clienteNombre = cancelCandidate.clienteNombre;
         const cancellationMessage = cancelCandidate.reason === "inicio_evento"
-          ? `La reserva #${reservaId} de ${clienteNombre} fue cancelada automaticamente porque llego su fecha de inicio y continuaba en estado Pendiente.`
-          : `La reserva #${reservaId} de ${clienteNombre} fue cancelada automaticamente por superar ${RESERVA_AUTO_CANCEL_DAYS} dias en estado Pendiente sin confirmacion ni modificaciones.`;
+          ? `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente porque llegó su fecha de inicio y continuaba en estado Pendiente.`
+          : `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente por superar ${RESERVA_AUTO_CANCEL_DAYS} días en estado Pendiente sin confirmación ni modificaciones.`;
 
         autoCancelNotificationsToInsert.push({
           tipo: "ESTADO_CAMBIADO",
-          titulo: `Reserva #${reservaId} cancelada automaticamente`,
+          titulo: `Reserva #${reservaId} cancelada automáticamente`,
           mensaje: cancellationMessage,
           reserva_id: reservaId,
           metadata: {
@@ -1753,7 +2302,7 @@ const publicReservaHandler = async (c) => {
     const fechaInicioDate = new Date(fechaInicio);
     const fechaFinDate = new Date(fechaFin);
     if (Number.isNaN(fechaInicioDate.getTime()) || Number.isNaN(fechaFinDate.getTime())) {
-      return c.json({ error: "Formato de fecha invalido" }, 400);
+      return c.json({ error: "Formato de fecha inválido" }, 400);
     }
 
     const now = new Date();
@@ -1779,11 +2328,11 @@ const publicReservaHandler = async (c) => {
 
     if (salonError) {
       console.error("Error buscando salon:", salonError);
-      return c.json({ error: "No se pudo validar el salon seleccionado" }, 500);
+      return c.json({ error: "No se pudo validar el salón seleccionado" }, 500);
     }
 
     if (!salonData) {
-      return c.json({ error: "No se encontro el salon seleccionado" }, 404);
+      return c.json({ error: "No se encontró el salón seleccionado" }, 404);
     }
 
     let distribucionData: { id: number; nombre: string; capacidad: number } | null = null;
@@ -2012,24 +2561,28 @@ const proxyTo = (path: string) => (c: any) =>
   app.fetch(new Request(new URL(path, c.req.url), c.req.raw));
 
 app.get("/health", proxyTo("/make-server-484a241a/health"));
+app.post("/request-password-reset", proxyTo("/make-server-484a241a/request-password-reset"));
 app.post("/create-user", proxyTo("/make-server-484a241a/create-user"));
 app.post("/update-user-email", proxyTo("/make-server-484a241a/update-user-email"));
 app.post("/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
+app.post("/send-presupuesto-email", proxyTo("/make-server-484a241a/send-presupuesto-email"));
 app.post("/delete-reserva", proxyTo("/make-server-484a241a/delete-reserva"));
 app.post("/process-reserva-vencimiento", proxyTo("/make-server-484a241a/process-reserva-vencimiento"));
 app.get("/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
 app.post("/public-reserva", proxyTo("/make-server-484a241a/public-reserva"));
 
 app.get("/server/health", proxyTo("/make-server-484a241a/health"));
+app.post("/server/request-password-reset", proxyTo("/make-server-484a241a/request-password-reset"));
 app.post("/server/create-user", proxyTo("/make-server-484a241a/create-user"));
 app.post("/server/update-user-email", proxyTo("/make-server-484a241a/update-user-email"));
 app.post("/server/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/server/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/server/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/server/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
+app.post("/server/send-presupuesto-email", proxyTo("/make-server-484a241a/send-presupuesto-email"));
 app.post("/server/delete-reserva", proxyTo("/make-server-484a241a/delete-reserva"));
 app.post("/server/process-reserva-vencimiento", proxyTo("/make-server-484a241a/process-reserva-vencimiento"));
 app.get("/server/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { supabase } from '../utils/supabase/client';
+import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
 
 type LoginProps = {
   onLoginSuccess: () => void;
+  authMessage?: { type: 'success' | 'error'; text: string } | null;
 };
 
-export function Login({ onLoginSuccess }: LoginProps) {
+export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,6 +19,72 @@ export function Login({ onLoginSuccess }: LoginProps) {
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const [recoverySent, setRecoverySent] = useState(false);
 
+  const parseServerResponse = async (response: Response) => {
+    const text = await response.text();
+    if (!text) return {};
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: text };
+    }
+  };
+
+  const requestPasswordResetEmail = async (recoveryEmailTarget: string) => {
+    const redirectUrl = new URL(window.location.href);
+    redirectUrl.search = '';
+    redirectUrl.hash = '';
+    redirectUrl.searchParams.set('recovery', '1');
+
+    const urls = [
+      `https://${projectId}.supabase.co/functions/v1/server/request-password-reset`,
+      `https://${projectId}.supabase.co/functions/v1/request-password-reset`,
+      `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/request-password-reset`,
+      `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/request-password-reset`,
+    ];
+
+    let lastPayload: any = { error: 'No se pudo contactar el servidor' };
+    let lastStatus = 0;
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+          body: JSON.stringify({
+            email: recoveryEmailTarget,
+            redirectTo: redirectUrl.toString(),
+          }),
+        });
+
+        const payload = await parseServerResponse(response);
+        lastPayload = payload;
+        lastStatus = response.status;
+
+        if (response.ok) {
+          return { response, payload };
+        }
+
+        const message = String(payload?.error || '');
+        const isNotFound = response.status === 404 || /not found|404/i.test(message);
+
+        if (!isNotFound) {
+          return { response, payload };
+        }
+      } catch (err: any) {
+        lastPayload = { error: err?.message || 'Error de red al contactar el servidor' };
+      }
+    }
+
+    return {
+      response: new Response(null, { status: lastStatus || 500 }),
+      payload: lastPayload,
+    };
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -25,7 +93,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     const emailSanitizado = email.trim();
 
     if (!hasNonWhitespaceValue(emailSanitizado) || !hasNonWhitespaceValue(password)) {
-      setError('Complete email y contraseña validos');
+      setError('Complete email y contraseña válidos');
       setLoading(false);
       return;
     }
@@ -72,20 +140,22 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
     if (!hasNonWhitespaceValue(recoveryEmailSanitizado)) {
       setRecoverySent(false);
-      setRecoveryMessage('Ingrese un email valido');
+      setRecoveryMessage('Ingrese un email válido');
       setLoading(false);
       return;
     }
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(recoveryEmailSanitizado, {
-        redirectTo: window.location.origin,
-      });
+      const { response, payload } = await requestPasswordResetEmail(recoveryEmailSanitizado);
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(payload?.error || 'No se pudo enviar el email de recuperación');
+      }
 
       setRecoverySent(true);
-      setRecoveryMessage('Se ha enviado un email con instrucciones para recuperar tu contraseña.');
+      setRecoveryMessage(
+        'Si el email corresponde a un usuario válido, vas a recibir un enlace para cambiar la contraseña.',
+      );
     } catch (err: any) {
       console.error('Recovery error:', err);
       setRecoveryMessage(err.message || 'Error al enviar el email de recuperación');
@@ -175,6 +245,25 @@ export function Login({ onLoginSuccess }: LoginProps) {
             <h1 className="text-gray-900 mb-2">Hotel Back-Office</h1>
             <p className="text-gray-600">Sistema de Gestión de Reservas</p>
           </div>
+
+          {authMessage && (
+            <div
+              className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
+                authMessage.type === 'success'
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-red-50 border border-red-200'
+              }`}
+            >
+              {authMessage.type === 'success' ? (
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              )}
+              <p className={`text-sm ${authMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+                {authMessage.text}
+              </p>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-6">

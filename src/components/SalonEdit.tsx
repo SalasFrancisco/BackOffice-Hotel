@@ -93,19 +93,19 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     const descripcionSanitizada = descripcion.trim();
 
     if (!hasNonWhitespaceValue(nombreSanitizado) || !capacidadSanitizada || !precioBaseSanitizado) {
-      setMessage({ type: 'error', text: 'Complete todos los campos requeridos del salon' });
+      setMessage({ type: 'error', text: 'Complete todos los campos requeridos del salón' });
       return;
     }
 
     const capacidadNumero = parseInt(capacidadSanitizada, 10);
     if (!capacidadNumero || capacidadNumero <= 0) {
-      setMessage({ type: 'error', text: 'Ingrese una capacidad valida para el salon' });
+      setMessage({ type: 'error', text: 'Ingrese una capacidad válida para el salón' });
       return;
     }
 
     const precioNumero = parseFloat(precioBaseSanitizado);
     if (Number.isNaN(precioNumero) || precioNumero < 0) {
-      setMessage({ type: 'error', text: 'Ingrese un precio base valido para el salon' });
+      setMessage({ type: 'error', text: 'Ingrese un precio base válido para el salón' });
       return;
     }
 
@@ -113,7 +113,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     if (distribuciones.length > 0 && capacidadNumero < maxDistribucion) {
       setMessage({
         type: 'error',
-        text: `La capacidad del salon no puede ser inferior a la mayor distribucion (${maxDistribucion} personas)`,
+        text: `La capacidad del salón no puede ser inferior a la mayor distribución (${maxDistribucion} personas)`,
       });
       return;
     }
@@ -133,7 +133,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
       if (error) throw error;
 
-      setMessage({ type: 'success', text: 'Salon actualizado correctamente' });
+      setMessage({ type: 'success', text: 'Salón actualizado correctamente' });
       loadData();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -168,7 +168,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     const distCapacidadSanitizada = sanitizeIntegerInput(distCapacidad);
 
     if (!hasNonWhitespaceValue(distNombreSanitizado) || !distCapacidadSanitizada) {
-      setDistMessage({ type: 'error', text: 'Complete todos los campos de la distribucion' });
+      setDistMessage({ type: 'error', text: 'Complete todos los campos de la distribución' });
       return;
     }
 
@@ -176,14 +176,14 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
     const capacidadDistribucion = parseInt(distCapacidadSanitizada, 10);
 
     if (!capacidadDistribucion || capacidadDistribucion <= 0) {
-      setDistMessage({ type: 'error', text: 'Ingrese una capacidad valida para la distribucion' });
+      setDistMessage({ type: 'error', text: 'Ingrese una capacidad válida para la distribución' });
       return;
     }
 
     if (capacidadDistribucion > capacidadSalon) {
       setDistMessage({
         type: 'error',
-        text: `La distribucion no puede superar la capacidad del salon (${capacidadSalon} personas)`,
+        text: `La distribución no puede superar la capacidad del salón (${capacidadSalon} personas)`,
       });
       return;
     }
@@ -201,7 +201,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
           .eq('id', editingDist.id);
 
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Distribucion actualizada correctamente' });
+        setMessage({ type: 'success', text: 'Distribución actualizada correctamente' });
       } else {
         const { error } = await supabase
           .from('distribuciones')
@@ -212,7 +212,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
           }]);
 
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Distribucion creada correctamente' });
+        setMessage({ type: 'success', text: 'Distribución creada correctamente' });
       }
 
 
@@ -272,7 +272,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       <div className="p-8">
         <div className="flex items-start gap-2 p-4 bg-red-50 border border-red-200 rounded-lg">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-800">Salon no encontrado</p>
+          <p className="text-sm text-red-800">Salón no encontrado</p>
         </div>
       </div>
     );
@@ -397,7 +397,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h3 className="text-gray-900">Distribuciones del Salon</h3>
+            <h3 className="text-gray-900">Distribuciones del Salón</h3>
             <p className="text-sm text-gray-600">Configuraciones de distribución con diferentes capacidades</p>
           </div>
           <button
@@ -411,7 +411,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
         {distribuciones.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            No hay distribuciones creadas para este Salon
+            No hay distribuciones creadas para este Salón
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

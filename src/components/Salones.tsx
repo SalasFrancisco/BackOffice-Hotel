@@ -107,13 +107,13 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
 
     const capacidadNumero = parseInt(capacidadSanitizada, 10);
     if (!capacidadNumero || capacidadNumero <= 0) {
-      setMessage({ type: 'error', text: 'Por favor ingrese una capacidad valida' });
+      setMessage({ type: 'error', text: 'Por favor ingrese una capacidad válida' });
       return;
     }
 
     const precioNumero = parseFloat(precioBaseSanitizado);
     if (Number.isNaN(precioNumero) || precioNumero < 0) {
-      setMessage({ type: 'error', text: 'Por favor ingrese un precio base valido' });
+      setMessage({ type: 'error', text: 'Por favor ingrese un precio base válido' });
       return;
     }
 

@@ -54,7 +54,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
     if (!isReservaEstadoTransitionAllowed(reserva.estado, nuevoEstado)) {
       setMessage({
         type: 'error',
-        text: 'Transicion no permitida. Pendiente solo puede pasar a Confirmado o Cancelado, para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+        text: 'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
       });
       return;
     }
@@ -171,7 +171,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
               <p className="text-sm text-gray-600 mb-1">Cliente</p>
               <p className="text-gray-900">{reserva.cliente_nombre || 'Sin nombre'}</p>
               <p className="text-sm text-gray-600">{reserva.cliente_email || 'Sin email'}</p>
-              <p className="text-sm text-gray-600">{reserva.cliente_telefono || 'Sin telefono'}</p>
+              <p className="text-sm text-gray-600">{reserva.cliente_telefono || 'Sin teléfono'}</p>
             </div>
 
             <div>

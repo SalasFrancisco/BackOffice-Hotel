@@ -1,0 +1,3997 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Centro de Convenciones | Hotel Quinto Centenario</title>
+
+    <link
+
+        href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700;900&family=Poppins:wght@300;400;600;700&display=swap"
+
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css">
+
+    <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css" />
+
+    <style>
+
+        /* --- VARIABLES Y RESET --- */
+
+        :root {
+
+            --primary: #a19494;
+
+            --text-dark: #333;
+
+            --text-light: #666;
+
+            --white: #ffffff;
+
+            --blue-btn: #007bff;
+
+        }
+
+        * {
+
+            margin: 0;
+
+            padding: 0;
+
+            box-sizing: border-box;
+
+        }
+
+        body {
+
+            font-family: 'Lato', sans-serif;
+
+            color: var(--text-dark);
+
+            background-color: var(--white);
+
+            overflow-x: hidden;
+
+        }
+
+        a {
+
+            text-decoration: none;
+
+            color: inherit;
+
+            transition: 0.3s;
+
+        }
+
+        ul {
+
+            list-style: none;
+
+        }
+
+        /* --- HEADER --- */
+
+        header {
+
+            position: absolute;
+
+            top: 0;
+
+            left: 0;
+
+            width: 100%;
+
+            z-index: 100;
+
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 100%);
+
+            padding-top: 20px;
+
+        }
+
+        .navbar {
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            padding: 10px 0;
+
+        }
+
+        .nav-list {
+
+            display: flex;
+
+            gap: 30px;
+
+            align-items: center;
+
+        }
+
+        .nav-item {
+
+            font-family: 'Lato', sans-serif !important;
+
+            font-size: 13px;
+
+            text-transform: uppercase;
+
+            font-weight: 700;
+
+            letter-spacing: 1px;
+
+            color: var(--white);
+
+        }
+
+        .nav-item:hover {
+
+            color: var(--primary);
+
+        }
+
+        .logo img {
+
+            height: 70px;
+
+            margin: 0 40px;
+
+            filter: brightness(0) invert(1) grayscale(1) contrast(200%) !important;
+
+            opacity: 1 !important;
+
+        }
+
+        /* --- HERO SLIDER --- */
+
+        .hero-section {
+
+            position: relative;
+
+            width: 100%;
+
+            height: 600px;
+
+        }
+
+        .swiper-container.main-swiper {
+
+            width: 100%;
+
+            height: 100%;
+
+        }
+
+        .main-swiper .swiper-slide img {
+
+            width: 100%;
+
+            height: 100%;
+
+            object-fit: cover;
+
+        }
+
+        .hero-overlay-text {
+
+            position: absolute;
+
+            top: 50%;
+
+            left: 50%;
+
+            transform: translate(-50%, -50%);
+
+            z-index: 10;
+
+            text-align: center;
+
+            width: 100%;
+
+        }
+
+        .hero-overlay-text h1 {
+
+            font-family: 'Lato', sans-serif !important;
+
+            font-size: 60px;
+
+            color: var(--white);
+
+            font-weight: 400;
+
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+
+        }
+
+        /* --- CONTENEDORES --- */
+
+        .section-container {
+
+            max-width: 1200px;
+
+            margin: 60px auto;
+
+            padding: 0 20px;
+
+        }
+
+        .split-layout {
+
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 50px;
+
+            align-items: flex-start;
+
+        }
+
+        .intro-col,
+
+        .form-col {
+
+            flex: 1;
+
+            min-width: 300px;
+
+        }
+
+        .section-title {
+
+            font-family: 'Lato', sans-serif;
+
+            font-size: 18px;
+
+            color: #666;
+
+            margin-bottom: 20px;
+
+            font-weight: 400;
+
+        }
+
+        .intro-text {
+
+            font-size: 18px;
+
+            line-height: 1.8;
+
+            color: #555;
+
+            margin-bottom: 20px;
+
+            text-align: justify;
+
+        }
+
+        .blue-btn {
+
+            display: inline-block;
+
+            background-color: var(--blue-btn);
+
+            color: var(--white);
+
+            padding: 12px 20px;
+
+            font-size: 14px;
+
+            font-weight: 700;
+
+            text-transform: uppercase;
+
+            border: none;
+
+            margin-right: 10px;
+
+            margin-bottom: 10px;
+
+            text-align: center;
+
+            width: fit-content;
+
+            border-radius: 4px;
+
+        }
+
+        .blue-btn:hover {
+
+            background-color: #0056b3;
+
+        }
+
+        .form-card {
+
+            background: #fff;
+
+            padding: 50px 40px 40px;
+
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+
+            position: relative;
+
+            border: 1px solid #eee;
+
+            text-align: center;
+
+            margin-top: 40px;
+
+        }
+
+        .circle-img {
+
+            width: 90px;
+
+            height: 90px;
+
+            border-radius: 50%;
+
+            overflow: hidden;
+
+            position: absolute;
+
+            top: -45px;
+
+            left: 50%;
+
+            transform: translateX(-50%);
+
+            border: 4px solid #fff;
+
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+
+        }
+
+        .circle-img img {
+
+            width: 100%;
+
+            height: 100%;
+
+            object-fit: cover;
+
+        }
+
+        .form-title {
+
+            font-size: 14px;
+
+            font-weight: 700;
+
+            margin-bottom: 25px;
+
+            color: #000;
+
+        }
+
+        .form-row {
+
+            display: flex;
+
+            gap: 15px;
+
+            margin-bottom: 15px;
+
+            text-align: left;
+
+        }
+
+        .form-group {
+
+            margin-bottom: 15px;
+
+            text-align: left;
+
+            width: 100%;
+
+        }
+
+        .form-group.half {
+
+            width: 50%;
+
+        }
+
+        .form-group input,
+
+        .form-group textarea,
+
+        .form-group select {
+
+            width: 100%;
+
+            padding: 10px 0;
+
+            border: none;
+
+            border-bottom: 1px solid #ddd;
+
+            font-family: 'Lato', sans-serif;
+
+            font-size: 13px;
+
+            outline: none;
+
+            transition: 0.3s;
+
+            background: transparent;
+
+        }
+
+        .form-group input:focus,
+
+        .form-group textarea:focus {
+
+            border-bottom-color: var(--primary);
+
+        }
+
+        .form-group label {
+
+            font-size: 11px;
+
+            color: #999;
+
+            display: block;
+
+            margin-bottom: 5px;
+
+        }
+
+        .btn-submit {
+
+            background-color: var(--primary);
+
+            color: white;
+
+            border: none;
+
+            padding: 10px 30px;
+
+            font-size: 12px;
+
+            text-transform: uppercase;
+
+            cursor: pointer;
+
+            margin-top: 10px;
+
+            width: 100%;
+
+        }
+
+        .form-disclaimer {
+
+            margin: 8px 0 0;
+
+            padding: 10px 12px;
+
+            border: 1px solid #f0dfb0;
+
+            background: #fff9ea;
+
+            color: #7a5a14;
+
+            font-size: 11px;
+
+            line-height: 1.45;
+
+            text-align: left;
+
+        }
+
+        body.status-modal-open {
+
+            overflow: hidden;
+
+        }
+
+        .status-modal-overlay {
+
+            position: fixed;
+
+            inset: 0;
+
+            padding: 24px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background: rgba(18, 14, 14, 0.36);
+
+            backdrop-filter: blur(6px);
+
+            -webkit-backdrop-filter: blur(6px);
+
+            z-index: 2600;
+
+            opacity: 0;
+
+            visibility: hidden;
+
+            pointer-events: none;
+
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+
+        }
+
+        .status-modal-overlay.is-open {
+
+            opacity: 1;
+
+            visibility: visible;
+
+            pointer-events: auto;
+
+        }
+
+        .status-modal-card {
+
+            width: min(480px, 100%);
+
+            position: relative;
+
+            padding: 28px 24px 22px;
+
+            border-radius: 14px;
+
+            background: #fff;
+
+            border: 1px solid #eadfdf;
+
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+
+            text-align: center;
+
+        }
+
+        .status-modal-close {
+
+            position: absolute;
+
+            top: 10px;
+
+            right: 10px;
+
+            width: 32px;
+
+            height: 32px;
+
+            border: 1px solid #ddd;
+
+            border-radius: 50%;
+
+            background: #fff;
+
+            color: #666;
+
+            font-size: 12px;
+
+            cursor: pointer;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+
+        }
+
+        .status-modal-close:hover {
+
+            background: #f5f5f5;
+
+            color: #333;
+
+            border-color: #cfcfcf;
+
+        }
+
+        .status-modal-close:focus {
+
+            outline: none;
+
+            border-color: var(--primary);
+
+            box-shadow: 0 0 0 3px rgba(161, 148, 148, 0.2);
+
+        }
+
+        .status-modal-icon {
+
+            width: 62px;
+
+            height: 62px;
+
+            border-radius: 50%;
+
+            margin: 0 auto 14px;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            font-size: 28px;
+
+            border: 1px solid transparent;
+
+            background: #f0f0f0;
+
+            color: #666;
+
+        }
+
+        .status-modal-title {
+
+            font-family: 'Poppins', sans-serif;
+
+            font-size: 18px;
+
+            font-weight: 600;
+
+            color: #222;
+
+            margin-bottom: 8px;
+
+        }
+
+        .status-modal-message {
+
+            font-size: 14px;
+
+            line-height: 1.55;
+
+            color: #4b4b4b;
+
+            margin: 0;
+
+            white-space: pre-line;
+
+        }
+
+        .status-modal-card[data-state="loading"] .status-modal-icon {
+
+            color: #8a4b08;
+
+            border-color: #f5c57a;
+
+            background: #fff8ed;
+
+        }
+
+        .status-modal-card[data-state="success"] .status-modal-icon {
+
+            color: #1a7f37;
+
+            border-color: #b9e2c5;
+
+            background: #edf8f1;
+
+        }
+
+        .status-modal-card[data-state="error"] .status-modal-icon {
+
+            color: #b00020;
+
+            border-color: #f2c6cf;
+
+            background: #fff0f3;
+
+        }
+
+        .status-modal-card[data-state="info"] .status-modal-icon {
+
+            color: #295d91;
+
+            border-color: #bfd4e8;
+
+            background: #eef5fc;
+
+        }
+
+        .services-container {
+
+            border: 1px solid #eee;
+
+            padding: 10px;
+
+            max-height: 260px;
+
+            overflow-y: auto;
+
+        }
+
+        .service-category {
+
+            margin-bottom: 12px;
+
+        }
+
+        .service-category-title {
+
+            font-size: 10px;
+
+            font-weight: 700;
+
+            text-transform: uppercase;
+
+            color: #666;
+
+            margin-bottom: 6px;
+
+        }
+
+        .service-item {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+            padding: 6px 0;
+
+            border-bottom: 1px dashed #eee;
+
+        }
+
+        .service-item:last-child {
+
+            border-bottom: none;
+
+        }
+
+        .service-name {
+
+            flex: 1;
+
+            font-size: 12px;
+
+            color: #333;
+
+        }
+
+        .service-price {
+
+            font-size: 11px;
+
+            color: #666;
+
+        }
+
+        .service-qty {
+
+            width: 60px;
+
+        }
+
+        .services-summary {
+
+            font-size: 11px;
+
+            color: #666;
+
+            margin-top: 6px;
+
+        }
+
+        .form-group .datetime-field {
+
+            padding: 10px 12px;
+
+            border: 1px solid #d9d9d9;
+
+            border-radius: 8px;
+
+            background: #fafafa;
+
+            border-bottom: 1px solid #d9d9d9;
+
+        }
+
+        .form-group .datetime-field:focus {
+
+            border-color: var(--primary);
+
+            box-shadow: 0 0 0 3px rgba(161, 148, 148, 0.2);
+
+        }
+
+        .form-group input.datetime-field::-webkit-calendar-picker-indicator {
+
+            cursor: pointer;
+
+            opacity: 0.75;
+
+        }
+
+        .date-input-with-picker {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+        }
+
+        .date-input-with-picker .datetime-field {
+
+            flex: 1;
+
+        }
+
+        .date-picker-btn {
+
+            width: 40px;
+
+            height: 40px;
+
+            border: 1px solid #d9d9d9;
+
+            border-radius: 8px;
+
+            background: #fafafa;
+
+            color: #666;
+
+            cursor: pointer;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            transition: 0.2s;
+
+        }
+
+        .date-picker-btn:hover {
+
+            background: #f0f0f0;
+
+            color: #333;
+
+        }
+
+        .date-picker-btn:focus {
+
+            outline: none;
+
+            border-color: var(--primary);
+
+            box-shadow: 0 0 0 3px rgba(161, 148, 148, 0.2);
+
+        }
+
+        .native-date-picker {
+
+            position: absolute;
+
+            width: 0;
+
+            height: 0;
+
+            opacity: 0;
+
+            pointer-events: none;
+
+        }
+
+        .capacity-warning {
+
+            display: none;
+
+            margin: -4px 0 14px;
+
+            padding: 10px 12px;
+
+            border: 1px solid #f5c57a;
+
+            background: #fff8ed;
+
+            color: #8a4b08;
+
+            font-size: 12px;
+
+            line-height: 1.4;
+
+        }
+
+        /* Selector Inteligente */
+
+        .custom-select-wrapper {
+
+            position: relative;
+
+            user-select: none;
+
+            width: 100%;
+
+        }
+
+        .custom-select-trigger {
+
+            position: relative;
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            padding: 10px 0;
+
+            font-size: 13px;
+
+            color: #333;
+
+            border-bottom: 1px solid #ddd;
+
+            cursor: pointer;
+
+        }
+
+        .custom-options {
+
+            position: absolute;
+
+            display: block;
+
+            top: 100%;
+
+            left: 0;
+
+            right: 0;
+
+            border: 1px solid #ddd;
+
+            background: #fff;
+
+            opacity: 0;
+
+            visibility: hidden;
+
+            pointer-events: none;
+
+            z-index: 50;
+
+            max-height: 250px;
+
+            overflow-y: auto;
+
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+
+            transition: 0.3s;
+
+        }
+
+        .custom-select-wrapper.open .custom-options {
+
+            opacity: 1;
+
+            visibility: visible;
+
+            pointer-events: all;
+
+        }
+
+        .salon-option {
+
+            display: flex;
+
+            padding: 10px;
+
+            border-bottom: 1px solid #eee;
+
+            cursor: pointer;
+
+            align-items: center;
+
+        }
+
+        .salon-option:hover {
+
+            background-color: #f4f4f4;
+
+        }
+
+        .salon-option.recommended {
+
+            background-color: #e8f5e9;
+
+            border-left: 3px solid #4caf50;
+
+        }
+
+        .salon-option.disabled-option {
+
+            opacity: 1;
+
+            background-color: #fff;
+
+            border-left: 3px solid transparent;
+
+        }
+
+        .salon-thumb {
+
+            width: 40px;
+
+            height: 40px;
+
+            border-radius: 4px;
+
+            object-fit: cover;
+
+            margin-right: 10px;
+
+        }
+
+        .salon-details {
+
+            text-align: left;
+
+            flex: 1;
+
+        }
+
+        .salon-name-opt {
+
+            font-weight: 700;
+
+            font-size: 12px;
+
+            display: block;
+
+            color: #333;
+
+        }
+
+        .salon-meta-opt {
+
+            font-size: 10px;
+
+            color: #666;
+
+            display: block;
+
+        }
+
+        .select-group-title {
+
+            padding: 5px 10px;
+
+            background: #eee;
+
+            color: #333;
+
+            font-size: 10px;
+
+            font-weight: 700;
+
+            text-transform: uppercase;
+
+        }
+
+        /* --- CARRUSEL INTERMEDIO --- */
+
+        .gallery-full-width {
+
+            width: 100%;
+
+            height: 300px;
+
+            position: relative;
+
+            margin-bottom: 60px;
+
+        }
+
+        .gallery-full-width .swiper-container {
+
+            width: 100%;
+
+            height: 100%;
+
+        }
+
+        .gallery-full-width img {
+
+            width: 100%;
+
+            height: 100%;
+
+            object-fit: cover;
+
+        }
+
+        .gallery-overlay {
+
+            position: absolute;
+
+            top: 0;
+
+            left: 0;
+
+            width: 100%;
+
+            height: 100%;
+
+            z-index: 10;
+
+            display: flex;
+
+            flex-direction: column;
+
+            justify-content: center;
+
+            align-items: center;
+
+            background: rgba(0, 0, 0, 0.3);
+
+            pointer-events: none;
+
+            text-align: center;
+
+            color: var(--white);
+
+        }
+
+        .gallery-heading {
+
+            font-family: 'Poppins', sans-serif;
+
+            font-size: 40px;
+
+            font-weight: 700;
+
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+
+        }
+
+        .gallery-subheading {
+
+            font-family: 'Lato', sans-serif;
+
+            font-size: 18px;
+
+            text-shadow: 0 1px 5px rgba(0, 0, 0, 0.5);
+
+        }
+
+        .gallery-full-width .swiper-button-next,
+
+        .gallery-full-width .swiper-button-prev {
+
+            color: #fff;
+
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+
+        }
+
+        /* --- SALONES --- */
+
+        .big-title {
+
+            text-align: center;
+
+            font-family: 'Lato', sans-serif;
+
+            font-size: 28px;
+
+            font-weight: 400;
+
+            margin: 60px 0 40px;
+
+            text-transform: uppercase;
+
+            letter-spacing: 1px;
+
+        }
+
+        .salon-row {
+
+            display: flex;
+
+            flex-wrap: wrap;
+
+            border-bottom: 1px dashed #ddd;
+
+            padding: 50px 0;
+
+            gap: 40px;
+
+        }
+
+        .salon-row:last-child {
+
+            border-bottom: none;
+
+        }
+
+        .salon-info {
+
+            flex: 1;
+
+            min-width: 350px;
+
+        }
+
+        .salon-slider {
+
+            flex: 1;
+
+            min-width: 350px;
+
+            position: relative;
+
+        }
+
+        .salon-name {
+
+            font-family: 'Lato', sans-serif;
+
+            font-size: 24px;
+
+            color: var(--primary);
+
+            font-weight: 700;
+
+            margin-bottom: 5px;
+
+        }
+
+        .salon-meta {
+
+            font-size: 14px;
+
+            color: #555;
+
+            margin-bottom: 20px;
+
+            font-style: italic;
+
+        }
+
+        .sub-salon-container {
+
+            margin-bottom: 25px;
+
+            padding-bottom: 15px;
+
+            border-bottom: 1px solid #f0f0f0;
+
+        }
+
+        .sub-salon-container:last-child {
+
+            border-bottom: none;
+
+        }
+
+        .sub-salon-title {
+
+            font-size: 12px;
+
+            font-weight: 900;
+
+            text-transform: uppercase;
+
+            color: #333;
+
+            margin-bottom: 10px;
+
+            display: flex;
+
+            align-items: center;
+
+        }
+
+        .sub-salon-title::before {
+
+            content: '';
+
+            display: inline-block;
+
+            width: 6px;
+
+            height: 6px;
+
+            background: var(--primary);
+
+            margin-right: 8px;
+
+            border-radius: 50%;
+
+        }
+
+        .tech-data {
+
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 15px;
+
+            margin-bottom: 10px;
+
+            font-size: 13px;
+
+            color: #666;
+
+            background: #f9f9f9;
+
+            padding: 8px 12px;
+
+            border-radius: 4px;
+
+        }
+
+        .tech-item i {
+
+            color: var(--primary);
+
+            margin-right: 6px;
+
+        }
+
+        .capacity-grid {
+
+            display: grid;
+
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+
+            gap: 10px;
+
+        }
+
+        .cap-item {
+
+            font-size: 12px;
+
+            color: #444;
+
+        }
+
+        .swiper-container.salon-swiper {
+
+            width: 100%;
+
+            height: 400px;
+
+            border-radius: 6px;
+
+            overflow: hidden;
+
+        }
+
+        .salon-swiper img {
+
+            width: 100%;
+
+            height: 100%;
+
+            object-fit: cover;
+
+        }
+
+        .swiper-button-next,
+
+        .swiper-button-prev {
+
+            color: #fff;
+
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+
+            transform: scale(0.8);
+
+        }
+
+        .salon-slider .swiper-button-next,
+
+        .salon-slider .swiper-button-prev {
+
+            width: 38px;
+
+            height: 38px;
+
+            margin-top: -19px;
+
+            border-radius: 50%;
+
+            background: rgba(0, 0, 0, 0.55);
+
+            color: #fff;
+
+            z-index: 10;
+
+            transition: background 0.2s ease;
+
+        }
+
+        .salon-slider .swiper-button-next:hover,
+
+        .salon-slider .swiper-button-prev:hover {
+
+            background: rgba(0, 0, 0, 0.75);
+
+        }
+
+        .salon-slider .swiper-button-next::after,
+
+        .salon-slider .swiper-button-prev::after {
+
+            font-size: 14px;
+
+            font-weight: 700;
+
+        }
+
+        .salon-slider .swiper-button-prev {
+
+            left: 12px;
+
+        }
+
+        .salon-slider .swiper-button-next {
+
+            right: 12px;
+
+        }
+
+        /* --- PLANOS --- */
+
+        .planos-grid {
+
+            display: flex;
+
+            flex-wrap: wrap;
+
+            justify-content: center;
+
+            gap: 40px;
+
+            margin-bottom: 50px;
+
+        }
+
+        .plano-item {
+
+            text-align: center;
+
+            width: 45%;
+
+            min-width: 300px;
+
+        }
+
+        .plano-title {
+
+            font-size: 12px;
+
+            font-weight: 700;
+
+            text-transform: uppercase;
+
+            margin-bottom: 15px;
+
+            color: var(--primary);
+
+        }
+
+        .plano-img {
+
+            width: 100%;
+
+            height: auto;
+
+            border: 1px solid #eee;
+
+            padding: 5px;
+
+        }
+
+        /* --- FOOTER REPLICA --- */
+
+        footer {
+
+            background-color: #1a1a1a;
+
+            color: #999;
+
+            padding: 60px 0 20px;
+
+            font-size: 14px;
+
+        }
+
+        .footer-content {
+
+            max-width: 1200px;
+
+            margin: 0 auto;
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: flex-start;
+
+            flex-wrap: wrap;
+
+            padding: 0 20px;
+
+        }
+
+        .footer-col {
+
+            flex: 1;
+
+            min-width: 250px;
+
+            margin-bottom: 30px;
+
+            text-align: center;
+
+        }
+
+        .neo-contact-title {
+
+            color: #fff;
+
+            font-family: 'Poppins', sans-serif;
+
+            font-size: 18px;
+
+            margin-bottom: 20px;
+
+            text-transform: uppercase;
+
+        }
+
+        .footer-col ul li {
+
+            margin-bottom: 12px;
+
+        }
+
+        .footer-col a {
+
+            color: #999;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            gap: 10px;
+
+        }
+
+        .footer-col a:hover {
+
+            color: var(--white);
+
+        }
+
+        .footer-col i {
+
+            font-size: 16px;
+
+            color: #fff;
+
+        }
+
+        .footer-logo img {
+
+            height: 80px;
+
+            opacity: 0.9;
+
+            margin: 0 auto 20px;
+
+            display: block;
+
+        }
+
+        .social-icons {
+
+            margin-bottom: 20px;
+
+            display: flex;
+
+            justify-content: center;
+
+            gap: 20px;
+
+        }
+
+        .social-icons i {
+
+            font-size: 20px;
+
+            color: #fff;
+
+            transition: 0.3s;
+
+        }
+
+        .social-icons i:hover {
+
+            color: var(--primary);
+
+        }
+
+        .newsletter-box {
+
+            display: flex;
+
+            max-width: 300px;
+
+            margin: 10px auto;
+
+        }
+
+        .newsletter-box input {
+
+            flex: 1;
+
+            padding: 10px;
+
+            border: none;
+
+            background: #fff;
+
+            color: #333;
+
+            font-size: 13px;
+
+        }
+
+        .newsletter-box button {
+
+            background: #333;
+
+            color: #fff;
+
+            border: 1px solid #666;
+
+            padding: 0 15px;
+
+            cursor: pointer;
+
+            text-transform: uppercase;
+
+            font-size: 11px;
+
+        }
+
+        .btn-arrepentimiento {
+
+            display: inline-block;
+
+            margin-top: 15px;
+
+            border: 1px solid #666;
+
+            color: #999;
+
+            padding: 5px 15px;
+
+            font-size: 11px;
+
+            text-transform: uppercase;
+
+        }
+
+        .bottom-bar {
+
+            text-align: center;
+
+            border-top: 1px solid #333;
+
+            padding-top: 20px;
+
+            margin-top: 40px;
+
+            font-size: 12px;
+
+            color: #666;
+
+        }
+
+        .bottom-bar a {
+
+            margin: 0 5px;
+
+            color: #999;
+
+        }
+
+        .bottom-bar a:hover {
+
+            color: #fff;
+
+        }
+
+        .pxsol-link {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            margin-top: 10px;
+
+            gap: 5px;
+
+        }
+
+        .pxsol-logo svg {
+
+            height: 18px;
+
+            fill: #666;
+
+        }
+
+        .whatsapp-float {
+
+            position: fixed;
+
+            bottom: 20px;
+
+            right: 20px;
+
+            background-color: #25d366;
+
+            color: white;
+
+            width: 60px;
+
+            height: 60px;
+
+            border-radius: 50%;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            font-size: 30px;
+
+            z-index: 1000;
+
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+
+        }
+
+        @media (max-width: 992px) {
+
+            .navbar {
+
+                display: none;
+
+            }
+
+            .hero-overlay-text h1 {
+
+                font-size: 30px;
+
+            }
+
+            .split-layout {
+
+                flex-direction: column;
+
+            }
+
+            .form-card {
+
+                margin-top: 60px;
+
+            }
+
+            .footer-content {
+
+                flex-direction: column;
+
+                text-align: center;
+
+            }
+
+            .status-modal-overlay {
+
+                padding: 16px;
+
+            }
+
+            .status-modal-card {
+
+                width: 100%;
+
+                border-radius: 12px;
+
+                padding: 24px 18px 20px;
+
+            }
+
+            .status-modal-title {
+
+                font-size: 17px;
+
+            }
+
+            .status-modal-message {
+
+                font-size: 13px;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <header>
+
+        <div class="navbar">
+
+            <ul class="nav-list">
+
+                <li><a class="nav-item" href="#">EL HOTEL</a></li>
+
+                <li><a class="nav-item" href="#">HABITACIONES</a></li>
+
+                <li><a class="nav-item" href="#">SERVICIOS</a></li>
+
+                <li><a class="nav-item" href="#">PROMOCIONES</a></li>
+
+                <li class="logo">
+
+                    <img src="https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png"
+
+                        alt="Quinto Centenario Hotel">
+
+                </li>
+
+                <li><a class="nav-item" href="#">CENTRO DE CONVENCIONES</a></li>
+
+                <li><a class="nav-item" href="#">GALERIA</a></li>
+
+                <li><a class="nav-item" href="#">UBICACION Y CONTACTO</a></li>
+
+            </ul>
+
+        </div>
+
+    </header>
+
+    <div class="hero-section">
+
+        <div class="hero-overlay-text">
+
+            <h1>Centro de Convenciones</h1>
+
+        </div>
+
+        <div class="swiper-container main-swiper">
+
+            <div class="swiper-wrapper">
+
+                <div class="swiper-slide"><img
+
+                        src="https://images-new.pxsol.com/QTpeGjZdeww4HSv15LjkJhtJwMocXucC3KkHC_Nr_iY/rs:fill:1900:600:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/17109424510db00b2e0ac14846d89b4fb2e54dd73dc.jpg@jpg">
+
+                </div>
+
+                <div class="swiper-slide"><img
+
+                        src="https://images-new.pxsol.com/C6nPYQM3Y5xj2b9le4efv1HObysVvcr80GvIIe1fiFo/rs:fill:1900:900:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/1710942440055fa43d0bd2716d6d166c7f8814b0b66.jpg@jpg">
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="section-container">
+
+        <div class="split-layout">
+
+            <div class="intro-col">
+
+                <h3 class="section-title">Instalaciones y servicios para reuniones</h3>
+
+                <p class="intro-text">El <b>Centro de Convenciones</b> tiene una superficie total de 3000 m2 entre salones, foyers propios y terrazas, diseñado con acceso independiente, 
+                    escaleras mecánicas que los conectan entre sí, que se adaptan fácilmente y permiten organizar eventos de hasta 3500 personas, ofreciendo la solución ideal e integral 
+                    para realizar gran variedad de actividades que se ajustan a las necesidades de cada cliente.</p>
+
+                <p class="intro-text"><b>Cada Salón posee:</b>
+                    <br> Su propio foyer todos con luz natural.
+                    <br> Acceso al rea de servicio.
+                    <br> Sistema de seguridad.</p>
+
+                <a href="https://files-p.pxsol.com/5019/company/library/user/19166246814240e3b7efb5007c71e42c9ca0add4ba0.pdf" target="_blank" rel="noopener noreferrer" class="blue-btn">CLICK PARA DESCARGAR<br>REGLAMENTO EXPOSITORES</a>
+
+                <a href="https://files-p.pxsol.com/5019/company/library/user/15681540339395bb4d82f4ed5719a8e00af70101cab.pdf" target="_blank" rel="noopener noreferrer" class="blue-btn">CLICK PARA DESCARGAR<br>CATLOGO DE EQUIPAMIENTO</a>
+
+            </div>
+
+            <div class="form-col">
+
+                <div class="form-card">
+
+                    <div class="circle-img">
+
+                        <img src="https://picsv3.pxsol.com/5019/company/library/user/267147499525888c6579bd22ca6c4de10ecd4c35492.jpg?ixlib=js-2.3.2&s=3eddf46201be0b57de4c78b593a562d7"
+
+                            alt="Evento">
+
+                    </div>
+
+                    <div class="form-title">Cuidamos los detalles y desarrollamos tu evento a medida</div>
+
+                                        <form id="formTesis">
+
+                    <div class="form-row">
+
+                        <div class="form-group half"><label>Nombre / Empresa</label><input type="text" id="nombre" required></div>
+
+                        <div class="form-group half"><label>Email</label><input type="email" id="email" required></div>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono" inputmode="numeric" required></div>
+
+                        <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" inputmode="numeric" required></div>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <div class="form-group half">
+
+                            <label>Salón</label>
+
+                            <input type="hidden" id="salon_seleccionado_id" name="salon">
+
+                            <input type="hidden" id="salon_seleccionado_nombre" name="salon_nombre">
+
+                            <div class="custom-select-wrapper" id="salonSelectWrapper">
+
+                                <div class="custom-select-trigger" id="salonTrigger"><span>Seleccione...</span><i class="fas fa-chevron-down"></i></div>
+
+                                <div class="custom-options" id="salonOptionsList">
+
+                                    <div style="padding:10px; font-size:12px; color:#999;">Cargando salones...</div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="form-group half">
+
+                            <label>Distribución</label>
+
+                            <select id="distribucion"></select>
+
+                        </div>
+
+                    </div>
+
+                    <div id="capacityWarning" class="capacity-warning"></div>
+
+                    <div class="form-row">
+
+                        <div class="form-group half">
+                            <label>Fecha Inicio</label>
+                            <div class="date-input-with-picker">
+                                <input type="text" id="fecha_inicio" class="datetime-field" inputmode="numeric" maxlength="8" placeholder="dd/mm/aa" required>
+                                <button type="button" id="fecha_inicio_btn" class="date-picker-btn" aria-label="Seleccionar fecha de inicio"><i class="far fa-calendar-alt"></i></button>
+                                <input type="date" id="fecha_inicio_picker" class="native-date-picker" tabindex="-1" aria-hidden="true">
+                            </div>
+                        </div>
+
+                        <div class="form-group half">
+                            <label>Hora Inicio</label>
+                            <select id="hora_inicio" class="datetime-field" required>
+                                <option value="">Seleccione horario</option>
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <div class="form-group half">
+                            <label>Fecha Fin</label>
+                            <div class="date-input-with-picker">
+                                <input type="text" id="fecha_fin" class="datetime-field" inputmode="numeric" maxlength="8" placeholder="dd/mm/aa" required>
+                                <button type="button" id="fecha_fin_btn" class="date-picker-btn" aria-label="Seleccionar fecha de fin"><i class="far fa-calendar-alt"></i></button>
+                                <input type="date" id="fecha_fin_picker" class="native-date-picker" tabindex="-1" aria-hidden="true">
+                            </div>
+                        </div>
+
+                        <div class="form-group half">
+                            <label>Hora Fin</label>
+                            <select id="hora_fin" class="datetime-field" required>
+                                <option value="">Seleccione horario</option>
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Servicios Adicionales</label>
+
+                        <div id="serviciosContainer" class="services-container">Cargando servicios...</div>
+
+                        <div id="serviciosResumen" class="services-summary"></div>
+
+                    </div>
+
+                    <div class="form-group"><label>Observaciones</label><textarea id="observaciones"
+
+                            rows="3"></textarea></div>
+
+                    <div class="form-disclaimer">
+                        Importante: la informacion enviada por este formulario es orientativa. El presupuesto y la reserva final quedaran sujetos a validacion y confirmacion del hotel.
+                    </div>
+
+                    <button type="submit" class="btn-submit">ENVIAR FORMULARIO</button>
+
+</form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="gallery-full-width">
+
+        <div class="gallery-overlay">
+
+            <div class="gallery-heading">Espacios únicos,<br>Experiencias Inigualables</div>
+
+            <div class="gallery-subheading">Todas las comodidades para tus reuniones y eventos</div>
+
+        </div>
+
+        <div class="swiper-container gallery-swiper">
+
+            <div class="swiper-wrapper">
+
+                <div class="swiper-slide"><img
+
+                        src="https://images-new.pxsol.com/Ze7YMR2WF6R9Zmw3ubsehDuwLd-gtyQv2GeW1DAXUNI/rs:fill:1900:900:1/q:80/plain/https://files-p.pxsol.com/5019/library/user/252990995.jpeg@jpeg">
+
+                </div>
+
+                <div class="swiper-slide"><img
+
+                        src="https://images-new.pxsol.com/DqpJQlwIxsGbZM754Twt8xJIF7P99b2CfWRtUJbOLLM/rs:fill:1900:900:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/136875395447fcfbb6178408ff6dad4d681461a0db6.jpg@jpg">
+
+                </div>
+
+                <div class="swiper-slide"><img
+
+                        src="https://images-new.pxsol.com/ncz3VLMwhkiRHQbWKft-ZHqPI6yynH1yEY9hCF9eBwU/rs:fill:1900:900:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/1539848193310aa7e31d3ae304e8da7761d1c4b1e09.jpg@jpg">
+
+                </div>
+
+            </div>
+
+            <div class="swiper-button-next"></div>
+
+            <div class="swiper-button-prev"></div>
+
+        </div>
+
+    </div>
+
+    <div class="section-container">
+
+        <h2 class="big-title">NUESTROS SALONES</h2>
+
+        <div class="salon-row">
+
+            <div class="salon-info">
+
+                <h3 class="salon-name">Salón Uritorco</h3>
+
+                <div class="salon-meta">Nivel 0 | Se puede dividir en 2</div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Salón Completo</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-ruler-combined"></i> 10 x 9 mts</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 90 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> Altura 3.2m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 80</span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 40</span>
+
+                        <span class="cap-item"><strong>Cocktail:</strong> 80</span>
+
+                        <span class="cap-item"><strong>Banquete:</strong> 60</span>
+
+                    </div>
+
+                </div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Uritorco 1 / 2</div>
+
+                    <div class="tech-data"><span class="tech-item"><i class="fas fa-expand"></i> 45 m</span></div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 30</span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 20</span>
+
+                        <span class="cap-item"><strong>Ban:</strong> 30</span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="salon-slider">
+
+                <div class="swiper-container salon-swiper">
+
+                    <div class="swiper-wrapper">
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/DupfQ2PpIyXRU0s7pTsCRe8MaIyrbC2H1Z6RQL429wQ/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/18453577714707dd5dc6a1647630e2b60c722860396.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/nRQLaYlrE11Rq0_50gLOCRWgo4vWtpRWaCC4osnhYII/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/136875393847e3f689c001c3858e713bd020dbc5291.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/glAN89xuSfpusT1Fv-vTugnXzhHV6xUqCXgDnr7_ojA/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/2737507878473b4f113a38e2132ee1c448d489bbcf5.jpg@jpg">
+
+                        </div>
+
+                    </div>
+
+                    <div class="swiper-button-next"></div>
+
+                    <div class="swiper-button-prev"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="salon-row">
+
+            <div class="salon-info">
+
+                <h3 class="salon-name">Salón Suquía</h3>
+
+                <div class="salon-meta">Nivel 0 | Se puede dividir en 2</div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Salón Completo</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-ruler-combined"></i> 10 x 9 mts</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 90 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> Altura 3.2m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 80</span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 40</span>
+
+                        <span class="cap-item"><strong>Cocktail:</strong> 80</span>
+
+                        <span class="cap-item"><strong>Banquete:</strong> 60</span>
+
+                    </div>
+
+                </div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Suquía 1 / 2</div>
+
+                    <div class="tech-data"><span class="tech-item"><i class="fas fa-expand"></i> 45 m</span></div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 30</span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 20</span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="salon-slider">
+
+                <div class="swiper-container salon-swiper">
+
+                    <div class="swiper-wrapper">
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/nRQLaYlrE11Rq0_50gLOCRWgo4vWtpRWaCC4osnhYII/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/136875393847e3f689c001c3858e713bd020dbc5291.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/lnCErQiCSZPXwzAu0QaUj6H-tTsw-tfb5xI4MDvLR0o/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/15398481969831bff61715f3682a2001d9a7eee25af.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/cv-m-wQefw-Gh5gm3CBVQrgqK2XB3QJEsWoTAepJ3So/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/136875395447fcfbb6178408ff6dad4d681461a0db6.jpg@jpg">
+
+                        </div>
+
+                    </div>
+
+                    <div class="swiper-button-next"></div>
+
+                    <div class="swiper-button-prev"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="salon-row">
+
+            <div class="salon-info">
+
+                <h3 class="salon-name">Salón Leopoldo Lugones</h3>
+
+                <div class="salon-meta">Nivel -1 | Se puede dividir en 3</div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Lugones Completo</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-ruler-combined"></i> 30 x 20 mts</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 600 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> Altura 7.2m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 800</span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 450</span>
+
+                        <span class="cap-item"><strong>Cocktail:</strong> 800</span>
+
+                        <span class="cap-item"><strong>Banquete:</strong> 500</span>
+
+                    </div>
+
+                </div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Lugones 1 / 2 / 3</div>
+
+                    <div class="tech-data"><span class="tech-item"><i class="fas fa-expand"></i> 200 m</span></div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Aud:</strong> 250</span>
+
+                        <span class="cap-item"><strong>Esc:</strong> 130</span>
+
+                        <span class="cap-item"><strong>Ban:</strong> 200</span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="salon-slider">
+
+                <div class="swiper-container salon-swiper">
+
+                    <div class="swiper-wrapper">
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/IsVGkx0-mqRJ_vmnyHGyqhUFV8KM5mHeCps53ag47cg/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/library/user/252990995.jpeg@jpeg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/WpLXtKNxzp6TI6leWrn7Z2h2FNFR1wDUx8jamIDGX_o/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/10032467832142a9cc55a605404b2cb6e67ff67110d.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/jPSVNoVWpJ6cH6c7zM1NrpmfyGauMWXndOzGDhi_h0E/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/102656545984f138b552ce211b7ec247411be5734f0.jpg@jpg">
+
+                        </div>
+
+                    </div>
+
+                    <div class="swiper-button-next"></div>
+
+                    <div class="swiper-button-prev"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="salon-row">
+
+            <div class="salon-info">
+
+                <h3 class="salon-name">Salón Champaquí</h3>
+
+                <div class="salon-meta">Nivel -1 | Se puede dividir en 2</div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Champaquí Completo</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-ruler-combined"></i> 20 x 15 mts</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 300 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> Altura 3.3m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Aud:</strong> 380</span>
+
+                        <span class="cap-item"><strong>Esc:</strong> 180</span>
+
+                        <span class="cap-item"><strong>Cock:</strong> 400</span>
+
+                        <span class="cap-item"><strong>Ban:</strong> 240</span>
+
+                    </div>
+
+                </div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Champaquí 1 / 2</div>
+
+                    <div class="tech-data"><span class="tech-item"><i class="fas fa-expand"></i> 150 m</span></div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Aud:</strong> 180</span>
+
+                        <span class="cap-item"><strong>Esc:</strong> 90</span>
+
+                        <span class="cap-item"><strong>Ban:</strong> 130</span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="salon-slider">
+
+                <div class="swiper-container salon-swiper">
+
+                    <div class="swiper-wrapper">
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/Qj5Xvl3qoRpbDNCd_nUeytqql-G7JZoHj_qCe_wlU5U/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/234878427006009cbe8b4d41ebab2cd892dd21f8989.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/BguhLkoUdjQT2GztyInjz9w-Etfz-rK51Y9m0v89w-Q/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/20531309016f4c6504f23a82fd113b5773fee31c861.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/Lbqjur461bq2z2uzXMokEBQfWy1zbBMlyJU7-s0sTtc/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/136875393529ef2452b72323335022a735e647f72aa.jpg@jpg">
+
+                        </div>
+
+                    </div>
+
+                    <div class="swiper-button-next"></div>
+
+                    <div class="swiper-button-prev"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="salon-row">
+
+            <div class="salon-info">
+
+                <h3 class="salon-name">Salón Yacanto</h3>
+
+                <div class="salon-meta">Nivel -2 | Se puede dividir en 2</div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Dimensiones y Capacidad YACANTO</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-draw-polygon"></i> irregular</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 510 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> Altura 3 m</span>
+
+                    </div>
+
+                    <p style="font-size:12px; color:#666; font-style:italic; margin-top: 5px;">(consultar opciones de
+
+                        armado)</p>
+
+                </div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Yacanto A</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-ruler-combined"></i> 7x11 / 8x4,5 mts</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 172 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> 3 m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 70 <i class="fas fa-chair"></i></span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 35 <i class="fas fa-graduation-cap"></i></span>
+
+                        <span class="cap-item"><strong>Banquetes:</strong> 45 <i class="fas fa-utensils"></i></span>
+
+                    </div>
+
+                </div>
+
+                <div class="sub-salon-container">
+
+                    <div class="sub-salon-title">Yacanto C</div>
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-ruler-combined"></i> 18 x 15 mts</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> 280 m</span>
+
+                        <span class="tech-item"><i class="fas fa-arrows-alt-v"></i> 3 m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 200 <i class="fas fa-chair"></i></span>
+
+                        <span class="cap-item"><strong>Escuela:</strong> 180 <i
+
+                                class="fas fa-graduation-cap"></i></span>
+
+                        <span class="cap-item"><strong>Banquetes:</strong> 200 <i class="fas fa-utensils"></i></span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="salon-slider">
+
+                <div class="swiper-container salon-swiper">
+
+                    <div class="swiper-wrapper">
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/-1q-2TmeRNoZ6lmcAmRR5_zJ_jKme1UM5VlvWJpHvz8/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/27375075888e9c91fd23a9e418349d45591587135cf.jpg@jpg">
+
+                        </div>
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/5hVfuXuvQkYuZNp3AdYj3juJ1KUxA2LnyuWM8oGQO-Q/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/11976596996c80cdf40bfdeb83364cd34637870d669.jpg@jpg">
+
+                        </div>
+
+                    </div>
+
+                    <div class="swiper-button-next"></div>
+
+                    <div class="swiper-button-prev"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="salon-row">
+
+            <div class="salon-info">
+
+                <h3 class="salon-name">Azotea</h3>
+
+                <div class="salon-meta">Aire Libre</div>
+
+                <div class="sub-salon-container">
+
+                    <div class="tech-data">
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> Carpa cristal de 160 m</span>
+
+                        <span class="tech-item"><i class="fas fa-expand"></i> Terraza exterior de 200 m</span>
+
+                    </div>
+
+                    <div class="capacity-grid">
+
+                        <span class="cap-item"><strong>Cocktail:</strong> 350 <i class="fas fa-glass-cheers"></i></span>
+
+                        <span class="cap-item"><strong>Auditorio:</strong> 150 <i class="fas fa-chair"></i></span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="salon-slider">
+
+                <div class="swiper-container salon-swiper">
+
+                    <div class="swiper-wrapper">
+
+                        <div class="swiper-slide"><img
+
+                                src="https://images-new.pxsol.com/tJOXWaymo86k8fS7mbyRZxHyt4_UFe5BBvku2MFZCNg/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/21081051348b6e665ce27a30de32bb296b5d1bc80a3.jpg@jpg">
+
+                        </div>
+
+                    </div>
+
+                    <div class="swiper-button-next"></div>
+
+                    <div class="swiper-button-prev"></div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="section-container">
+
+        <h2 class="big-title">PLANOS DE LOS SALONES</h2>
+
+        <div class="planos-grid">
+
+            <div class="plano-item">
+
+                <div class="plano-title">SALONES URITORCO Y SUQUA</div>
+
+                <img class="plano-img"
+
+                    src="https://picsv3.pxsol.com/5019/company/library/user/184394977474257341b2594a25910e6eeff6cbcd7a8.jpg?ixlib=js-2.3.2&s=13da6e8d0951ff29d5749089aad0fe4d"
+
+                    alt="Plano 1">
+
+            </div>
+
+            <div class="plano-item">
+
+                <div class="plano-title">SALONES LUGONES Y CHAMPAQU</div>
+
+                <img class="plano-img"
+
+                    src="https://picsv3.pxsol.com/5019/company/library/user/33526359527f00aab2ffeeceff03ebb8225eb96615.jpg?ixlib=js-2.3.2&s=a62b13c0285ce21d300b66428d1c613e"
+
+                    alt="Plano 2">
+
+            </div>
+
+            <div class="plano-item">
+
+                <div class="plano-title">SALÓN YACANTO</div>
+
+                <img class="plano-img"
+
+                    src="https://picsv3.pxsol.com/5019/company/library/user/335517051640a5df86fd09d77d7a91b8ec8fb7c1d3.jpg?ixlib=js-2.3.2&s=1995313269cdd8f69511f6b13380c4ba"
+
+                    alt="Plano 3">
+
+            </div>
+
+        </div>
+
+        <iframe width="100%" height="500" src="https://www.youtube.com/embed/HsyGA7l9c60" title="YouTube video player"
+
+            frameborder="0" allowfullscreen></iframe>
+
+    </div>
+
+    <footer>
+
+        <div class="footer-content">
+
+            <div class="footer-col">
+
+                <h4 class="neo-contact-title">Quinto Centenario Hotel</h4>
+
+                <ul>
+
+                    <li><a href="#"><i class="fas fa-phone"></i> +54 351 420 2100</a></li>
+
+                    <li><a href="#"><i class="fas fa-phone"></i> +54 351 420 2124</a></li>
+
+                    <li><a href="https://api.whatsapp.com/send?phone=543516108751" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i> +54 351 610 8751</a></li>
+
+                    <li><a href="#"><i class="fas fa-map-marker-alt"></i> Duarte Quirós 1300, Córdoba, Argentina</a>
+
+                    </li>
+
+                    <li><a href="#"><i class="fas fa-envelope"></i> reservas@quintocentenario.com</a></li>
+
+                </ul>
+
+            </div>
+
+            <div class="footer-col footer-logo">
+
+                <img src="https://files-p.pxsol.com/5019/company/library/user/13402788184e7db09b43a4e98e2082003b27c4eaba6.png"
+
+                    alt="Logo Footer">
+
+            </div>
+
+            <div class="footer-col">
+
+                <div class="social-icons">
+
+                    <i class="fab fa-facebook-f"></i>
+
+                    <i class="fab fa-instagram"></i>
+
+                </div>
+
+                <div style="font-size:10px; text-transform: uppercase; margin-bottom:5px;">Suscríbete a nuestro
+
+                    newsletter</div>
+
+                <div class="newsletter-box">
+
+                    <input type="email" placeholder="Ingresa tu Email">
+
+                    <button>SUSCRIBIRSE</button>
+
+                </div>
+
+                <a href="#" class="btn-arrepentimiento">BOTÓN DE ARREPENTIMIENTO</a>
+
+            </div>
+
+        </div>
+
+        <div class="bottom-bar">
+
+            Al utilizar este sitio web, acepta el uso de cookies.
+
+            <a href="#">Política de cookies</a> | <a href="#">Términos y condiciones</a> | <a href="#">Política de
+
+                privacidad</a>
+
+            <div class="pxsol-link">
+
+                <a href="#" style="text-decoration: underline;">Software Hotelero</a> de
+
+                <a href="#" class="pxsol-logo">
+
+                    <svg viewBox="0 0 752.4 358.4" xmlns="http://www.w3.org/2000/svg">
+
+                        <path d="M0 268.8h564.3V0H0z" fill="none" />
+
+                        <g transform="matrix(1.33333 0 0 -1.33333 0 358.4)">
+
+                            <path
+
+                                d="M0 0h12.4c12 0 20.8 1.9 26.4 5.7 5.6 3.8 8.4 9.7 8.4 17.7 0 7.5-2.5 13-7.5 16.7-5 3.7-12.8 5.5-23.4 5.5H0zm71.2 24.1c0-13.5-4.9-23.9-14.7-31.1-9.8-7.2-23.7-10.8-41.7-10.8H0v-66.3h-23.3V63.3h41.1c17.8 0 31.2-3.3 40.1-9.9 8.9-6.6 13.3-16.4 13.3-29.3"
+
+                                transform="translate(23.3 154.9)" />
+
+                            <path
+
+                                d="M0 0c0-11.5-4.6-20.6-13.8-27.1-9.2-6.6-21.8-9.8-38-9.8-16.1 0-29.4 2.3-39.7 6.8v20c6.5-2.8 13.4-5 20.8-6.6 7.3-1.6 14.1-2.4 20.5-2.4 9.2 0 16 1.6 20.5 4.8 4.4 3.2 6.6 7.5 6.6 12.9 0 4.8-2 9-6.1 12.3-4 3.4-12.4 7.4-25 12-13 4.8-22.2 10.3-27.5 16.4-5.3 6.1-8 13.5-8 22.2 0 10.8 4.2 19.3 12.7 25.5 8.5 6.2 19.8 9.3 34 9.3 13.7 0 27.3-2.7 40.8-8.2l-6.8-17.3c-12.7 4.8-24 7.3-34 7.3-7.6 0-13.3-1.5-17.2-4.5-3.9-3-5.9-6.9-5.9-11.8 0-3.4.8-6.3 2.3-8.6 1.6-2.4 4.1-4.7 7.7-6.8 3.6-2.1 10-4.9 19.3-8.4 10.5-4 18.2-7.7 23.1-11.1 4.9-3.4 8.5-7.3 10.7-11.6C-1.1 10.9 0 5.9 0 0"
+
+                                transform="translate(325.4 123.8)" />
+
+                            <path
+
+                                d="M0 0c0-16 3.5-28.1 10.6-36.3 7.1-8.2 17.6-12.4 31.5-12.4 13.9 0 24.3 4.1 31.4 12.2 7.1 8.2 10.6 20.3 10.6 36.4 0 15.9-3.5 28-10.5 36.2-7 8.2-17.4 12.4-31.3 12.4-14 0-24.5-4.1-31.6-12.4-7.1-8.3-10.7-20.4-10.7-36.1m109 0c0-21.1-5.8-37.5-17.4-49.2-11.6-11.7-28.1-17.5-49.4-17.5-21.6 0-38.1 5.8-49.7 17.4-11.6 11.6-17.3 28.1-17.3 49.5 0 21.4 5.8 37.8 17.4 49.3 11.6 11.5 28.2 17.2 49.8 17.2 21.2 0 37.6-5.8 49.2-17.5C103.2 37.6 109 21.2 109 0"
+
+                                transform="translate(355.8 153.6)" />
+
+                            <path d="M0 0v129.6h23.3V18.2h60.5V0z" transform="translate(480.5 88.6)" />
+
+                            <path
+
+                                d="M0 0l43-58.8-68.1-93.3 30.3-9.1 56.2 77.1L149.4-204.6l46.3-13.9L79.6-59.1 159.4 50.3 112.2 36.1 61-33.9 29.7 9z"
+
+                                fill="#ee2735" transform="translate(95.5 218.4)" />
+
+                        </g>
+
+                    </svg>
+
+                </a>
+
+            </div>
+
+        </div>
+
+    </footer>
+
+    <a href="https://api.whatsapp.com/send?phone=543516108751" class="whatsapp-float" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i></a>
+
+    <div id="statusModalOverlay" class="status-modal-overlay" aria-hidden="true">
+        <div
+            id="statusModalCard"
+            class="status-modal-card"
+            data-state="info"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="statusModalTitle"
+            aria-describedby="statusModalMessage"
+        >
+            <button type="button" id="statusModalClose" class="status-modal-close" aria-label="Cerrar mensaje">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="statusModalIcon" class="status-modal-icon" aria-hidden="true">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <h4 id="statusModalTitle" class="status-modal-title">Informacion</h4>
+            <p id="statusModalMessage" class="status-modal-message"></p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
+
+    <script>
+
+        // Hero
+
+        const mainSwiper = new Swiper('.main-swiper', { loop: true, effect: 'fade', autoplay: { delay: 5000, disableOnInteraction: false } });
+
+        // Carrusel Central
+
+        const gallerySwiper = new Swiper('.gallery-swiper', {
+
+            loop: true, effect: 'fade', autoplay: { delay: 4000 },
+
+            navigation: { nextEl: '.gallery-full-width .swiper-button-next', prevEl: '.gallery-full-width .swiper-button-prev' }
+
+        });
+
+        // Salones
+
+        const salonSwipers = document.querySelectorAll('.salon-swiper');
+
+        salonSwipers.forEach(slider => {
+
+            const sliderContainer = slider.closest('.salon-slider');
+            const nextButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-next') : null;
+            const prevButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-prev') : null;
+
+            new Swiper(slider, {
+                loop: true,
+                effect: 'fade',
+                fadeEffect: { crossFade: true },
+                navigation: { nextEl: nextButton, prevEl: prevButton }
+            });
+
+        });
+
+        // --- LOGICA SELECTOR INTELIGENTE ---
+
+        const PROJECT_ID = 'gcmkqbilhtkexexwumux';
+        const PUBLIC_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjbWtxYmlsaHRrZXhleHd1bXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1ODU1OTksImV4cCI6MjA3OTE2MTU5OX0.9dPbyp_0pj2eZQ7dEEwWlmT2PhaoL1_nl6FPrv5rVH0';
+        // Primary base used previously (function deployed as `server`)
+        const PUBLIC_API_BASE = `https://${PROJECT_ID}.supabase.co/functions/v1/server/make-server-484a241a`;
+        // Alternate base in case the function was deployed without the `server` prefix
+        const PUBLIC_API_BASE_ALT = `https://${PROJECT_ID}.supabase.co/functions/v1/make-server-484a241a`;
+
+        let salonesDB = [];
+
+        let catalogDistribuciones = [];
+
+        let catalogCategorias = [];
+
+        let catalogServicios = [];
+
+        const defaultSalonImg = 'https://images-new.pxsol.com/tJOXWaymo86k8fS7mbyRZxHyt4_UFe5BBvku2MFZCNg/rs:fill:600:400:1/q:80/plain/https://files-p.pxsol.com/5019/company/library/user/21081051348b6e665ce27a30de32bb296b5d1bc80a3.jpg@jpg';
+
+        const inputCantidad = document.getElementById('cantidad');
+
+        const selectDistribucion = document.getElementById('distribucion');
+
+        const salonTrigger = document.getElementById('salonTrigger');
+
+        const salonWrapper = document.getElementById('salonSelectWrapper');
+
+        const salonOptionsList = document.getElementById('salonOptionsList');
+
+        const hiddenInput = document.getElementById('salon_seleccionado_id');
+
+        const hiddenSalonNombre = document.getElementById('salon_seleccionado_nombre');
+
+        const serviciosContainer = document.getElementById('serviciosContainer');
+
+        const serviciosResumen = document.getElementById('serviciosResumen');
+
+        const inputTelefono = document.getElementById('telefono');
+
+        const capacityWarning = document.getElementById('capacityWarning');
+
+        const inputFechaInicio = document.getElementById('fecha_inicio');
+
+        const inputFechaFin = document.getElementById('fecha_fin');
+
+        const inputFechaInicioPicker = document.getElementById('fecha_inicio_picker');
+
+        const inputFechaFinPicker = document.getElementById('fecha_fin_picker');
+
+        const inputFechaInicioBtn = document.getElementById('fecha_inicio_btn');
+
+        const inputFechaFinBtn = document.getElementById('fecha_fin_btn');
+
+        const horaInicioSelect = document.getElementById('hora_inicio');
+
+        const horaFinSelect = document.getElementById('hora_fin');
+
+        const invalidNumberKeys = new Set(['e', 'E', '+', '-', ' ']);
+
+        const hasNonWhitespaceValue = (value) => value.trim().length > 0;
+
+        const sanitizeIntegerInput = (value) => value.replace(/\D/g, '');
+
+        const sanitizePhoneInput = (value) => value.replace(/\D/g, '');
+
+        const formatShortDateInput = (value) => {
+            const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
+            if (digits.length <= 2) return digits;
+            if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+            return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 6)}`;
+        };
+
+        const parseShortDateToIso = (value) => {
+            const normalized = String(value || '').trim();
+            const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+            if (!match) return null;
+
+            const day = Number(match[1]);
+            const month = Number(match[2]);
+            const year = 2000 + Number(match[3]);
+
+            if (!Number.isInteger(day) || !Number.isInteger(month) || month < 1 || month > 12 || day < 1 || day > 31) {
+                return null;
+            }
+
+            const candidate = new Date(year, month - 1, day);
+            if (
+                candidate.getFullYear() !== year
+                || candidate.getMonth() !== month - 1
+                || candidate.getDate() !== day
+            ) {
+                return null;
+            }
+
+            return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        };
+
+        const isoDateToShortDate = (value) => {
+            const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return '';
+            return `${match[3]}/${match[2]}/${match[1].slice(-2)}`;
+        };
+
+        const syncDatePickerValue = (textInput, pickerInput) => {
+            if (!textInput || !pickerInput) return;
+            pickerInput.value = parseShortDateToIso(textInput.value) || '';
+        };
+
+        const openNativeDatePicker = (pickerInput) => {
+            if (!pickerInput) return;
+            if (typeof pickerInput.showPicker === 'function') {
+                pickerInput.showPicker();
+                return;
+            }
+            pickerInput.click();
+        };
+
+        const preventInvalidNumberKeys = (event) => {
+            if (invalidNumberKeys.has(event.key)) {
+                event.preventDefault();
+            }
+        };
+
+        const populateHalfHourOptions = () => {
+            [horaInicioSelect, horaFinSelect].forEach((selectElement) => {
+                if (!selectElement) return;
+
+                selectElement.innerHTML = '<option value="">Seleccione horario</option>';
+
+                for (let hour = 0; hour < 24; hour += 1) {
+                    for (let minutes = 0; minutes < 60; minutes += 30) {
+                        const hourText = String(hour).padStart(2, '0');
+                        const minuteText = String(minutes).padStart(2, '0');
+                        const timeValue = `${hourText}:${minuteText}`;
+
+                        const option = document.createElement('option');
+                        option.value = timeValue;
+                        option.textContent = timeValue;
+                        selectElement.appendChild(option);
+                    }
+                }
+            });
+        };
+
+        const parseJsonResponse = async (response) => {
+            const text = await response.text();
+            if (!text) return {};
+
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                return { error: text };
+            }
+        };
+
+        const base64ToPdfBlob = (base64) => {
+            const byteCharacters = atob(base64);
+            const byteArrays = [];
+            const sliceSize = 1024;
+
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+
+            return new Blob(byteArrays, { type: 'application/pdf' });
+        };
+
+        const triggerBlobDownload = (blob, fileName) => {
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        };
+
+        const triggerAnchorDownload = (url, fileName) => {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        const triggerUrlDownload = async (url, fileName) => {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`No se pudo descargar el archivo (HTTP ${response.status})`);
+            }
+            const blob = await response.blob();
+            triggerBlobDownload(blob, fileName);
+        };
+
+        const downloadGeneratedPresupuesto = async (data) => {
+            const reservaId = data?.reservaId || 'evento';
+            const fileName = data?.fileName || `presupuesto-reserva-${reservaId}.pdf`;
+
+            if (data?.pdfBase64) {
+                try {
+                    const blob = base64ToPdfBlob(data.pdfBase64);
+                    triggerBlobDownload(blob, fileName);
+                    return true;
+                } catch (error) {
+                    console.warn('No se pudo descargar desde PDF base64:', error);
+                }
+            }
+
+            const downloadUrlCandidates = [
+                data?.accessUrl,
+                data?.access_url,
+                data?.shortUrl,
+                data?.short_url,
+                data?.downloadUrl,
+                data?.download_url,
+                data?.signedUrl,
+                data?.signed_url,
+            ]
+                .filter((value) => typeof value === 'string')
+                .map((value) => value.trim())
+                .filter(Boolean);
+
+            for (const downloadUrl of downloadUrlCandidates) {
+                try {
+                    await triggerUrlDownload(downloadUrl, fileName);
+                    return true;
+                } catch (error) {
+                    console.warn('No se pudo descargar desde URL candidata:', downloadUrl, error);
+                    try {
+                        triggerAnchorDownload(downloadUrl, fileName);
+                        return true;
+                    } catch (anchorError) {
+                        console.warn('No se pudo iniciar descarga por enlace directo:', downloadUrl, anchorError);
+                    }
+                }
+            }
+
+            return false;
+        };
+
+        const getSelectedSalonData = () => {
+            const salonId = parseInt(hiddenInput.value, 10);
+            if (!salonId) return null;
+            return salonesDB.find(s => Number(s.id) === salonId) || null;
+        };
+
+        const getSelectedDistribucionData = () => {
+            const distribucionId = parseInt(selectDistribucion.value, 10);
+            if (!distribucionId) return null;
+            return catalogDistribuciones.find(d => Number(d.id) === distribucionId) || null;
+        };
+
+        const getCapacityWarningMessage = () => {
+            const personas = parseInt(inputCantidad.value, 10);
+            if (!personas || personas <= 0) return '';
+
+            const salon = getSelectedSalonData();
+            const distribucion = getSelectedDistribucionData();
+            if (!salon && !distribucion) return '';
+
+            const warnings = [];
+
+            if (salon && personas > Number(salon.capacidad || 0)) {
+                warnings.push(`supera la capacidad del salon (${salon.capacidad} personas)`);
+            }
+
+            if (distribucion && personas > Number(distribucion.capacidad || 0)) {
+                warnings.push(`supera la capacidad de la distribucion seleccionada (${distribucion.capacidad} personas)`);
+            }
+
+            if (!warnings.length) return '';
+
+            return `Advertencia: la cantidad ingresada ${warnings.join(' y ')}. Podes enviar el formulario igualmente.`;
+        };
+
+        const updateCapacityWarning = () => {
+            if (!capacityWarning) return;
+
+            const warningMessage = getCapacityWarningMessage();
+
+            if (!warningMessage) {
+                capacityWarning.style.display = 'none';
+                capacityWarning.textContent = '';
+                return;
+            }
+
+            capacityWarning.textContent = warningMessage;
+            capacityWarning.style.display = 'block';
+        };
+
+        function updateDistribucionesForSalon(salonId) {
+
+            selectDistribucion.innerHTML = '';
+
+            const defaultOption = document.createElement('option');
+
+            defaultOption.value = '0';
+
+            defaultOption.textContent = 'Sin distribucion especifica';
+
+            selectDistribucion.appendChild(defaultOption);
+
+            if (!salonId) {
+
+                selectDistribucion.disabled = true;
+
+                return;
+
+            }
+
+            const distribuciones = catalogDistribuciones.filter(d => d.id_salon === salonId);
+
+            distribuciones.forEach(d => {
+
+                const option = document.createElement('option');
+
+                option.value = d.id;
+
+                option.textContent = `${d.nombre} - Cap: ${d.capacidad}`;
+
+                selectDistribucion.appendChild(option);
+
+            });
+
+            selectDistribucion.disabled = distribuciones.length === 0;
+
+            updateCapacityWarning();
+
+        }
+
+        function updateSalonRecommendations() {
+
+            const personas = parseInt(inputCantidad.value, 10);
+
+            salonOptionsList.innerHTML = '';
+
+            if (!salonesDB.length) {
+
+                salonOptionsList.innerHTML = '<div style="padding:15px; font-size:12px; color:#999;">Cargando salones...</div>';
+
+                return;
+
+            }
+
+            if (!personas || personas <= 0) {
+                const t = document.createElement('div');
+                t.className = 'select-group-title';
+                t.innerText = 'SALONES DISPONIBLES';
+                salonOptionsList.appendChild(t);
+
+                const ordered = [...salonesDB].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+                ordered.forEach(s => renderOption({ ...s, capReal: s.capacidad || 0 }, true));
+                return;
+            }
+
+            let recomendados = [], otros = [];
+
+            salonesDB.forEach(salon => {
+
+                const cap = salon.capacidad || 0;
+
+                const view = { ...salon, capReal: cap };
+
+                (cap >= personas) ? recomendados.push(view) : otros.push(view);
+
+            });
+
+            recomendados.sort((a, b) => a.capReal - b.capReal);
+
+            if (recomendados.length) {
+
+                const t = document.createElement('div'); t.className = 'select-group-title'; t.innerText = 'RECOMENDADOS'; salonOptionsList.appendChild(t);
+
+                recomendados.forEach(s => renderOption(s, true));
+
+            }
+
+            if (otros.length) {
+
+                const t = document.createElement('div'); t.className = 'select-group-title'; t.style.background = '#666'; t.innerText = 'OTROS'; salonOptionsList.appendChild(t);
+
+                otros.forEach(s => renderOption(s, false));
+
+            }
+
+        }
+
+        function renderOption(salon, isRec) {
+
+            const d = document.createElement('div');
+
+            d.className = `salon-option ${isRec ? 'recommended' : 'disabled-option'}`;
+
+            d.innerHTML = `<img src="${salon.img || defaultSalonImg}" class="salon-thumb"><div class="salon-details"><span class="salon-name-opt">${salon.nombre}</span><span class="salon-meta-opt">Capacidad: <b>${salon.capReal}</b> personas</span></div>`;
+
+            d.addEventListener('click', () => {
+
+                salonTrigger.querySelector('span').innerText = salon.nombre;
+
+                hiddenInput.value = salon.id;
+
+                hiddenSalonNombre.value = salon.nombre;
+
+                updateDistribucionesForSalon(Number(salon.id));
+
+                salonWrapper.classList.remove('open');
+
+            });
+
+            salonOptionsList.appendChild(d);
+
+        }
+
+        function updateServiciosResumen() {
+
+            const selected = serviciosContainer.querySelectorAll('input[type="checkbox"]:checked');
+
+            if (!selected.length) {
+
+                serviciosResumen.textContent = '';
+
+                return;
+
+            }
+
+            serviciosResumen.textContent = `${selected.length} servicio(s) seleccionado(s)`;
+
+        }
+
+        function renderServicios() {
+
+            serviciosContainer.innerHTML = '';
+
+            serviciosResumen.textContent = '';
+
+            if (!catalogServicios.length) {
+
+                serviciosContainer.innerHTML = '<div style="font-size:12px; color:#999;">No hay servicios disponibles.</div>';
+
+                return;
+
+            }
+
+            const categoriasOrdenadas = catalogCategorias.length ? catalogCategorias : [{ id: 0, nombre: 'Servicios' }];
+
+            categoriasOrdenadas.forEach(cat => {
+
+                const items = catalogServicios.filter(s => s.id_categoria === cat.id || cat.id === 0);
+
+                if (!items.length) return;
+
+                const section = document.createElement('div');
+
+                section.className = 'service-category';
+
+                const title = document.createElement('div');
+
+                title.className = 'service-category-title';
+
+                title.textContent = cat.nombre;
+
+                section.appendChild(title);
+
+                items.forEach(servicio => {
+
+                    const item = document.createElement('div');
+
+                    item.className = 'service-item';
+
+                    const checkbox = document.createElement('input');
+
+                    checkbox.type = 'checkbox';
+
+                    checkbox.dataset.serviceId = servicio.id;
+
+                    const name = document.createElement('span');
+
+                    name.className = 'service-name';
+
+                    name.textContent = servicio.nombre;
+
+                    const price = document.createElement('span');
+
+                    price.className = 'service-price';
+
+                    price.textContent = `$${Number(servicio.precio || 0).toLocaleString('es-AR')}`;
+
+                    const qty = document.createElement('input');
+
+                    qty.type = 'number';
+
+                    qty.min = '1';
+
+                    qty.value = '1';
+
+                    qty.inputMode = 'numeric';
+
+                    qty.className = 'service-qty';
+
+                    qty.disabled = true;
+
+                    checkbox.addEventListener('change', () => {
+
+                        qty.disabled = !checkbox.checked;
+
+                        if (!checkbox.checked) {
+
+                            qty.value = '1';
+
+                        }
+
+                        updateServiciosResumen();
+
+                    });
+
+                    qty.addEventListener('keydown', preventInvalidNumberKeys);
+
+                    qty.addEventListener('input', () => {
+
+                        qty.value = sanitizeIntegerInput(qty.value);
+
+                        const value = parseInt(qty.value, 10);
+
+                        if (!value || value < 1) {
+
+                            qty.value = '1';
+
+                        }
+
+                    });
+
+                    item.appendChild(checkbox);
+
+                    item.appendChild(name);
+
+                    item.appendChild(price);
+
+                    item.appendChild(qty);
+
+                    section.appendChild(item);
+
+                });
+
+                serviciosContainer.appendChild(section);
+
+            });
+
+        }
+
+        async function loadCatalog() {
+            // Intentamos primero la función pública (edge function).
+            // Probamos dos variantes de ruta en orden: con el prefijo `server` y sin él.
+            const functionAttempts = [
+                `${PUBLIC_API_BASE}/public-catalog`,
+                `${PUBLIC_API_BASE_ALT}/public-catalog`,
+                `https://${PROJECT_ID}.supabase.co/functions/v1/server/public-catalog`,
+                `https://${PROJECT_ID}.supabase.co/functions/v1/public-catalog`,
+            ];
+
+            const functionHeaders = {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${PUBLIC_ANON_KEY}`,
+            };
+
+            for (const url of functionAttempts) {
+                try {
+                    const response = await fetch(url, { headers: functionHeaders });
+                    const text = await response.text();
+                    let data = null;
+                    try { data = text ? JSON.parse(text) : null; } catch (e) { /* no-op */ }
+                    if (!response.ok) {
+                        console.warn(`Function attempt failed (${response.status}) at ${url}:`, data || text);
+                        continue; // try next
+                    }
+
+                    salonesDB = (data.salones || []).map(salon => ({
+                    id: salon.id,
+                    nombre: salon.nombre,
+                    capacidad: salon.capacidad,
+                    precio_base: salon.precio_base,
+                    img: salon.imagen_url || defaultSalonImg
+                }));
+
+                    catalogDistribuciones = data.distribuciones || [];
+                    catalogCategorias = data.categorias || [];
+                    catalogServicios = data.servicios || [];
+
+                    updateSalonRecommendations();
+                    updateDistribucionesForSalon(null);
+                    renderServicios();
+                    updateCapacityWarning();
+                    return;
+                } catch (err) {
+                    console.warn('Error parsing/using function response for', url, err);
+                    continue; // try next URL
+                }
+            }
+            console.warn('All function attempts failed, trying REST fallback');
+
+            // Fallback: usar REST pública de Supabase con public anon key
+            try {
+                const restBase = `https://${PROJECT_ID}.supabase.co/rest/v1`;
+                const headers = {
+                    'apikey': PUBLIC_ANON_KEY,
+                    'Authorization': `Bearer ${PUBLIC_ANON_KEY}`,
+                    'Accept': 'application/json'
+                };
+
+                const [salonesRes, distribRes, categoriasRes, serviciosRes] = await Promise.all([
+                    fetch(`${restBase}/salones?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/distribuciones?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/categorias_servicios?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/servicios?select=*,categoria:categorias_servicios(*)&order=nombre`, { headers }),
+                ]);
+
+                if (!salonesRes.ok || !distribRes.ok || !categoriasRes.ok || !serviciosRes.ok) {
+                    const details = {
+                        salones: salonesRes.status,
+                        distribuciones: distribRes.status,
+                        categorias: categoriasRes.status,
+                        servicios: serviciosRes.status,
+                    };
+                    throw new Error('REST API devolvio respuesta no OK: ' + JSON.stringify(details));
+                }
+
+                const [salonesData, distribData, categoriasData, serviciosData] = await Promise.all([
+                    salonesRes.json(), distribRes.json(), categoriasRes.json(), serviciosRes.json()
+                ]);
+
+                salonesDB = (salonesData || []).map(salon => ({
+                    id: salon.id,
+                    nombre: salon.nombre,
+                    capacidad: salon.capacidad,
+                    precio_base: salon.precio_base,
+                    img: salon.imagen_url || defaultSalonImg
+                }));
+
+                catalogDistribuciones = distribData || [];
+                catalogCategorias = categoriasData || [];
+                catalogServicios = (serviciosData || []).map(s => ({
+                    id: s.id,
+                    id_categoria: s.id_categoria ?? (s.categoria ? s.categoria.id : 0),
+                    nombre: s.nombre,
+                    descripcion: s.descripcion,
+                    precio: s.precio
+                }));
+
+                updateSalonRecommendations();
+                updateDistribucionesForSalon(null);
+                renderServicios();
+                updateCapacityWarning();
+                return;
+            } catch (error) {
+                console.error('Error loading catalog (fallback):', error);
+                salonOptionsList.innerHTML = '<div style="padding:15px; font-size:12px; color:#999;">No se pudo cargar el catálogo. Intentá abrir la consola para más detalles.</div>';
+                serviciosContainer.innerHTML = '<div style="font-size:12px; color:#999;">No se pudo cargar los servicios. Intentá abrir la consola para más detalles.</div>';
+            }
+        }
+
+        inputCantidad.addEventListener('keydown', preventInvalidNumberKeys);
+
+        inputCantidad.addEventListener('input', () => {
+            inputCantidad.value = sanitizeIntegerInput(inputCantidad.value);
+            updateSalonRecommendations();
+            updateCapacityWarning();
+        });
+
+        inputTelefono.addEventListener('keydown', preventInvalidNumberKeys);
+
+        inputTelefono.addEventListener('input', () => {
+            inputTelefono.value = sanitizePhoneInput(inputTelefono.value);
+        });
+
+        [inputFechaInicio, inputFechaFin].forEach((dateInput) => {
+            if (!dateInput) return;
+            dateInput.addEventListener('input', () => {
+                dateInput.value = formatShortDateInput(dateInput.value);
+                if (dateInput === inputFechaInicio) {
+                    syncDatePickerValue(inputFechaInicio, inputFechaInicioPicker);
+                } else if (dateInput === inputFechaFin) {
+                    syncDatePickerValue(inputFechaFin, inputFechaFinPicker);
+                }
+            });
+        });
+
+        if (inputFechaInicioPicker) {
+            inputFechaInicioPicker.addEventListener('change', () => {
+                inputFechaInicio.value = isoDateToShortDate(inputFechaInicioPicker.value);
+            });
+        }
+
+        if (inputFechaFinPicker) {
+            inputFechaFinPicker.addEventListener('change', () => {
+                inputFechaFin.value = isoDateToShortDate(inputFechaFinPicker.value);
+            });
+        }
+
+        if (inputFechaInicioBtn) {
+            inputFechaInicioBtn.addEventListener('click', () => {
+                syncDatePickerValue(inputFechaInicio, inputFechaInicioPicker);
+                openNativeDatePicker(inputFechaInicioPicker);
+            });
+        }
+
+        if (inputFechaFinBtn) {
+            inputFechaFinBtn.addEventListener('click', () => {
+                syncDatePickerValue(inputFechaFin, inputFechaFinPicker);
+                openNativeDatePicker(inputFechaFinPicker);
+            });
+        }
+
+        selectDistribucion.addEventListener('change', () => {
+            updateSalonRecommendations();
+            updateCapacityWarning();
+        });
+
+        salonTrigger.addEventListener('click', () => salonWrapper.classList.toggle('open'));
+
+        document.addEventListener('click', (e) => { if (!salonWrapper.contains(e.target)) salonWrapper.classList.remove('open'); });
+
+        populateHalfHourOptions();
+
+        loadCatalog();
+
+        // Envio Form
+
+        const formTesis = document.getElementById('formTesis');
+
+        const submitButton = formTesis.querySelector('button[type="submit"]');
+
+        const statusModalOverlay = document.getElementById('statusModalOverlay');
+
+        const statusModalCard = document.getElementById('statusModalCard');
+
+        const statusModalClose = document.getElementById('statusModalClose');
+
+        const statusModalIcon = document.getElementById('statusModalIcon');
+
+        const statusModalTitle = document.getElementById('statusModalTitle');
+
+        const statusModalMessage = document.getElementById('statusModalMessage');
+
+        let statusModalLocked = false;
+
+        let statusModalAutoCloseTimer = null;
+
+        const STATUS_CONFIG = {
+            loading: {
+                iconClass: 'fas fa-circle-notch fa-spin',
+                title: 'Procesando solicitud',
+                color: '#8a4b08',
+            },
+            success: {
+                iconClass: 'fas fa-check-circle',
+                title: 'Solicitud enviada',
+                color: '#1a7f37',
+            },
+            error: {
+                iconClass: 'fas fa-exclamation-triangle',
+                title: 'No se pudo completar la accion',
+                color: '#b00020',
+            },
+            info: {
+                iconClass: 'fas fa-info-circle',
+                title: 'Informacion',
+                color: '#295d91',
+            },
+        };
+
+        const clearStatusModalTimer = () => {
+            if (!statusModalAutoCloseTimer) return;
+            window.clearTimeout(statusModalAutoCloseTimer);
+            statusModalAutoCloseTimer = null;
+        };
+
+        const closeStatusModal = () => {
+            if (statusModalLocked) return;
+            clearStatusModalTimer();
+            statusModalOverlay.classList.remove('is-open');
+            statusModalOverlay.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('status-modal-open');
+        };
+
+        const openStatusModal = ({ statusType, text, title, lock, autoCloseMs }) => {
+            const normalizedType = STATUS_CONFIG[statusType] ? statusType : 'info';
+            const config = STATUS_CONFIG[normalizedType];
+
+            clearStatusModalTimer();
+            statusModalLocked = Boolean(lock);
+
+            statusModalCard.dataset.state = normalizedType;
+            statusModalIcon.innerHTML = `<i class="${config.iconClass}"></i>`;
+            statusModalTitle.textContent = title || config.title;
+            statusModalMessage.textContent = text || '';
+            statusModalClose.style.display = statusModalLocked ? 'none' : 'inline-flex';
+
+            statusModalOverlay.classList.add('is-open');
+            statusModalOverlay.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('status-modal-open');
+
+            if (!statusModalLocked && autoCloseMs > 0) {
+                statusModalAutoCloseTimer = window.setTimeout(() => {
+                    closeStatusModal();
+                }, autoCloseMs);
+            }
+        };
+
+        const normalizeStatusType = (value) => {
+            if (typeof value === 'string') return value;
+            if (value === true) return 'error';
+            if (value === false) return 'success';
+            return 'info';
+        };
+
+        const setStatus = (text, typeOrIsError = 'info', options = {}) => {
+            const statusType = normalizeStatusType(typeOrIsError);
+            const config = STATUS_CONFIG[statusType] || STATUS_CONFIG.info;
+            const shouldLock = options.lock === true || statusType === 'loading';
+            const autoCloseMs = Number.isFinite(options.autoCloseMs)
+                ? options.autoCloseMs
+                : (statusType === 'success' || statusType === 'info' ? 4500 : 0);
+
+            openStatusModal({
+                statusType,
+                text,
+                title: options.title,
+                lock: shouldLock,
+                autoCloseMs,
+            });
+        };
+
+        statusModalClose.addEventListener('click', closeStatusModal);
+
+        statusModalOverlay.addEventListener('click', (event) => {
+            if (event.target === statusModalOverlay) {
+                closeStatusModal();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeStatusModal();
+            }
+        });
+
+        formTesis.addEventListener('submit', async function (e) {
+
+            e.preventDefault();
+
+            const nombre = document.getElementById('nombre').value.trim();
+
+            const email = document.getElementById('email').value.trim();
+
+            const telefonoInput = document.getElementById('telefono');
+
+            telefonoInput.value = sanitizePhoneInput(telefonoInput.value);
+
+            const telefono = telefonoInput.value;
+
+            const fechaInicioRaw = document.getElementById('fecha_inicio').value;
+
+            const horaInicio = document.getElementById('hora_inicio').value;
+
+            const fechaFinRaw = document.getElementById('fecha_fin').value;
+
+            const horaFin = document.getElementById('hora_fin').value;
+
+            const cantidadInput = document.getElementById('cantidad');
+
+            cantidadInput.value = sanitizeIntegerInput(cantidadInput.value);
+
+            const cantidad = parseInt(cantidadInput.value, 10);
+
+            const distribucionId = parseInt(selectDistribucion.value, 10) || 0;
+
+            const salonId = parseInt(hiddenInput.value, 10) || 0;
+
+            const salonNombre = hiddenSalonNombre.value.trim();
+
+            const observaciones = document.getElementById('observaciones').value.trim();
+
+            if (!hasNonWhitespaceValue(nombre) || !hasNonWhitespaceValue(email) || !telefono) {
+
+                setStatus('Complete nombre, email y telefono del cliente.', true);
+
+                return;
+
+            }
+
+            if (!salonId) {
+
+                setStatus('Seleccione un salon antes de enviar el formulario.', true);
+
+                return;
+
+            }
+
+            if (!fechaInicioRaw || !horaInicio || !fechaFinRaw || !horaFin) {
+
+                setStatus('Complete fecha y horario del evento.', true);
+
+                return;
+
+            }
+
+            const fechaInicioIso = parseShortDateToIso(fechaInicioRaw);
+            const fechaFinIso = parseShortDateToIso(fechaFinRaw);
+
+            if (!fechaInicioIso || !fechaFinIso) {
+                setStatus('Use formato de fecha dd/mm/aa para inicio y fin.', true);
+                return;
+            }
+
+            if (!cantidad || cantidad <= 0) {
+
+                setStatus('Ingrese una cantidad valida de personas.', true);
+
+                return;
+
+            }
+
+            const startDate = new Date(`${fechaInicioIso}T${horaInicio}`);
+
+            const endDate = new Date(`${fechaFinIso}T${horaFin}`);
+
+            const now = new Date();
+            now.setSeconds(0, 0);
+
+            if (startDate < now) {
+
+                setStatus('La fecha y hora de inicio no pueden ser anteriores al momento actual.', true);
+
+                return;
+
+            }
+
+            if (endDate <= startDate) {
+
+                setStatus('La fecha y hora de fin deben ser posteriores al inicio.', true);
+
+                return;
+
+            }
+
+            const serviciosSeleccionados = Array.from(serviciosContainer.querySelectorAll('input[type="checkbox"]:checked'))
+
+                .map((checkbox) => {
+
+                    const serviceId = parseInt(checkbox.dataset.serviceId, 10);
+
+                    const qtyInput = checkbox.closest('.service-item').querySelector('input[type="number"]');
+
+                    qtyInput.value = sanitizeIntegerInput(qtyInput.value);
+
+                    const cantidadServicio = parseInt(qtyInput.value, 10) || 1;
+
+                    return { id_servicio: serviceId, cantidad: cantidadServicio };
+
+                });
+
+            const tipoEvento = hasNonWhitespaceValue(observaciones)
+                ? observaciones.split('\n')[0].trim()
+                : null;
+
+            const payload = {
+
+                nombre,
+
+                email: email || null,
+
+                telefono: telefono || null,
+
+                fecha_inicio: startDate.toISOString(),
+
+                fecha_fin: endDate.toISOString(),
+
+                tipo_evento: tipoEvento,
+
+                cantidad,
+
+                id_distribucion: distribucionId || null,
+
+                salon_id: salonId,
+
+                salon_nombre: salonNombre,
+
+                observaciones: observaciones || null,
+
+                servicios: serviciosSeleccionados
+
+            };
+
+            try {
+
+                submitButton.disabled = true;
+
+                setStatus('Se esta generando el presupuesto y enviando la solicitud...', 'loading', {
+                    title: 'Procesando solicitud',
+                    lock: true,
+                });
+
+                const submitAttempts = [
+                    `${PUBLIC_API_BASE}/public-reserva`,
+                    `${PUBLIC_API_BASE_ALT}/public-reserva`,
+                    `https://${PROJECT_ID}.supabase.co/functions/v1/server/public-reserva`,
+                    `https://${PROJECT_ID}.supabase.co/functions/v1/public-reserva`,
+                ];
+
+                let data = null;
+                const submitErrors = [];
+                const submitHeaders = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${PUBLIC_ANON_KEY}`,
+                };
+
+                for (const endpoint of submitAttempts) {
+                    try {
+                        const response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: submitHeaders,
+                            body: JSON.stringify(payload)
+                        });
+
+                        const parsed = await parseJsonResponse(response);
+
+                        if (response.ok) {
+                            data = parsed;
+                            break;
+                        }
+
+                        submitErrors.push(parsed?.error || `HTTP ${response.status} en ${endpoint}`);
+                    } catch (error) {
+                        submitErrors.push(`${endpoint}: ${error?.message || 'Error de red'}`);
+                    }
+                }
+
+                if (!data) {
+                    throw new Error(submitErrors.join(' | ') || 'No se pudo enviar el formulario.');
+                }
+
+                const downloadStarted = await downloadGeneratedPresupuesto(data);
+
+                if (downloadStarted) {
+                    setStatus('Solicitud enviada. El presupuesto se esta descargando.', 'success', {
+                        title: 'Solicitud enviada',
+                        autoCloseMs: 5000,
+                    });
+                } else {
+                    const detalleBackend = data?.pdfError || data?.uploadError || data?.signedError || '';
+                    const detalle = detalleBackend ? ` Detalle: ${detalleBackend}` : '';
+                    setStatus(`Solicitud enviada, pero no se pudo descargar el presupuesto automaticamente.${detalle}`, 'error', {
+                        title: 'Solicitud enviada con incidencia',
+                    });
+                    console.warn('Respuesta de public-reserva sin archivo descargable:', data);
+                }
+
+                formTesis.reset();
+
+                salonTrigger.querySelector('span').innerText = 'Seleccione...';
+
+                hiddenInput.value = '';
+
+                hiddenSalonNombre.value = '';
+
+                updateDistribucionesForSalon(null);
+
+                renderServicios();
+
+                updateCapacityWarning();
+
+            } catch (error) {
+
+                setStatus(error.message || 'Ocurrio un error inesperado.', 'error', {
+                    title: 'Error al enviar la solicitud',
+                });
+
+            } finally {
+
+                submitButton.disabled = false;
+
+            }
+
+        });
+
+</script>
+
+</body>
+
+</html>

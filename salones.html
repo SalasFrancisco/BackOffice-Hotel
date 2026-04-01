@@ -3114,18 +3114,31 @@
                 }
             }
 
-            const downloadUrl = data?.downloadUrl || data?.download_url || data?.signedUrl || data?.signed_url;
-            if (downloadUrl) {
+            const downloadUrlCandidates = [
+                data?.accessUrl,
+                data?.access_url,
+                data?.shortUrl,
+                data?.short_url,
+                data?.downloadUrl,
+                data?.download_url,
+                data?.signedUrl,
+                data?.signed_url,
+            ]
+                .filter((value) => typeof value === 'string')
+                .map((value) => value.trim())
+                .filter(Boolean);
+
+            for (const downloadUrl of downloadUrlCandidates) {
                 try {
                     await triggerUrlDownload(downloadUrl, fileName);
                     return true;
                 } catch (error) {
-                    console.warn('No se pudo descargar desde URL firmada:', error);
+                    console.warn('No se pudo descargar desde URL candidata:', downloadUrl, error);
                     try {
                         triggerAnchorDownload(downloadUrl, fileName);
                         return true;
                     } catch (anchorError) {
-                        console.warn('No se pudo iniciar descarga por enlace directo:', anchorError);
+                        console.warn('No se pudo iniciar descarga por enlace directo:', downloadUrl, anchorError);
                     }
                 }
             }

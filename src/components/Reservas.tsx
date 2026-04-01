@@ -222,83 +222,36 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     setOpeningPresupuestoId(reserva.id);
 
     try {
-      const { data, error: signedUrlError } = await supabase.storage
-        .from('presupuestos')
-        .createSignedUrl(reserva.presupuesto_url, 60);
+      const payload = await invokeProtectedFunction('get-presupuesto-url', {
+        reservaId: reserva.id,
+        presupuestoPath: reserva.presupuesto_url,
+      });
 
-      if (signedUrlError) throw signedUrlError;
-      if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank', 'noopener');
-      } else {
-        throw new Error('Signed URL not available from storage client');
+      const accessUrl = typeof payload?.accessUrl === 'string' && payload.accessUrl.trim()
+        ? payload.accessUrl.trim()
+        : typeof payload?.shortUrl === 'string' && payload.shortUrl.trim()
+          ? payload.shortUrl.trim()
+          : typeof payload?.signedUrl === 'string' && payload.signedUrl.trim()
+            ? payload.signedUrl.trim()
+            : '';
+
+      if (!accessUrl) {
+        throw new Error('No se pudo obtener la URL del presupuesto.');
       }
+
+      window.open(accessUrl, '_blank', 'noopener');
     } catch (err: any) {
       try {
-        const payload = await invokeProtectedFunction('get-presupuesto-url', {
-          reservaId: reserva.id,
-          presupuestoPath: reserva.presupuesto_url,
-        });
+        const { data, error: signedUrlError } = await supabase.storage
+          .from('presupuestos')
+          .createSignedUrl(reserva.presupuesto_url, 60);
 
-        if (!payload?.signedUrl) {
+        if (signedUrlError) throw signedUrlError;
+        if (!data?.signedUrl) {
           throw new Error('No se pudo obtener la URL del presupuesto.');
         }
 
-        window.open(payload.signedUrl, '_blank', 'noopener');
-        return;
-
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error('No hay sesión activa para solicitar la URL del presupuesto.');
-        }
-
-        const endpoints = [
-          `https://${projectId}.supabase.co/functions/v1/server/get-presupuesto-url`,
-          `https://${projectId}.supabase.co/functions/v1/get-presupuesto-url`,
-          `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/get-presupuesto-url`,
-          `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/get-presupuesto-url`,
-        ];
-
-        let signedUrl: string | null = null;
-        let lastError = 'No se pudo obtener la URL del presupuesto.';
-
-        for (const endpoint of endpoints) {
-          try {
-            const response = await fetch(endpoint, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({
-                reservaId: reserva.id,
-                presupuestoPath: reserva.presupuesto_url,
-              }),
-            });
-
-            const text = await response.text();
-            let payload: any = {};
-            try {
-              payload = text ? JSON.parse(text) : {};
-            } catch {
-              payload = { error: text };
-            }
-
-            if (response.ok && payload?.signedUrl) {
-              signedUrl = payload.signedUrl;
-              break;
-            }
-
-            lastError = payload?.error || `HTTP ${response.status} en ${endpoint}`;
-          } catch (fetchError: any) {
-            lastError = fetchError?.message || String(fetchError);
-          }
-        }
-
-        if (!signedUrl) {
-          throw new Error(lastError);
-        }
-
-        window.open(signedUrl, '_blank', 'noopener');
+        window.open(data.signedUrl, '_blank', 'noopener');
       } catch (fallbackError: any) {
         console.error('Error opening presupuesto:', err, fallbackError);
         setMessage({

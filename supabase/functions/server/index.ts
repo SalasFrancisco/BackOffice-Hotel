@@ -117,6 +117,11 @@ const RESERVA_ALERTA_CANCELACION_AUTOMATICA = "cancelacion_automatica";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESUPUESTOS_BUCKET = "presupuestos";
 const PRESUPUESTO_EMAIL_LINK_TTL_SECONDS = 60 * 60 * 24 * 7;
+const PRESUPUESTO_SHORT_LINK_MIN_TTL_SECONDS = 60;
+const PRESUPUESTO_SHORT_LINK_SIGNED_URL_TTL_SECONDS = 90;
+const PRESUPUESTO_SHORT_LINK_SIGNATURE_LENGTH = 16;
+const PRESUPUESTO_SHORT_LINK_ROUTE_SEGMENT = "p";
+const TEXT_ENCODER = new TextEncoder();
 
 const SALONES_HEADER_LOGO_URL = "https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png";
 const LOCAL_LOGO_URL = new URL("./assets/QuintoCente.png", import.meta.url);
@@ -667,7 +672,7 @@ function getSmtpConfig(): SmtpConfig {
   const user = Deno.env.get("SMTP_USER")?.trim() || "";
   const pass = Deno.env.get("SMTP_PASS")?.trim() || "";
   const fromOverride = Deno.env.get("SMTP_FROM")?.trim() || "";
-  const fromName = Deno.env.get("SMTP_FROM_NAME")?.trim() || "Hotel Back-Office";
+  const fromName = Deno.env.get("SMTP_FROM_NAME")?.trim() || "Quinto Centenario Hotel";
   const secureOverride = Deno.env.get("SMTP_SECURE")?.trim()?.toLowerCase();
 
   if (!host || !portRaw || !user || !pass) {
@@ -797,6 +802,7 @@ async function sendSmtpEmail(
   smtpConfig: SmtpConfig,
   input: {
     to: string;
+    bcc?: string;
     subject: string;
     text: string;
     html: string;
@@ -817,6 +823,7 @@ async function sendSmtpEmail(
     await transporter.sendMail({
       from: smtpConfig.from,
       to: input.to,
+      bcc: input.bcc,
       subject: input.subject,
       text: input.text,
       html: input.html,
@@ -875,16 +882,16 @@ function buildPresupuestoReservationEmail(input: {
             <p style="margin: 0; line-height: 1.5;"><strong>Fin:</strong> ${escapeHtml(fechaFinLabel)}</p>
           </div>
           <p style="margin: 0 0 24px; line-height: 1.6;">
-            También podés descargar el PDF desde el siguiente botón. El enlace estará disponible durante 7 días.
+            También podés abrir el PDF desde el siguiente botón. El enlace estará disponible durante 7 días.
           </p>
           <a
             href="${safeDownloadUrl}"
             style="display: inline-block; background: #0f766e; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;"
           >
-            Descargar presupuesto
+            Abrir presupuesto
           </a>
           <p style="margin: 24px 0 8px; line-height: 1.6;">
-            Si el botón no funciona, copiá y pegá este enlace en tu navegador:
+            Si el botón no funciona, accede desde el siguiente enlace:
           </p>
           <p style="margin: 0; line-height: 1.6; word-break: break-all;">
             <a href="${safeDownloadUrl}" style="color: #0f766e;">${safeDownloadUrl}</a>
@@ -930,6 +937,187 @@ async function sendPresupuestoReservationEmail(
       contentType: "application/pdf",
     }],
   });
+}
+
+type BackofficeNotificationRecipient = {
+  userId: string;
+  nombre: string;
+  rol: string;
+  email: string;
+};
+
+const normalizeEmail = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+};
+
+const formatOptionalText = (value: unknown, fallback: string) => {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : fallback;
+};
+
+function buildPublicReservaBackofficeNotificationEmail(input: {
+  reservaId: number;
+  clienteNombre: string;
+  clienteEmail: string;
+  clienteTelefono?: string | null;
+  salonNombre: string;
+  distribucionNombre?: string | null;
+  tipoEvento?: string | null;
+  cantidadPersonas: number;
+  fechaInicio: string;
+  fechaFin: string;
+}) {
+  const reservaLabel = `#${input.reservaId}`;
+  const clienteNombre = formatOptionalText(input.clienteNombre, "Sin nombre");
+  const clienteEmail = formatOptionalText(input.clienteEmail, "No informado");
+  const clienteTelefono = formatOptionalText(input.clienteTelefono, "No informado");
+  const salonNombre = formatOptionalText(input.salonNombre, "No informado");
+  const distribucionNombre = formatOptionalText(input.distribucionNombre, "No informada");
+  const tipoEvento = formatOptionalText(input.tipoEvento, "No informado");
+  const cantidadPersonas = Number.isFinite(input.cantidadPersonas) ? input.cantidadPersonas : 0;
+  const fechaInicioLabel = `${formatDate(input.fechaInicio)} ${formatTime(input.fechaInicio)}`;
+  const fechaFinLabel = `${formatDate(input.fechaFin)} ${formatTime(input.fechaFin)}`;
+
+  return {
+    subject: `Nueva reserva ${reservaLabel} desde Salones - Pendiente`,
+    text:
+      "Se registro una nueva solicitud de reserva desde el formulario de Salones.\n\n"
+      + `Reserva: ${reservaLabel}\n`
+      + "Estado: Pendiente\n"
+      + `Cliente: ${clienteNombre}\n`
+      + `Email cliente: ${clienteEmail}\n`
+      + `Telefono cliente: ${clienteTelefono}\n`
+      + `Salon: ${salonNombre}\n`
+      + `Distribucion: ${distribucionNombre}\n`
+      + `Tipo de evento: ${tipoEvento}\n`
+      + `Cantidad de personas: ${cantidadPersonas}\n`
+      + `Inicio: ${fechaInicioLabel}\n`
+      + `Fin: ${fechaFinLabel}\n\n`
+      + "Ingresa al Back Office para revisar y gestionar la reserva.",
+    html: `
+      <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
+        <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
+          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Nueva reserva desde Salones</h1>
+          <p style="margin: 0 0 20px; line-height: 1.6;">
+            Se registro una nueva solicitud de reserva en estado <strong>Pendiente</strong>.
+          </p>
+          <div style="margin: 0 0 16px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Reserva:</strong> ${escapeHtml(reservaLabel)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Cliente:</strong> ${escapeHtml(clienteNombre)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Email cliente:</strong> ${escapeHtml(clienteEmail)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Telefono cliente:</strong> ${escapeHtml(clienteTelefono)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Salon:</strong> ${escapeHtml(salonNombre)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Distribucion:</strong> ${escapeHtml(distribucionNombre)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Tipo de evento:</strong> ${escapeHtml(tipoEvento)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Cantidad de personas:</strong> ${escapeHtml(String(cantidadPersonas))}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Inicio:</strong> ${escapeHtml(fechaInicioLabel)}</p>
+            <p style="margin: 0; line-height: 1.5;"><strong>Fin:</strong> ${escapeHtml(fechaFinLabel)}</p>
+          </div>
+          <p style="margin: 0; line-height: 1.6; color: #475569;">
+            Ingresa al Back Office para revisar y gestionar esta reserva.
+          </p>
+        </div>
+      </div>
+    `.trim(),
+  };
+}
+
+async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient) {
+  const { data: perfilesData, error: perfilesError } = await supabaseAdmin
+    .from("perfiles")
+    .select("user_id, nombre, rol");
+
+  if (perfilesError) {
+    throw new Error(`No se pudo cargar perfiles para notificaciones: ${perfilesError.message}`);
+  }
+
+  const perfiles = (perfilesData || []).filter((perfil) => {
+    const normalizedRol = normalizeRole(perfil?.rol);
+    return normalizedRol === "ADMIN" || normalizedRol === "OPERADOR";
+  });
+
+  if (perfiles.length === 0) {
+    return [] as BackofficeNotificationRecipient[];
+  }
+
+  const recipientsByEmail = new Map<string, BackofficeNotificationRecipient>();
+
+  await Promise.all(
+    perfiles.map(async (perfil) => {
+      const userId = typeof perfil?.user_id === "string" ? perfil.user_id : "";
+      if (!userId) return;
+
+      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (userError) {
+        console.warn(`No se pudo obtener el usuario ${userId} para notificacion de reserva publica:`, userError);
+        return;
+      }
+
+      const email = normalizeEmail(userData?.user?.email);
+      if (!email) {
+        console.warn(`El usuario ${userId} no tiene email para notificacion de reserva publica.`);
+        return;
+      }
+
+      if (recipientsByEmail.has(email)) {
+        return;
+      }
+
+      recipientsByEmail.set(email, {
+        userId,
+        nombre: formatOptionalText(perfil?.nombre, "Usuario Back Office"),
+        rol: normalizeRole(perfil?.rol) || "OPERADOR",
+        email,
+      });
+    }),
+  );
+
+  return Array.from(recipientsByEmail.values());
+}
+
+async function sendPublicReservaBackofficeNotificationEmails(
+  smtpConfig: SmtpConfig,
+  supabaseAdmin: SupabaseClient,
+  input: {
+    reservaId: number;
+    clienteNombre: string;
+    clienteEmail: string;
+    clienteTelefono?: string | null;
+    salonNombre: string;
+    distribucionNombre?: string | null;
+    tipoEvento?: string | null;
+    cantidadPersonas: number;
+    fechaInicio: string;
+    fechaFin: string;
+  },
+) {
+  const recipients = await getBackofficeNotificationRecipients(supabaseAdmin);
+  if (recipients.length === 0) {
+    console.warn("No hay destinatarios ADMIN/OPERADOR para notificaciones de reserva publica.");
+    return { sent: false, recipientsCount: 0 } as const;
+  }
+
+  const primaryRecipient = recipients[0]?.email;
+  if (!primaryRecipient) {
+    console.warn("No se pudo resolver destinatario principal para notificaciones de reserva publica.");
+    return { sent: false, recipientsCount: 0 } as const;
+  }
+
+  const bccRecipients = recipients.slice(1).map((recipient) => recipient.email);
+  const emailContent = buildPublicReservaBackofficeNotificationEmail(input);
+
+  await sendSmtpEmail(smtpConfig, {
+    to: primaryRecipient,
+    bcc: bccRecipients.length > 0 ? bccRecipients.join(", ") : undefined,
+    subject: emailContent.subject,
+    text: emailContent.text,
+    html: emailContent.html,
+  });
+
+  return { sent: true, recipientsCount: recipients.length } as const;
 }
 
 function normalizeRole(role: unknown) {
@@ -1148,6 +1336,124 @@ const buildPresupuestoStorageCandidates = (rawPath?: string | null) => {
 
   return Array.from(candidates).filter(Boolean);
 };
+
+const toBase64Url = (value: string) =>
+  value
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/g, "");
+
+const timingSafeEqual = (left: string, right: string) => {
+  if (left.length !== right.length) return false;
+
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+
+  return diff === 0;
+};
+
+let presupuestoShortLinkCryptoKey: Promise<CryptoKey> | null = null;
+
+const getPresupuestoShortLinkCryptoKey = () => {
+  if (!presupuestoShortLinkCryptoKey) {
+    presupuestoShortLinkCryptoKey = crypto.subtle.importKey(
+      "raw",
+      TEXT_ENCODER.encode(SUPABASE_SERVICE_ROLE_KEY),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+  }
+
+  return presupuestoShortLinkCryptoKey;
+};
+
+const buildPresupuestoShortLinkPayload = (reservaId: number, expiresAtBase36: string) =>
+  `${reservaId}.${expiresAtBase36}`;
+
+async function buildPresupuestoShortLinkSignature(payload: string) {
+  const cryptoKey = await getPresupuestoShortLinkCryptoKey();
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, TEXT_ENCODER.encode(payload));
+  const signatureBase64 = bytesToBase64(new Uint8Array(signature));
+
+  return toBase64Url(signatureBase64).slice(0, PRESUPUESTO_SHORT_LINK_SIGNATURE_LENGTH);
+}
+
+const buildPresupuestoShortLinkUrl = (token: string) =>
+  new URL(
+    `/functions/v1/server/${PRESUPUESTO_SHORT_LINK_ROUTE_SEGMENT}/${token}`,
+    SUPABASE_URL,
+  ).toString();
+
+async function createPresupuestoShortLink(
+  reservaId: number,
+  ttlSeconds: number,
+) {
+  if (!Number.isFinite(reservaId) || reservaId <= 0) {
+    return null;
+  }
+
+  const safeTtlSeconds = Math.max(
+    PRESUPUESTO_SHORT_LINK_MIN_TTL_SECONDS,
+    Math.floor(Number(ttlSeconds) || 0),
+  );
+  const expiresAtUnix = Math.floor(Date.now() / 1000) + safeTtlSeconds;
+  const expiresAtBase36 = expiresAtUnix.toString(36);
+  const payload = buildPresupuestoShortLinkPayload(reservaId, expiresAtBase36);
+  const signature = await buildPresupuestoShortLinkSignature(payload);
+  const token = `${payload}.${signature}`;
+
+  return {
+    shortUrl: buildPresupuestoShortLinkUrl(token),
+    expiresAtUnix,
+    token,
+  } as const;
+}
+
+async function resolvePresupuestoShortLinkToken(token: string) {
+  const tokenMatch = String(token || "")
+    .trim()
+    .match(/^([1-9]\d*)\.([0-9a-z]+)\.([A-Za-z0-9_-]{8,128})$/i);
+
+  if (!tokenMatch) {
+    return {
+      status: 400,
+      error: "Enlace de presupuesto invalido",
+    } as const;
+  }
+
+  const reservaId = Number.parseInt(tokenMatch[1], 10);
+  const expiresAtBase36 = tokenMatch[2].toLowerCase();
+  const expiresAtUnix = Number.parseInt(expiresAtBase36, 36);
+  const signature = tokenMatch[3];
+
+  if (!Number.isFinite(reservaId) || reservaId <= 0 || !Number.isFinite(expiresAtUnix) || expiresAtUnix <= 0) {
+    return {
+      status: 400,
+      error: "Enlace de presupuesto invalido",
+    } as const;
+  }
+
+  if (expiresAtUnix < Math.floor(Date.now() / 1000)) {
+    return {
+      status: 410,
+      error: "El enlace del presupuesto expiro",
+    } as const;
+  }
+
+  const payload = buildPresupuestoShortLinkPayload(reservaId, expiresAtBase36);
+  const expectedSignature = await buildPresupuestoShortLinkSignature(payload);
+  if (!timingSafeEqual(signature, expectedSignature)) {
+    return {
+      status: 403,
+      error: "Enlace de presupuesto invalido",
+    } as const;
+  }
+
+  return { reservaId } as const;
+}
 
 async function createPresupuestoSignedUrl(
   supabaseAdmin: SupabaseClient,
@@ -1626,6 +1932,51 @@ app.post("/make-server-484a241a/reset-user-password", async (c) => {
   }
 });
 
+const openPresupuestoShortLinkHandler = async (c: any) => {
+  try {
+    const token = c.req.param("token");
+    const tokenResult = await resolvePresupuestoShortLinkToken(token);
+    if ("error" in tokenResult) {
+      return c.text(tokenResult.error, tokenResult.status);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const { data: reservaData, error: reservaError } = await supabaseAdmin
+      .from("reservas")
+      .select("presupuesto_url")
+      .eq("id", tokenResult.reservaId)
+      .maybeSingle();
+
+    if (reservaError) {
+      console.error("Error resolving presupuesto short link:", reservaError);
+      return c.text("No se pudo resolver el enlace del presupuesto", 500);
+    }
+
+    if (!reservaData?.presupuesto_url) {
+      return c.text("La reserva no tiene presupuesto generado", 404);
+    }
+
+    const signedUrlResult = await createPresupuestoSignedUrl(
+      supabaseAdmin,
+      reservaData.presupuesto_url,
+      PRESUPUESTO_SHORT_LINK_SIGNED_URL_TTL_SECONDS,
+    );
+    if ("error" in signedUrlResult) {
+      return c.text(signedUrlResult.error, signedUrlResult.status);
+    }
+
+    return c.redirect(signedUrlResult.signedUrl, 302);
+  } catch (error) {
+    console.error("Error in presupuesto short link endpoint:", error);
+    return c.text("No se pudo abrir el presupuesto", 500);
+  }
+};
+
+app.get("/make-server-484a241a/p/:token", openPresupuestoShortLinkHandler);
+app.get("/server/make-server-484a241a/p/:token", openPresupuestoShortLinkHandler);
+app.get("/p/:token", openPresupuestoShortLinkHandler);
+app.get("/server/p/:token", openPresupuestoShortLinkHandler);
+
 app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
   try {
     const accessToken = extractAccessToken(c.req.header("Authorization"));
@@ -1669,7 +2020,21 @@ app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
       return c.json({ error: signedUrlResult.error }, signedUrlResult.status);
     }
 
-    return c.json({ signedUrl: signedUrlResult.signedUrl });
+    let shortUrl: string | null = null;
+    if (Number.isFinite(reservaId) && reservaId > 0) {
+      try {
+        const shortLinkResult = await createPresupuestoShortLink(reservaId, 60);
+        shortUrl = shortLinkResult?.shortUrl || null;
+      } catch (shortLinkError) {
+        console.warn("No se pudo generar el enlace corto del presupuesto:", shortLinkError);
+      }
+    }
+
+    return c.json({
+      signedUrl: signedUrlResult.signedUrl,
+      shortUrl,
+      accessUrl: shortUrl || signedUrlResult.signedUrl,
+    });
   } catch (error) {
     console.error("Error in get-presupuesto-url endpoint:", error);
     return c.json({ error: error?.message ?? "Internal server error" }, 500);
@@ -1738,6 +2103,17 @@ const sendPresupuestoEmailHandler = async (c: any) => {
       return c.json({ error: signedUrlResult.error }, signedUrlResult.status);
     }
 
+    let shortUrl: string | null = null;
+    try {
+      const shortLinkResult = await createPresupuestoShortLink(
+        reservaData.id,
+        PRESUPUESTO_EMAIL_LINK_TTL_SECONDS,
+      );
+      shortUrl = shortLinkResult?.shortUrl || null;
+    } catch (shortLinkError) {
+      console.warn("No se pudo generar enlace corto para presupuesto por email:", shortLinkError);
+    }
+
     const presupuestoFileResult = await downloadPresupuestoFile(supabaseAdmin, presupuestoPath);
     if ("error" in presupuestoFileResult) {
       return c.json({ error: presupuestoFileResult.error }, presupuestoFileResult.status);
@@ -1757,7 +2133,7 @@ const sendPresupuestoEmailHandler = async (c: any) => {
       clienteNombre: reservaData.cliente_nombre,
       fechaInicio: reservaData.fecha_inicio,
       fechaFin: reservaData.fecha_fin,
-      downloadUrl: signedUrlResult.signedUrl,
+      downloadUrl: shortUrl || signedUrlResult.signedUrl,
       attachmentFileName,
       attachmentContent,
     });
@@ -1765,6 +2141,7 @@ const sendPresupuestoEmailHandler = async (c: any) => {
     return c.json({
       success: true,
       sentTo: clienteEmail,
+      shortUrl,
     });
   } catch (error) {
     console.error("Error in send-presupuesto-email endpoint:", error);
@@ -2406,6 +2783,34 @@ const publicReservaHandler = async (c) => {
       salonId: salonData.id,
     });
 
+    try {
+      const smtpConfig = getSmtpConfig();
+      const notificationEmailResult = await sendPublicReservaBackofficeNotificationEmails(
+        smtpConfig,
+        supabaseAdmin,
+        {
+          reservaId: reservaData.id,
+          clienteNombre: formatOptionalText(nombre, "Sin nombre"),
+          clienteEmail: formatOptionalText(email, "No informado"),
+          clienteTelefono: formatOptionalText(telefono, "No informado"),
+          salonNombre: formatOptionalText(salonData.nombre, "No informado"),
+          distribucionNombre: distribucionData?.nombre ?? null,
+          tipoEvento,
+          cantidadPersonas: totalPersonas,
+          fechaInicio,
+          fechaFin,
+        },
+      );
+
+      if (notificationEmailResult.sent) {
+        console.info(
+          `Notificacion por email de reserva publica enviada a ${notificationEmailResult.recipientsCount} destinatario(s).`,
+        );
+      }
+    } catch (emailNotificationError) {
+      console.warn("No se pudo enviar la notificacion por email de reserva publica:", emailNotificationError);
+    }
+
     const selectedServicios = Array.isArray(servicios) ? servicios : [];
     const serviciosIds = selectedServicios
       .map((item) => Number(item?.id_servicio))
@@ -2458,6 +2863,7 @@ const publicReservaHandler = async (c) => {
     let uploadErrorMsg: string | undefined = undefined;
     let signed = false;
     let signedErrorMsg: string | undefined = undefined;
+    let shortDownloadUrl: string | undefined = undefined;
     const fileName = buildPresupuestoFileName({
       nombreBase: nombre?.trim() || null,
       fechaInicio,
@@ -2506,16 +2912,22 @@ const publicReservaHandler = async (c) => {
           .update({ presupuesto_url: storagePath })
           .eq("id", reservaData.id);
 
-        const { data: signedData, error: signedError } = await supabaseAdmin.storage
-          .from("presupuestos")
-          .createSignedUrl(storagePath, 60 * 15);
-
-        if (signedError || !signedData) {
-          signedErrorMsg = signedError?.message || String(signedError);
+        const signedUrlResult = await createPresupuestoSignedUrl(supabaseAdmin, storagePath, 60 * 15);
+        if ("error" in signedUrlResult) {
+          signedErrorMsg = signedUrlResult.error;
           console.error("Error creando URL firmada:", signedErrorMsg);
         } else {
           signed = true;
-          downloadUrl = signedData.signedUrl;
+          downloadUrl = signedUrlResult.signedUrl;
+          try {
+            const shortLinkResult = await createPresupuestoShortLink(reservaData.id, 60 * 15);
+            shortDownloadUrl = shortLinkResult?.shortUrl;
+          } catch (shortLinkError) {
+            console.warn(
+              "No se pudo generar enlace corto para descarga de presupuesto publico:",
+              shortLinkError,
+            );
+          }
         }
       }
 
@@ -2531,6 +2943,8 @@ const publicReservaHandler = async (c) => {
       reservaId: reservaData.id,
       fileName,
       downloadUrl,
+      shortUrl: shortDownloadUrl,
+      accessUrl: shortDownloadUrl || downloadUrl,
       pdfGenerated,
       uploaded,
       signed,

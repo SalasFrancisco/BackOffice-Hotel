@@ -462,8 +462,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Dialog - Crear/Editar Categoría */}
       <Dialog open={showCategoriaDialog} onOpenChange={setShowCategoriaDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">
             <DialogTitle>
               {editingCategoria ? 'Editar Categoría' : 'Nueva Categoría'}
             </DialogTitle>
@@ -517,14 +517,15 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Dialog - Crear/Editar Servicio */}
       <Dialog open={showServicioDialog} onOpenChange={setShowServicioDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">
             <DialogTitle>
               {editingServicio ? 'Editar Servicio' : 'Nuevo Servicio'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveServicio} className="space-y-4 p-2">
-            <div>
+          <form onSubmit={handleSaveServicio} className="flex max-h-[calc(85vh-5rem)] flex-col">
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Categoría <span className="text-red-500">*</span>
               </label>
@@ -585,8 +586,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                 placeholder="Descripcion opcional"
               />
             </div>
+            </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 border-t bg-white px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowServicioDialog(false)}

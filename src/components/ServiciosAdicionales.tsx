@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, Perfil, CategoriaServicio, Servicio } from '../utils/supabase/client';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
+import { ServiceDescriptionEditor } from './ServiceDescriptionEditor';
 import {
   hasNonWhitespaceValue,
   preventInvalidNumberKeys,
@@ -39,7 +40,6 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   const [servicioDescripcion, setServicioDescripcion] = useState('');
   const [servicioPrecio, setServicioPrecio] = useState('');
   const [servicioCategoria, setServicioCategoria] = useState('');
-  const servicioDescripcionRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [selectedCategoria, setSelectedCategoria] = useState<number | null>(null);
 
@@ -202,32 +202,6 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     setServicioPrecio(servicio.precio.toString());
     setServicioCategoria(servicio.id_categoria.toString());
     setShowServicioDialog(true);
-  };
-
-  const applyServicioDescripcionFormat = (tagName: 'strong' | 'em') => {
-    const textarea = servicioDescripcionRef.current;
-    if (!textarea) return;
-
-    const openTag = `<${tagName}>`;
-    const closeTag = `</${tagName}>`;
-    const currentValue = servicioDescripcion;
-    const selectionStart = textarea.selectionStart ?? currentValue.length;
-    const selectionEnd = textarea.selectionEnd ?? currentValue.length;
-    const selectedText = currentValue.slice(selectionStart, selectionEnd);
-    const formattedText = `${openTag}${selectedText}${closeTag}`;
-    const nextValue =
-      `${currentValue.slice(0, selectionStart)}${formattedText}${currentValue.slice(selectionEnd)}`;
-
-    setServicioDescripcion(nextValue);
-
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const nextSelectionStart = selectionStart + openTag.length;
-      const nextSelectionEnd = selectedText
-        ? selectionEnd + openTag.length
-        : nextSelectionStart;
-      textarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
-    });
   };
 
   const handleSaveServicio = async (e: React.FormEvent) => {
@@ -605,52 +579,11 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               <label className="block text-sm text-gray-700 mb-2">
                 Descripción
               </label>
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applyServicioDescripcionFormat('strong');
-                  }}
-                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-                  title="Aplicar negrita"
-                >
-                  B
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    applyServicioDescripcionFormat('em');
-                  }}
-                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm italic text-gray-700 hover:bg-gray-50 transition-colors"
-                  title="Aplicar cursiva"
-                >
-                  I
-                </button>
-                <p className="text-xs text-gray-500">
-                  Selecciona texto y aplica negrita o cursiva. Ese formato se usa en el PDF.
-                </p>
-              </div>
-              <textarea
-                ref={servicioDescripcionRef}
+              <ServiceDescriptionEditor
                 value={servicioDescripcion}
-                onChange={(e) => setServicioDescripcion(e.target.value)}
-                rows={5}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                placeholder="Descripción opcional"
+                onChange={setServicioDescripcion}
+                placeholder="Descripcion opcional"
               />
-              <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                <p className="text-xs text-gray-500 mb-2">Vista previa</p>
-                {hasServiceDescriptionContent(servicioDescripcion) ? (
-                  <RichTextDescription
-                    value={servicioDescripcion}
-                    className="text-sm text-gray-700 leading-relaxed"
-                  />
-                ) : (
-                  <p className="text-sm text-gray-400">Sin descripcion</p>
-                )}
-              </div>
             </div>
 
             <div className="flex gap-3 pt-4">

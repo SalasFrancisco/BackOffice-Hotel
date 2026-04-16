@@ -368,7 +368,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
               />
             </div>
 
-            <div className="md:col-span-3">
+            <div className="col-span-full">
               <label className="block text-sm text-gray-700 mb-2">
                 Descripción
               </label>

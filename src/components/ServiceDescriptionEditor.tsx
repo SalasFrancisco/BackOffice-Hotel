@@ -131,7 +131,7 @@ export function ServiceDescriptionEditor({
             insertPlainTextAtCursor(event.clipboardData.getData('text/plain'));
             commitEditorValue();
           }}
-          className="min-h-[132px] w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="h-40 w-full overflow-y-auto rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
     </div>

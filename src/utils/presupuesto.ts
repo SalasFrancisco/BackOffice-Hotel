@@ -8,6 +8,12 @@ type PresupuestoServicio = {
   cantidad: number;
 };
 
+type PdfInlineFragment = {
+  text: string;
+  bold?: boolean;
+  italics?: boolean;
+};
+
 export type PresupuestoPayload = {
   reservaId: number;
   salon: Salon;
@@ -198,25 +204,80 @@ export const buildPresupuestoFileName = ({
   return `${evento} - ${fecha}.pdf`;
 };
 
-const buildServiciosBody = (servicios: PresupuestoServicio[]) => {
-  const headerRow = [
-    { text: 'Servicio', style: 'tableHeader' },
-    { text: 'Descripción', style: 'tableHeader' },
-    { text: 'Cantidad', style: 'tableHeader', alignment: 'center' },
-    { text: 'Precio unitario', style: 'tableHeader', alignment: 'right' },
-    { text: 'Subtotal', style: 'tableHeader', alignment: 'right' },
-  ];
+const decodeSupportedHtmlEntities = (value: string) =>
+  value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
 
+const parseInlineRichText = (value?: string | null): PdfInlineFragment[] => {
+  const source = (value || '').replace(/\r\n/g, '\n');
+  if (!source) return [{ text: '' }];
+
+  const tokens = source.split(/(<\/?(?:strong|b|em|i)\s*>|<br\s*\/?>)/gi);
+  const fragments: PdfInlineFragment[] = [];
+  let boldDepth = 0;
+  let italicDepth = 0;
+
+  const pushText = (text: string) => {
+    if (!text) return;
+
+    const decodedText = decodeSupportedHtmlEntities(text);
+    if (!decodedText) return;
+
+    fragments.push({
+      text: decodedText,
+      ...(boldDepth > 0 ? { bold: true } : {}),
+      ...(italicDepth > 0 ? { italics: true } : {}),
+    });
+  };
+
+  tokens.forEach((token) => {
+    const normalizedToken = token.toLowerCase();
+
+    if (/^<br\s*\/?>$/.test(normalizedToken)) {
+      pushText('\n');
+      return;
+    }
+
+    if (/^<(strong|b)\s*>$/.test(normalizedToken)) {
+      boldDepth += 1;
+      return;
+    }
+
+    if (/^<\/(strong|b)\s*>$/.test(normalizedToken)) {
+      boldDepth = Math.max(0, boldDepth - 1);
+      return;
+    }
+
+    if (/^<(em|i)\s*>$/.test(normalizedToken)) {
+      italicDepth += 1;
+      return;
+    }
+
+    if (/^<\/(em|i)\s*>$/.test(normalizedToken)) {
+      italicDepth = Math.max(0, italicDepth - 1);
+      return;
+    }
+
+    pushText(token);
+  });
+
+  return fragments.length > 0 ? fragments : [{ text: '' }];
+};
+
+const buildServiciosRows = (servicios: PresupuestoServicio[]) => {
   if (servicios.length === 0) {
     return [
-      headerRow,
       [
         {
           text: 'No se agregaron servicios adicionales para esta reserva.',
-          colSpan: 5,
+          colSpan: 4,
           style: 'tableCell',
         },
-        {},
         {},
         {},
         {},
@@ -224,21 +285,33 @@ const buildServiciosBody = (servicios: PresupuestoServicio[]) => {
     ];
   }
 
-  return [
-    headerRow,
-    ...servicios.map(({ servicio, cantidad }) => {
-      const unit = Number(servicio.precio) || 0;
-      const subtotal = unit * cantidad;
+  return servicios.map(({ servicio, cantidad }) => {
+    const unit = Number(servicio.precio) || 0;
+    const subtotal = unit * cantidad;
+    const servicioStack: Array<{
+      text: string | PdfInlineFragment[];
+      style: string;
+      bold?: boolean;
+      margin?: [number, number, number, number];
+    }> = [
+      { text: servicio.nombre, style: 'tableCell', bold: true },
+    ];
 
-      return [
-        { text: servicio.nombre, style: 'tableCell' },
-        { text: servicio.descripcion || 'Sin descripción', style: 'tableCell' },
-        { text: String(cantidad), style: 'tableCell', alignment: 'center' },
-        { text: formatCurrency(unit), style: 'tableCell', alignment: 'right' },
-        { text: formatCurrency(subtotal), style: 'tableCell', alignment: 'right' },
-      ];
-    }),
-  ];
+    if (servicio.descripcion) {
+      servicioStack.push({
+        text: parseInlineRichText(servicio.descripcion),
+        style: 'tableCellSecondary',
+        margin: [0, 3, 0, 0],
+      });
+    }
+
+    return [
+      { stack: servicioStack },
+      { text: String(cantidad), style: 'tableCell', alignment: 'center' },
+      { text: formatCurrency(unit), style: 'tableCell', alignment: 'right' },
+      { text: formatCurrency(subtotal), style: 'tableCell', alignment: 'right' },
+    ];
+  });
 };
 
 const parseTerminosLines = (text: string) => {
@@ -474,16 +547,15 @@ export async function generatePresupuestoDocumento({
       { text: 'Servicios adicionales', style: 'infoTitle' },
       {
         table: {
-          widths: ['*', '*', 'auto', 'auto', 'auto'],
+          widths: ['*', 'auto', 'auto', 'auto'],
           body: [
             [
-              { text: 'Servicio', style: 'detailTableHeader' },
-              { text: 'Descripción', style: 'detailTableHeader' },
+              { text: 'Servicio y descripción', style: 'detailTableHeader' },
               { text: 'Cantidad', style: 'detailTableHeader', alignment: 'center' },
               { text: 'Precio unitario', style: 'detailTableHeader', alignment: 'right' },
               { text: 'Subtotal', style: 'detailTableHeader', alignment: 'right' },
             ],
-            ...buildServiciosBody(servicios).slice(1),
+            ...buildServiciosRows(servicios),
           ],
         },
         layout: cardTableLayout,
@@ -525,6 +597,7 @@ export async function generatePresupuestoDocumento({
       detailTableHeader: { fontSize: 10, bold: true, fillColor: '#EEF2FF', color: '#1F2937' },
       tableHeader: { bold: true, fillColor: '#f5f5f5' },
       tableCell: { fontSize: 10 },
+      tableCellSecondary: { fontSize: 9, color: '#4B5563' },
       totalLabel: { fontSize: 11, bold: true, margin: [0, 4, 0, 4] },
       totalValue: { fontSize: 11, margin: [0, 4, 0, 4] },
       grandTotalLabel: { fontSize: 12, bold: true, margin: [0, 8, 0, 0] },

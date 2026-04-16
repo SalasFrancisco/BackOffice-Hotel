@@ -368,7 +368,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
               />
             </div>
 
-            <div className="col-span-full">
+            <div style={{ gridColumn: '1 / -1' }}>
               <label className="block text-sm text-gray-700 mb-2">
                 Descripción
               </label>

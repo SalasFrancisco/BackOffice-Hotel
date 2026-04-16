@@ -321,7 +321,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
         <h3 className="text-gray-900 mb-4">Datos del Salon</h3>
         <form onSubmit={handleSaveSalon} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre <span className="text-red-500">*</span>
@@ -368,7 +368,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
               />
             </div>
 
-            <div>
+            <div className="md:col-span-3">
               <label className="block text-sm text-gray-700 mb-2">
                 Descripción
               </label>

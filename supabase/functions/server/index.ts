@@ -311,6 +311,11 @@ type PresupuestoServicio = {
     nombre: string;
     descripcion?: string | null;
     precio: number;
+    categoria?: {
+      id: number;
+      nombre: string;
+      descripcion?: string | null;
+    } | null;
   };
   cantidad: number;
 };
@@ -402,33 +407,64 @@ const buildServiciosRows = (servicios: PresupuestoServicio[]) => {
     ];
   }
 
-  return servicios.map(({ servicio, cantidad }) => {
-    const unit = Number(servicio.precio) || 0;
-    const subtotal = unit * cantidad;
-    const servicioStack: Array<{
-      text: string | PdfInlineFragment[];
-      style: string;
-      bold?: boolean;
-      margin?: [number, number, number, number];
-    }> = [
-      { text: servicio.nombre, style: "tableCell", bold: true },
-    ];
+  const groupedServicios = new Map<string, PresupuestoServicio[]>();
 
-    if (servicio.descripcion) {
-      servicioStack.push({
-        text: parseInlineRichText(servicio.descripcion),
-        style: "tableCellSecondary",
-        margin: [0, 3, 0, 0],
-      });
+  servicios.forEach((item) => {
+    const categoriaNombre = item.servicio.categoria?.nombre?.trim() || "Sin categoría";
+    const categoriaServicios = groupedServicios.get(categoriaNombre);
+
+    if (categoriaServicios) {
+      categoriaServicios.push(item);
+      return;
     }
 
-    return [
-      { stack: servicioStack },
-      { text: String(cantidad), style: "tableCell", alignment: "center" },
-      { text: formatCurrency(unit), style: "tableCell", alignment: "right" },
-      { text: formatCurrency(subtotal), style: "tableCell", alignment: "right" },
-    ];
+    groupedServicios.set(categoriaNombre, [item]);
   });
+
+  const rows: Array<Array<Record<string, unknown>>> = [];
+
+  groupedServicios.forEach((categoriaServicios, categoriaNombre) => {
+    rows.push([
+      {
+        text: categoriaNombre,
+        colSpan: 4,
+        style: "serviceCategoryHeader",
+      },
+      {},
+      {},
+      {},
+    ]);
+
+    categoriaServicios.forEach(({ servicio, cantidad }) => {
+      const unit = Number(servicio.precio) || 0;
+      const subtotal = unit * cantidad;
+      const servicioStack: Array<{
+        text: string | PdfInlineFragment[];
+        style: string;
+        bold?: boolean;
+        margin?: [number, number, number, number];
+      }> = [
+        { text: servicio.nombre, style: "tableCell", bold: true },
+      ];
+
+      if (servicio.descripcion) {
+        servicioStack.push({
+          text: parseInlineRichText(servicio.descripcion),
+          style: "tableCellSecondary",
+          margin: [0, 3, 0, 0],
+        });
+      }
+
+      rows.push([
+        { stack: servicioStack },
+        { text: String(cantidad), style: "tableCell", alignment: "center" },
+        { text: formatCurrency(unit), style: "tableCell", alignment: "right" },
+        { text: formatCurrency(subtotal), style: "tableCell", alignment: "right" },
+      ]);
+    });
+  });
+
+  return rows;
 };
 
 const buildPresupuestoPdf = async (
@@ -678,6 +714,7 @@ const buildPresupuestoPdf = async (
       infoLabel: { fontSize: 10, bold: true, color: "#374151" },
       infoValue: { fontSize: 10, color: "#111827" },
       detailTableHeader: { fontSize: 10, bold: true, fillColor: "#EEF2FF", color: "#1F2937" },
+      serviceCategoryHeader: { fontSize: 10, bold: true, fillColor: "#F3F4F6", color: "#111827" },
       tableHeader: { bold: true, fillColor: "#f5f5f5" },
       tableCell: { fontSize: 10 },
       tableCellSecondary: { fontSize: 9, color: "#4B5563" },
@@ -2893,7 +2930,7 @@ const publicReservaHandler = async (c) => {
     if (serviciosIds.length > 0) {
       const { data: serviciosData, error: serviciosError } = await supabaseAdmin
         .from("servicios")
-        .select("id, nombre, descripcion, precio")
+        .select("id, nombre, descripcion, precio, categoria:categorias_servicios(id, nombre, descripcion)")
         .in("id", serviciosIds);
 
       if (serviciosError) {

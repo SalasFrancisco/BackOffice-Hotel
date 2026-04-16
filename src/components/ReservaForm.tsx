@@ -13,6 +13,7 @@ import {
   ReservaPendingConflictComparable,
 } from '../utils/reservaPendingConflict';
 import { deletePresupuestoFile } from '../utils/reservaDeletion';
+import { RichTextDescription } from './RichTextDescription';
 import {
   getAllowedReservaEstadoTransitions,
   isReservaEstadoTransitionAllowed,
@@ -1001,7 +1002,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                                   </p>
                                 </div>
                                 {servicio.descripcion && (
-                                  <p className="text-xs text-gray-600 mt-1">{servicio.descripcion}</p>
+                                  <RichTextDescription
+                                    value={servicio.descripcion}
+                                    className="text-xs text-gray-600 mt-1 leading-relaxed"
+                                  />
                                 )}
                                 {isSelected && (
                                   <div className="flex items-center gap-2 mt-2">

@@ -3,6 +3,7 @@ import { supabase, Reserva, ReservaServicio } from '../utils/supabase/client';
 import { X, Trash2, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import { ConfirmDialog } from './ConfirmDialog';
+import { RichTextDescription } from './RichTextDescription';
 import {
   getAllowedReservaEstadoTransitions,
   isReservaEstadoTransitionAllowed,
@@ -241,7 +242,10 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
                         <p className="text-xs text-gray-600">{rs.servicio.categoria.nombre}</p>
                       )}
                       {rs.servicio?.descripcion && (
-                        <p className="text-xs text-gray-600 mt-1">{rs.servicio.descripcion}</p>
+                        <RichTextDescription
+                          value={rs.servicio.descripcion}
+                          className="text-xs text-gray-600 mt-1 leading-relaxed"
+                        />
                       )}
                     </div>
                     <div className="text-right">

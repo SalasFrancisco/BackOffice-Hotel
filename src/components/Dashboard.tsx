@@ -101,13 +101,16 @@ export function Dashboard({ perfil }: DashboardProps) {
         ? (totalConfirmadasCalc / totalSolicitudesCalc) * 100
         : 0;
 
-      const reservasPagadas = reservasMetricas.filter((reservaMetrica) => reservaMetrica.estado === 'Pagado');
-      const capitalObtenidoCalc = reservasPagadas.reduce(
+      const estadosConCapital = new Set(['Confirmado', 'Pagado']);
+      const reservasConCapital = reservasMetricas.filter((reservaMetrica) =>
+        estadosConCapital.has(reservaMetrica.estado),
+      );
+      const capitalObtenidoCalc = reservasConCapital.reduce(
         (acc, reservaMetrica) => acc + Number(reservaMetrica.monto || 0),
         0,
       );
-      const ticketPromedioCalc = reservasPagadas.length > 0
-        ? capitalObtenidoCalc / reservasPagadas.length
+      const ticketPromedioCalc = reservasConCapital.length > 0
+        ? capitalObtenidoCalc / reservasConCapital.length
         : 0;
 
       setTotalSolicitudes(totalSolicitudesCalc);
@@ -217,7 +220,7 @@ export function Dashboard({ perfil }: DashboardProps) {
               <Wallet className="w-6 h-6 text-purple-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Capital Obtenido (Reservas Pagadas)</p>
+          <p className="text-gray-600 text-sm mb-1">Capital Obtenido</p>
           <p className="text-3xl text-gray-900">{formatCurrency(capitalObtenido)}</p>
         </div>
 
@@ -227,7 +230,7 @@ export function Dashboard({ perfil }: DashboardProps) {
               <ReceiptText className="w-6 h-6 text-green-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Ticket Promedio (Pagadas)</p>
+          <p className="text-gray-600 text-sm mb-1">Ticket Promedio</p>
           <p className="text-3xl text-gray-900">{formatCurrency(ticketPromedioPagado)}</p>
         </div>
       </div>

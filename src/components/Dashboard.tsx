@@ -336,7 +336,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           <p className="text-gray-600 text-sm mb-1">Ocupacion Mensual de Salones</p>
           <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
           <p className="text-sm text-amber-700 mt-1">
-            {salonesOcupadosMensual} / {totalSalonesMensual} {filterSalon ? 'dias del salon' : 'dias de todos los salones'} ocupados</p>
+            {salonesOcupadosMensual} / {totalSalonesMensual} {filterSalon ? 'dias del salon' : 'dias de todos los salones'} ocupados
           </p>
         </div>
 

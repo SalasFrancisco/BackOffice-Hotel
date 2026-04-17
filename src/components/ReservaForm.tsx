@@ -218,6 +218,43 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     ? distribuciones.find(d => d.id === idDistribucion) || null
     : null;
   const totalPersonasNumber = parseInt(cantidadPersonas, 10) || 0;
+  const salonesRecomendadosData = useMemo(() => {
+    const salonesOrdenadosPorNombre = [...salones].sort((a, b) =>
+      String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'),
+    );
+
+    if (totalPersonasNumber <= 0) {
+      return {
+        hasPersonas: false,
+        recommended: salonesOrdenadosPorNombre,
+        others: [] as Salon[],
+        suggested: null as Salon | null,
+      };
+    }
+
+    const recommended = salonesOrdenadosPorNombre
+      .filter((salon) => Number(salon.capacidad || 0) >= totalPersonasNumber)
+      .sort((a, b) => {
+        const capacityDiff = Number(a.capacidad || 0) - Number(b.capacidad || 0);
+        if (capacityDiff !== 0) return capacityDiff;
+        return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+      });
+
+    const recommendedIds = new Set(recommended.map((salon) => salon.id));
+    const others = salonesOrdenadosPorNombre.filter((salon) => !recommendedIds.has(salon.id));
+
+    return {
+      hasPersonas: true,
+      recommended,
+      others,
+      suggested: recommended[0] || null,
+    };
+  }, [salones, totalPersonasNumber]);
+  const formatSalonOptionLabel = (salon: Salon) => (
+    `${salon.nombre} - Cap: ${salon.capacidad} - ${
+      Number(salon.precio_base || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
+    }`
+  );
   const exceedsSalonCapacity = Boolean(
     currentSalon && totalPersonasNumber > currentSalon.capacidad,
   );
@@ -766,12 +803,41 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value={0}>Seleccione un salón</option>
-              {salones.map(salon => (
+              {!salonesRecomendadosData.hasPersonas && salonesRecomendadosData.recommended.map((salon) => (
                 <option key={salon.id} value={salon.id}>
-                  {salon.nombre} - ${salon.precio_base}
+                  {formatSalonOptionLabel(salon)}
                 </option>
               ))}
+              {salonesRecomendadosData.hasPersonas && salonesRecomendadosData.recommended.length > 0 && (
+                <optgroup label="Recomendados">
+                  {salonesRecomendadosData.recommended.map((salon) => (
+                    <option key={salon.id} value={salon.id}>
+                      {formatSalonOptionLabel(salon)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {salonesRecomendadosData.hasPersonas && salonesRecomendadosData.others.length > 0 && (
+                <optgroup label="Otros">
+                  {salonesRecomendadosData.others.map((salon) => (
+                    <option key={salon.id} value={salon.id}>
+                      {formatSalonOptionLabel(salon)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+            {salonesRecomendadosData.hasPersonas && salonesRecomendadosData.suggested && (
+              <p className="text-xs text-blue-700 mt-1">
+                Recomendado para {totalPersonasNumber} personas: {salonesRecomendadosData.suggested.nombre}
+                {' '}({salonesRecomendadosData.suggested.capacidad} personas)
+              </p>
+            )}
+            {salonesRecomendadosData.hasPersonas && !salonesRecomendadosData.suggested && (
+              <p className="text-xs text-amber-700 mt-1">
+                No hay salones con capacidad para {totalPersonasNumber} personas. Se muestran opciones alternativas.
+              </p>
+            )}
           </div>
 
           <div>
@@ -1125,3 +1191,4 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     </div>
   );
 }
+

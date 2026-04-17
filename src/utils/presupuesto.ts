@@ -530,7 +530,7 @@ export async function generatePresupuestoDocumento({
           body: [
             [
               { text: 'Salón y descripción', style: 'detailTableHeader' },
-              { text: 'Cantidad', style: 'detailTableHeader', alignment: 'center' },
+              { text: 'Cantidad (días)', style: 'detailTableHeader', alignment: 'center' },
               { text: 'Precio unitario', style: 'detailTableHeader', alignment: 'right' },
               { text: 'Subtotal', style: 'detailTableHeader', alignment: 'right' },
             ],

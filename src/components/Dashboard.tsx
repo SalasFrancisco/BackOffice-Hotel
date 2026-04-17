@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil, Reserva, Salon } from '../utils/supabase/client';
-import { AlertCircle, ChevronLeft, ChevronRight, X, CheckCircle2, Wallet, ReceiptText } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, X, CheckCircle2, Wallet, ReceiptText, Building2, BarChart3 } from 'lucide-react';
 import { ReservaModal } from './ReservaModal';
 
 const ESTADO_COLORS = {
@@ -33,6 +33,12 @@ export function Dashboard({ perfil }: DashboardProps) {
   const [porcentajeConfirmacion, setPorcentajeConfirmacion] = useState(0);
   const [capitalObtenido, setCapitalObtenido] = useState(0);
   const [ticketPromedioPagado, setTicketPromedioPagado] = useState(0);
+  const [porcentajeOcupacionMensual, setPorcentajeOcupacionMensual] = useState(0);
+  const [salonesOcupadosMensual, setSalonesOcupadosMensual] = useState(0);
+  const [totalSalonesMensual, setTotalSalonesMensual] = useState(0);
+  const [porcentajeFacturacionMensual, setPorcentajeFacturacionMensual] = useState(0);
+  const [facturacionMensualActual, setFacturacionMensualActual] = useState(0);
+  const [facturacionMensualPotencial, setFacturacionMensualPotencial] = useState(0);
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('es-AR', {
@@ -85,6 +91,40 @@ export function Dashboard({ perfil }: DashboardProps) {
       if (reservasError) throw reservasError;
       setReservas(reservasData || []);
 
+      // KPIs mensuales (segun mes seleccionado)
+      const { data: reservasMensualesData, error: reservasMensualesError } = await supabase
+        .from('reservas')
+        .select('id_salon, estado, monto')
+        .or(`and(fecha_inicio.lte.${endOfMonth},fecha_fin.gte.${startOfMonth})`);
+
+      if (reservasMensualesError) throw reservasMensualesError;
+
+      const reservasMensuales = reservasMensualesData || [];
+      const reservasMensualesCerradas = reservasMensuales.filter(
+        (reservaMensual) => reservaMensual.estado === 'Confirmado' || reservaMensual.estado === 'Pagado',
+      );
+      const salonesOcupadosCalc = new Set(
+        reservasMensualesCerradas
+          .map((reservaMensual) => Number(reservaMensual.id_salon))
+          .filter((idSalon) => Number.isFinite(idSalon)),
+      ).size;
+      const totalSalonesCalc = (salonesData || []).length;
+      const porcentajeOcupacionCalc = totalSalonesCalc > 0
+        ? (salonesOcupadosCalc / totalSalonesCalc) * 100
+        : 0;
+
+      const facturacionMensualActualCalc = reservasMensualesCerradas.reduce(
+        (acc, reservaMensual) => acc + Number(reservaMensual.monto || 0),
+        0,
+      );
+      const facturacionMensualPotencialCalc = (salonesData || []).reduce(
+        (acc, salon) => acc + Number(salon.precio_base || 0),
+        0,
+      );
+      const porcentajeFacturacionMensualCalc = facturacionMensualPotencialCalc > 0
+        ? (facturacionMensualActualCalc / facturacionMensualPotencialCalc) * 100
+        : 0;
+
       // KPIs de negocio (globales)
       const { data: reservasMetricasData, error: reservasMetricasError } = await supabase
         .from('reservas')
@@ -118,6 +158,12 @@ export function Dashboard({ perfil }: DashboardProps) {
       setPorcentajeConfirmacion(porcentajeConfirmacionCalc);
       setCapitalObtenido(capitalObtenidoCalc);
       setTicketPromedioPagado(ticketPromedioCalc);
+      setPorcentajeOcupacionMensual(porcentajeOcupacionCalc);
+      setSalonesOcupadosMensual(salonesOcupadosCalc);
+      setTotalSalonesMensual(totalSalonesCalc);
+      setPorcentajeFacturacionMensual(porcentajeFacturacionMensualCalc);
+      setFacturacionMensualActual(facturacionMensualActualCalc);
+      setFacturacionMensualPotencial(facturacionMensualPotencialCalc);
 
     } catch (err: any) {
       console.error('Error loading dashboard:', err);
@@ -187,8 +233,8 @@ export function Dashboard({ perfil }: DashboardProps) {
       <div className="p-8">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
             ))}
           </div>
@@ -202,7 +248,7 @@ export function Dashboard({ perfil }: DashboardProps) {
       <h2 className="text-gray-900 mb-6">Dashboard</h2>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -232,6 +278,30 @@ export function Dashboard({ perfil }: DashboardProps) {
           </div>
           <p className="text-gray-600 text-sm mb-1">Ticket Promedio</p>
           <p className="text-3xl text-gray-900">{formatCurrency(ticketPromedioPagado)}</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-amber-600" />
+            </div>
+          </div>
+          <p className="text-gray-600 text-sm mb-1">Ocupacion Mensual de Salones</p>
+          <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
+          <p className="text-sm text-amber-700 mt-1">{salonesOcupadosMensual} / {totalSalonesMensual} salones</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-cyan-600" />
+            </div>
+          </div>
+          <p className="text-gray-600 text-sm mb-1">Facturacion Mensual vs Potencial</p>
+          <p className="text-3xl text-gray-900">{porcentajeFacturacionMensual.toFixed(1)}%</p>
+          <p className="text-sm text-cyan-700 mt-1">
+            {formatCurrency(facturacionMensualActual)} / {formatCurrency(facturacionMensualPotencial)}
+          </p>
         </div>
       </div>
 

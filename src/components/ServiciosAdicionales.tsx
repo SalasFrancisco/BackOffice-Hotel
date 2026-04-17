@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
@@ -40,8 +40,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   const [servicioDescripcion, setServicioDescripcion] = useState('');
   const [servicioPrecio, setServicioPrecio] = useState('');
   const [servicioCategoria, setServicioCategoria] = useState('');
-
-  const [selectedCategoria, setSelectedCategoria] = useState<number | null>(null);
+  const [showOrdenCategoriasDialog, setShowOrdenCategoriasDialog] = useState(false);
+  const [categoriasOrdenDraft, setCategoriasOrdenDraft] = useState<CategoriaServicio[]>([]);
+  const [savingOrdenCategorias, setSavingOrdenCategorias] = useState(false);
 
   // Confirm dialogs
   const [confirmDeleteCategoria, setConfirmDeleteCategoria] = useState<{ open: boolean; categoriaId: number | null }>({
@@ -57,6 +58,28 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     loadData();
   }, []);
 
+  const sortCategorias = (categoriasInput: CategoriaServicio[]) =>
+    [...categoriasInput].sort((categoriaA, categoriaB) => {
+      const ordenA = Number(categoriaA.orden);
+      const ordenB = Number(categoriaB.orden);
+      const tieneOrdenA = Number.isFinite(ordenA) && ordenA > 0;
+      const tieneOrdenB = Number.isFinite(ordenB) && ordenB > 0;
+
+      if (tieneOrdenA && tieneOrdenB && ordenA !== ordenB) {
+        return ordenA - ordenB;
+      }
+      if (tieneOrdenA && !tieneOrdenB) return -1;
+      if (!tieneOrdenA && tieneOrdenB) return 1;
+
+      return categoriaA.nombre.localeCompare(categoriaB.nombre, 'es', { sensitivity: 'base' });
+    });
+
+  const isOrdenColumnMissingError = (error: unknown) => {
+    if (!error || typeof error !== 'object' || !('message' in error)) return false;
+    const message = String((error as { message?: string }).message || '').toLowerCase();
+    return message.includes('orden') && message.includes('categorias_servicios');
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -68,7 +91,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         .order('nombre');
 
       if (categoriasError) throw categoriasError;
-      setCategorias(categoriasData || []);
+      setCategorias(sortCategorias(categoriasData || []));
 
       // Load servicios
       const { data: serviciosData, error: serviciosError } = await supabase
@@ -130,14 +153,35 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         setMessage({ type: 'success', text: 'Categoría actualizada correctamente' });
       } else {
         // Create
-        const { error } = await supabase
+        const siguienteOrden = categorias.reduce((maxOrden, categoria) => {
+          const ordenCategoria = Number(categoria.orden);
+          return Number.isFinite(ordenCategoria) && ordenCategoria > maxOrden
+            ? ordenCategoria
+            : maxOrden;
+        }, 0) + 1;
+
+        const payloadBase = {
+          nombre: categoriaNombreSanitizado,
+          descripcion: hasNonWhitespaceValue(categoriaDescripcionSanitizada) ? categoriaDescripcionSanitizada : null,
+        };
+
+        const { error: errorConOrden } = await supabase
           .from('categorias_servicios')
           .insert({
-            nombre: categoriaNombreSanitizado,
-            descripcion: hasNonWhitespaceValue(categoriaDescripcionSanitizada) ? categoriaDescripcionSanitizada : null,
+            ...payloadBase,
+            orden: siguienteOrden,
           });
 
-        if (error) throw error;
+        if (errorConOrden) {
+          if (isOrdenColumnMissingError(errorConOrden)) {
+            const { error: errorSinOrden } = await supabase
+              .from('categorias_servicios')
+              .insert(payloadBase);
+            if (errorSinOrden) throw errorSinOrden;
+          } else {
+            throw errorConOrden;
+          }
+        }
         setMessage({ type: 'success', text: 'Categoría creada correctamente' });
       }
 
@@ -173,6 +217,63 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
       console.error('Error deleting categoria:', err);
       setMessage({ type: 'error', text: err.message });
       setConfirmDeleteCategoria({ open: false, categoriaId: null });
+    }
+  };
+
+  const handleOpenOrdenCategoriasDialog = () => {
+    setCategoriasOrdenDraft([...categorias]);
+    setShowOrdenCategoriasDialog(true);
+  };
+
+  const moveCategoriaInDraft = (index: number, direction: -1 | 1) => {
+    setCategoriasOrdenDraft((prev) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [movedCategoria] = next.splice(index, 1);
+      next.splice(targetIndex, 0, movedCategoria);
+      return next;
+    });
+  };
+
+  const handleSaveOrdenCategorias = async () => {
+    if (categoriasOrdenDraft.length === 0) {
+      setShowOrdenCategoriasDialog(false);
+      return;
+    }
+
+    try {
+      setSavingOrdenCategorias(true);
+      setMessage(null);
+
+      await Promise.all(
+        categoriasOrdenDraft.map(async (categoria, index) => {
+          const { error } = await supabase
+            .from('categorias_servicios')
+            .update({ orden: index + 1 })
+            .eq('id', categoria.id);
+
+          if (error) throw error;
+        }),
+      );
+
+      setShowOrdenCategoriasDialog(false);
+      setCategoriasOrdenDraft([]);
+      setMessage({ type: 'success', text: 'Orden de categorias actualizado correctamente' });
+      await loadData();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error saving categorias order:', err);
+      if (isOrdenColumnMissingError(err)) {
+        setMessage({
+          type: 'error',
+          text: 'No se puede guardar el orden personalizado porque falta la columna \"orden\" en categorias_servicios.',
+        });
+      } else {
+        setMessage({ type: 'error', text: err.message });
+      }
+    } finally {
+      setSavingOrdenCategorias(false);
     }
   };
 
@@ -350,6 +451,13 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
             <Plus className="w-5 h-5" />
             Nuevo Servicio
           </button>
+          <button
+            onClick={handleOpenOrdenCategoriasDialog}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+          >
+            <ListOrdered className="w-5 h-5" />
+            Ordenar categorias
+          </button>
         </div>
       )}
 
@@ -460,7 +568,92 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         )}
       </div>
 
-      {/* Dialog - Crear/Editar Categoría */}
+      {/* Dialog - Ordenar Categorias */}
+      <Dialog
+        open={showOrdenCategoriasDialog}
+        onOpenChange={(open) => {
+          if (savingOrdenCategorias) return;
+          setShowOrdenCategoriasDialog(open);
+          if (!open) setCategoriasOrdenDraft([]);
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden p-0">
+          <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">
+            <DialogTitle>Ordenar categorias</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex max-h-[calc(85vh-5rem)] flex-col">
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <p className="text-sm text-gray-600">
+                Usa las flechas para mover cada categoria y luego guarda el orden.
+              </p>
+
+              {categoriasOrdenDraft.length === 0 ? (
+                <p className="text-sm text-gray-500">No hay categorias para ordenar.</p>
+              ) : (
+                <div className="space-y-2">
+                  {categoriasOrdenDraft.map((categoria, index) => (
+                    <div
+                      key={categoria.id}
+                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="text-xs text-gray-500">Posicion {index + 1}</p>
+                        <p className="truncate text-sm text-gray-900">{categoria.nombre}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveCategoriaInDraft(index, -1)}
+                          disabled={index === 0 || savingOrdenCategorias}
+                          className="rounded-lg p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="Mover arriba"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveCategoriaInDraft(index, 1)}
+                          disabled={index === categoriasOrdenDraft.length - 1 || savingOrdenCategorias}
+                          className="rounded-lg p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="Mover abajo"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 border-t bg-white px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOrdenCategoriasDialog(false);
+                  setCategoriasOrdenDraft([]);
+                }}
+                disabled={savingOrdenCategorias}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveOrdenCategorias}
+                disabled={savingOrdenCategorias || categoriasOrdenDraft.length < 2}
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingOrdenCategorias ? 'Guardando...' : 'Guardar orden'}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog - Crear/Editar Categoria */}
       <Dialog open={showCategoriaDialog} onOpenChange={setShowCategoriaDialog}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-hidden p-0">
           <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">

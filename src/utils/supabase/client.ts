@@ -33,6 +33,7 @@ export type CategoriaServicio = {
   id: number;
   nombre: string;
   descripcion?: string;
+  orden?: number | null;
   creado_en: string;
 };
 

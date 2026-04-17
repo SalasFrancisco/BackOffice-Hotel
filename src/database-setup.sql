@@ -118,8 +118,23 @@ create table if not exists public.categorias_servicios (
   id bigint generated always as identity primary key,
   nombre text not null,
   descripcion text,
+  orden int not null default 0,
   creado_en timestamptz default now()
 );
+
+alter table public.categorias_servicios add column if not exists orden int not null default 0;
+
+with categorias_ordenables as (
+  select
+    id,
+    row_number() over (order by nombre asc, id asc) as posicion
+  from public.categorias_servicios
+  where coalesce(orden, 0) = 0
+)
+update public.categorias_servicios categoria
+set orden = categorias_ordenables.posicion
+from categorias_ordenables
+where categoria.id = categorias_ordenables.id;
 
 -- Servicios Adicionales
 create table if not exists public.servicios (

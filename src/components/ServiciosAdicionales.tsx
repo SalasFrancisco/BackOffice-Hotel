@@ -453,7 +453,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           </button>
           <button
             onClick={handleOpenOrdenCategoriasDialog}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <ListOrdered className="w-5 h-5" />
             Ordenar categorias
@@ -644,7 +644,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                 type="button"
                 onClick={handleSaveOrdenCategorias}
                 disabled={savingOrdenCategorias || categoriasOrdenDraft.length < 2}
-                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savingOrdenCategorias ? 'Guardando...' : 'Guardar orden'}
               </button>

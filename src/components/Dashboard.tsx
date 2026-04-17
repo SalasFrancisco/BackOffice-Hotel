@@ -94,7 +94,7 @@ export function Dashboard({ perfil }: DashboardProps) {
       // KPIs mensuales (segun mes seleccionado)
       const { data: reservasMensualesData, error: reservasMensualesError } = await supabase
         .from('reservas')
-        .select('id_salon, estado, monto')
+        .select('id_salon, estado, monto, fecha_inicio, fecha_fin')
         .or(`and(fecha_inicio.lte.${endOfMonth},fecha_fin.gte.${startOfMonth})`);
 
       if (reservasMensualesError) throw reservasMensualesError;
@@ -103,14 +103,45 @@ export function Dashboard({ perfil }: DashboardProps) {
       const reservasMensualesCerradas = reservasMensuales.filter(
         (reservaMensual) => reservaMensual.estado === 'Confirmado' || reservaMensual.estado === 'Pagado',
       );
-      const salonesOcupadosCalc = new Set(
-        reservasMensualesCerradas
-          .map((reservaMensual) => Number(reservaMensual.id_salon))
-          .filter((idSalon) => Number.isFinite(idSalon)),
-      ).size;
+
       const totalSalonesCalc = (salonesData || []).length;
-      const porcentajeOcupacionCalc = totalSalonesCalc > 0
-        ? (salonesOcupadosCalc / totalSalonesCalc) * 100
+      const monthStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1, 0, 0, 0, 0);
+      const monthEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      const daysInCurrentMonth = monthEndDate.getDate();
+      const totalDiaSalonCalc = totalSalonesCalc * daysInCurrentMonth;
+
+      const buildDayKey = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const diaSalonOcupados = new Set<string>();
+      reservasMensualesCerradas.forEach((reservaMensual) => {
+        const salonId = Number(reservaMensual.id_salon);
+        if (!Number.isFinite(salonId)) return;
+
+        const inicioReserva = new Date(reservaMensual.fecha_inicio);
+        const finReserva = new Date(reservaMensual.fecha_fin);
+        if (Number.isNaN(inicioReserva.getTime()) || Number.isNaN(finReserva.getTime())) return;
+
+        const inicioEfectivo = inicioReserva > monthStartDate ? inicioReserva : monthStartDate;
+        const finEfectivo = finReserva < monthEndDate ? finReserva : monthEndDate;
+        if (inicioEfectivo > finEfectivo) return;
+
+        const cursor = new Date(inicioEfectivo.getFullYear(), inicioEfectivo.getMonth(), inicioEfectivo.getDate());
+        const finDia = new Date(finEfectivo.getFullYear(), finEfectivo.getMonth(), finEfectivo.getDate());
+
+        while (cursor <= finDia) {
+          diaSalonOcupados.add(`${salonId}-${buildDayKey(cursor)}`);
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      });
+
+      const salonesOcupadosCalc = diaSalonOcupados.size;
+      const porcentajeOcupacionCalc = totalDiaSalonCalc > 0
+        ? (salonesOcupadosCalc / totalDiaSalonCalc) * 100
         : 0;
 
       const facturacionMensualActualCalc = reservasMensualesCerradas.reduce(
@@ -160,7 +191,7 @@ export function Dashboard({ perfil }: DashboardProps) {
       setTicketPromedioPagado(ticketPromedioCalc);
       setPorcentajeOcupacionMensual(porcentajeOcupacionCalc);
       setSalonesOcupadosMensual(salonesOcupadosCalc);
-      setTotalSalonesMensual(totalSalonesCalc);
+      setTotalSalonesMensual(totalDiaSalonCalc);
       setPorcentajeFacturacionMensual(porcentajeFacturacionMensualCalc);
       setFacturacionMensualActual(facturacionMensualActualCalc);
       setFacturacionMensualPotencial(facturacionMensualPotencialCalc);
@@ -288,7 +319,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           </div>
           <p className="text-gray-600 text-sm mb-1">Ocupacion Mensual de Salones</p>
           <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
-          <p className="text-sm text-amber-700 mt-1">{salonesOcupadosMensual} / {totalSalonesMensual} salones</p>
+          <p className="text-sm text-amber-700 mt-1">{salonesOcupadosMensual} / {totalSalonesMensual} dias-salon</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

@@ -70,6 +70,46 @@ const parseShortDateToIso = (value: string): string | null => {
   return `${String(fullYear).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 };
 
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const parseIsoDateToUtcTimestamp = (isoDate: string): number | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  const utcTimestamp = Date.UTC(year, month - 1, day);
+  const parsedDate = new Date(utcTimestamp);
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return utcTimestamp;
+};
+
+const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | null): number => {
+  if (!startIsoDate || !endIsoDate) return 1;
+
+  const startTimestamp = parseIsoDateToUtcTimestamp(startIsoDate);
+  const endTimestamp = parseIsoDateToUtcTimestamp(endIsoDate);
+  if (startTimestamp === null || endTimestamp === null || endTimestamp < startTimestamp) {
+    return 1;
+  }
+
+  return Math.floor((endTimestamp - startTimestamp) / MILLISECONDS_PER_DAY) + 1;
+};
+
 export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProps) {
   const CLIENTE_PDF_NOMBRE = 'Reserva sin cliente';
   const CAPACITY_WARNING_STYLES = {
@@ -169,8 +209,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
   const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
   const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
+  const eventDaysCount = getEventDaysCount(fechaInicioIsoFromInput, fechaFinIsoFromInput);
 
   const currentSalon = salones.find(s => s.id === idSalon) || null;
+  const currentSalonDailyPrice = currentSalon?.precio_base || 0;
+  const currentReservaTotal = currentSalonDailyPrice * eventDaysCount;
   const currentDistribucion = idDistribucion
     ? distribuciones.find(d => d.id === idDistribucion) || null
     : null;
@@ -476,8 +519,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       }
 
       const { data: userData } = await supabase.auth.getUser();
-      // Obtener precio base del salon seleccionado
-      const monto = selectedSalon?.precio_base || 0;
+      const eventDaysForMonto = getEventDaysCount(fechaInicioIso, fechaFinIso);
+      const salonDailyPrice = selectedSalon?.precio_base || 0;
+      const monto = salonDailyPrice * eventDaysForMonto;
 
       const reservaData = {
         cliente_nombre: nombreClienteSanitizado,
@@ -587,6 +631,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               fechaFin: fechaFinIsoString,
               tipoEvento: tipoEventoNombre,
               totalSalon: monto,
+              precioSalonDiario: salonDailyPrice,
+              diasSalon: eventDaysForMonto,
               cantidadPersonas: totalPersonas,
               servicios: serviciosDetalle,
               storagePath: `reservas/${reservaId}/${fileName}`,
@@ -932,8 +978,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         {idSalon > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
-              <strong>Monto de la reserva:</strong> ${salones.find(s => s.id === idSalon)?.precio_base.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-              <span className="text-xs block mt-1">(Precio base del salón seleccionado)</span>
+              <strong>Monto de la reserva:</strong> ${currentReservaTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              <span className="text-xs block mt-1">
+                ({currentSalonDailyPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por dia x {eventDaysCount} {eventDaysCount === 1 ? 'dia' : 'dias'})
+              </span>
             </p>
           </div>
         )}

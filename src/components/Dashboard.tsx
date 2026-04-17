@@ -164,10 +164,11 @@ export function Dashboard({ perfil }: DashboardProps) {
         (acc, reservaMensual) => acc + Number(reservaMensual.monto || 0),
         0,
       );
-      const facturacionMensualPotencialCalc = (salonesData || []).reduce(
+      const precioDiarioTotalSalonesCalc = (salonesData || []).reduce(
         (acc, salon) => acc + Number(salon.precio_base || 0),
         0,
       );
+      const facturacionMensualPotencialCalc = precioDiarioTotalSalonesCalc * daysInCurrentMonth;
       const porcentajeFacturacionMensualCalc = facturacionMensualPotencialCalc > 0
         ? (facturacionMensualActualCalc / facturacionMensualPotencialCalc) * 100
         : 0;

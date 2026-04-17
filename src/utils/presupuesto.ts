@@ -27,6 +27,8 @@ export type PresupuestoPayload = {
   fechaFin: string;
   tipoEvento?: string | null;
   totalSalon: number;
+  precioSalonDiario?: number;
+  diasSalon?: number;
   cantidadPersonas: number;
   servicios: PresupuestoServicio[];
   storagePath?: string;
@@ -398,6 +400,8 @@ export async function generatePresupuestoDocumento({
   fechaFin,
   tipoEvento,
   totalSalon,
+  precioSalonDiario: precioSalonDiarioInput,
+  diasSalon: diasSalonInput,
   cantidadPersonas,
   servicios,
   storagePath: storagePathInput,
@@ -412,6 +416,8 @@ export async function generatePresupuestoDocumento({
     return acc + unit * cantidad;
   }, 0);
 
+  const salonDailyPrice = Number(precioSalonDiarioInput ?? salon.precio_base) || 0;
+  const salonDays = Math.max(1, Math.floor(Number(diasSalonInput) || 1));
   const totalGeneral = totalSalon + totalServicios;
   const capacidadMaxima =
     distribucion?.capacidad && distribucion.capacidad > 0
@@ -535,8 +541,8 @@ export async function generatePresupuestoDocumento({
                   : [{ text: salon.nombre, bold: true }],
                 style: 'tableCell',
               },
-              { text: '1', style: 'tableCell', alignment: 'center' },
-              { text: formatCurrency(totalSalon), style: 'tableCell', alignment: 'right' },
+              { text: String(salonDays), style: 'tableCell', alignment: 'center' },
+              { text: formatCurrency(salonDailyPrice), style: 'tableCell', alignment: 'right' },
               { text: formatCurrency(totalSalon), style: 'tableCell', alignment: 'right' },
             ],
           ],

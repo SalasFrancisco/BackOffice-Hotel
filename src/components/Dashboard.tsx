@@ -108,8 +108,6 @@ export function Dashboard({ perfil }: DashboardProps) {
       const monthStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const monthEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       const daysInCurrentMonth = monthEndDate.getDate();
-      const totalDiaSalonCalc = totalSalonesCalc * daysInCurrentMonth;
-
       const buildDayKey = (date: Date) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -146,12 +144,20 @@ export function Dashboard({ perfil }: DashboardProps) {
         }
       });
 
-      const salonesOcupadosCalc = Array.from(ocupacionPorSalon.values()).reduce(
-        (acc, diasOcupadosSalon) => acc + diasOcupadosSalon.size,
-        0,
-      );
-      const porcentajeOcupacionCalc = totalDiaSalonCalc > 0
-        ? (salonesOcupadosCalc / totalDiaSalonCalc) * 100
+      const salonFiltradoId = filterSalon ? Number(filterSalon) : null;
+      const ocupacionFiltradaPorSalon = salonFiltradoId !== null && Number.isFinite(salonFiltradoId);
+      const diasOcupadosCalc = ocupacionFiltradaPorSalon
+        ? (ocupacionPorSalon.get(salonFiltradoId) || new Set<string>()).size
+        : Array.from(ocupacionPorSalon.values()).reduce(
+            (acc, diasOcupadosSalon) => acc + diasOcupadosSalon.size,
+            0,
+          );
+      const baseTotalOcupacionCalc = ocupacionFiltradaPorSalon
+        ? daysInCurrentMonth
+        : totalSalonesCalc * daysInCurrentMonth;
+
+      const porcentajeOcupacionCalc = baseTotalOcupacionCalc > 0
+        ? (diasOcupadosCalc / baseTotalOcupacionCalc) * 100
         : 0;
 
       const facturacionMensualActualCalc = reservasMensualesCerradas.reduce(
@@ -200,8 +206,8 @@ export function Dashboard({ perfil }: DashboardProps) {
       setCapitalObtenido(capitalObtenidoCalc);
       setTicketPromedioPagado(ticketPromedioCalc);
       setPorcentajeOcupacionMensual(porcentajeOcupacionCalc);
-      setSalonesOcupadosMensual(salonesOcupadosCalc);
-      setTotalSalonesMensual(totalDiaSalonCalc);
+      setSalonesOcupadosMensual(diasOcupadosCalc);
+      setTotalSalonesMensual(baseTotalOcupacionCalc);
       setPorcentajeFacturacionMensual(porcentajeFacturacionMensualCalc);
       setFacturacionMensualActual(facturacionMensualActualCalc);
       setFacturacionMensualPotencial(facturacionMensualPotencialCalc);
@@ -329,6 +335,9 @@ export function Dashboard({ perfil }: DashboardProps) {
           </div>
           <p className="text-gray-600 text-sm mb-1">Ocupacion Mensual de Salones</p>
           <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
+          <p className="text-sm text-amber-700 mt-1">
+            {salonesOcupadosMensual} / {totalSalonesMensual} {filterSalon ? 'dias del salon' : 'dias-salon'}
+          </p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">

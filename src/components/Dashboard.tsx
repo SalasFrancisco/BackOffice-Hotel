@@ -105,8 +105,8 @@ export function Dashboard({ perfil }: DashboardProps) {
       );
 
       const totalSalonesCalc = (salonesData || []).length;
-      const monthStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1, 0, 0, 0, 0);
-      const monthEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      const monthStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const monthEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       const daysInCurrentMonth = monthEndDate.getDate();
       const totalDiaSalonCalc = totalSalonesCalc * daysInCurrentMonth;
 
@@ -117,29 +117,39 @@ export function Dashboard({ perfil }: DashboardProps) {
         return `${year}-${month}-${day}`;
       };
 
-      const diaSalonOcupados = new Set<string>();
+      const ocupacionPorSalon = new Map<number, Set<string>>();
+      (salonesData || []).forEach((salon) => {
+        ocupacionPorSalon.set(Number(salon.id), new Set<string>());
+      });
+
       reservasMensualesCerradas.forEach((reservaMensual) => {
         const salonId = Number(reservaMensual.id_salon);
-        if (!Number.isFinite(salonId)) return;
+        if (!Number.isFinite(salonId) || !ocupacionPorSalon.has(salonId)) return;
 
         const inicioReserva = new Date(reservaMensual.fecha_inicio);
         const finReserva = new Date(reservaMensual.fecha_fin);
         if (Number.isNaN(inicioReserva.getTime()) || Number.isNaN(finReserva.getTime())) return;
 
-        const inicioEfectivo = inicioReserva > monthStartDate ? inicioReserva : monthStartDate;
-        const finEfectivo = finReserva < monthEndDate ? finReserva : monthEndDate;
+        const inicioReservaDia = new Date(inicioReserva.getFullYear(), inicioReserva.getMonth(), inicioReserva.getDate());
+        const finReservaDia = new Date(finReserva.getFullYear(), finReserva.getMonth(), finReserva.getDate());
+        const inicioEfectivo = inicioReservaDia > monthStartDate ? inicioReservaDia : monthStartDate;
+        const finEfectivo = finReservaDia < monthEndDate ? finReservaDia : monthEndDate;
         if (inicioEfectivo > finEfectivo) return;
 
-        const cursor = new Date(inicioEfectivo.getFullYear(), inicioEfectivo.getMonth(), inicioEfectivo.getDate());
-        const finDia = new Date(finEfectivo.getFullYear(), finEfectivo.getMonth(), finEfectivo.getDate());
+        const diasOcupadosSalon = ocupacionPorSalon.get(salonId);
+        if (!diasOcupadosSalon) return;
+        const cursor = new Date(inicioEfectivo);
 
-        while (cursor <= finDia) {
-          diaSalonOcupados.add(`${salonId}-${buildDayKey(cursor)}`);
+        while (cursor <= finEfectivo) {
+          diasOcupadosSalon.add(buildDayKey(cursor));
           cursor.setDate(cursor.getDate() + 1);
         }
       });
 
-      const salonesOcupadosCalc = diaSalonOcupados.size;
+      const salonesOcupadosCalc = Array.from(ocupacionPorSalon.values()).reduce(
+        (acc, diasOcupadosSalon) => acc + diasOcupadosSalon.size,
+        0,
+      );
       const porcentajeOcupacionCalc = totalDiaSalonCalc > 0
         ? (salonesOcupadosCalc / totalDiaSalonCalc) * 100
         : 0;

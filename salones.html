@@ -720,11 +720,63 @@
 
             overflow-y: auto;
 
+            background: #fafafa;
+
         }
 
         .service-category {
 
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+
+            border: 1px solid #e6e6e6;
+
+            border-radius: 8px;
+
+            background: #fff;
+
+            overflow: hidden;
+
+        }
+
+        .service-category:last-child {
+
+            margin-bottom: 0;
+
+        }
+
+        .service-category-toggle {
+
+            width: 100%;
+
+            border: none;
+
+            background: #f6f6f6;
+
+            cursor: pointer;
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+            padding: 10px 12px;
+
+            text-align: left;
+
+        }
+
+        .service-category-toggle:hover {
+
+            background: #efefef;
+
+        }
+
+        .service-category-toggle:focus {
+
+            outline: none;
+
+            box-shadow: inset 0 0 0 2px rgba(161, 148, 148, 0.28);
 
         }
 
@@ -738,7 +790,59 @@
 
             color: #666;
 
-            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+
+            flex: 1;
+
+            margin: 0;
+
+        }
+
+        .service-category-count {
+
+            font-size: 10px;
+
+            color: #666;
+
+            background: #e6e6e6;
+
+            border-radius: 999px;
+
+            min-width: 22px;
+
+            padding: 2px 7px;
+
+            text-align: center;
+
+        }
+
+        .service-category-icon {
+
+            color: #666;
+
+            font-size: 11px;
+
+            transition: transform 0.2s ease;
+
+        }
+
+        .service-category.open .service-category-icon {
+
+            transform: rotate(90deg);
+
+        }
+
+        .service-category-content {
+
+            display: none;
+
+            padding: 6px 10px 8px;
+
+        }
+
+        .service-category.open .service-category-content {
+
+            display: block;
 
         }
 
@@ -746,11 +850,13 @@
 
             display: flex;
 
-            align-items: center;
+            align-items: flex-start;
 
-            gap: 8px;
+            justify-content: space-between;
 
-            padding: 6px 0;
+            gap: 10px;
+
+            padding: 8px 0;
 
             border-bottom: 1px dashed #eee;
 
@@ -764,11 +870,57 @@
 
         .service-name {
 
-            flex: 1;
-
             font-size: 12px;
 
             color: #333;
+
+            line-height: 1.3;
+
+        }
+
+        .service-select {
+
+            display: flex;
+
+            align-items: flex-start;
+
+            gap: 8px;
+
+            flex: 1;
+
+            min-width: 0;
+
+        }
+
+        .service-select input[type="checkbox"] {
+
+            margin-top: 2px;
+
+            flex-shrink: 0;
+
+        }
+
+        .service-texts {
+
+            display: flex;
+
+            flex-direction: column;
+
+            min-width: 0;
+
+        }
+
+        .service-description {
+
+            font-size: 11px;
+
+            color: #666;
+
+            line-height: 1.35;
+
+            margin-top: 2px;
+
+            white-space: pre-line;
 
         }
 
@@ -780,9 +932,37 @@
 
         }
 
+        .service-pricing {
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+            margin-left: 8px;
+
+            flex-shrink: 0;
+
+        }
+
         .service-qty {
 
             width: 60px;
+
+            padding: 4px 6px !important;
+
+            border: 1px solid #ddd !important;
+
+            border-radius: 4px;
+
+            border-bottom: 1px solid #ddd !important;
+
+            background: #fff !important;
+
+            text-align: center;
+
+            font-size: 11px;
 
         }
 
@@ -2964,6 +3144,25 @@
 
         const sanitizePhoneInput = (value) => value.replace(/\D/g, '');
 
+        const getServiceDescriptionPlainText = (value) => {
+            const source = String(value || '').trim();
+            if (!source) return '';
+
+            const normalized = source
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<\/(div|p|li)>/gi, '\n')
+                .replace(/<li\b[^>]*>/gi, '- ');
+
+            const holder = document.createElement('div');
+            holder.innerHTML = normalized;
+
+            return String(holder.textContent || '')
+                .replace(/\u00a0/g, ' ')
+                .replace(/[ \t]+\n/g, '\n')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        };
+
         const formatShortDateInput = (value) => {
             const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
             if (digits.length <= 2) return digits;
@@ -3361,13 +3560,36 @@
 
                 section.className = 'service-category';
 
-                const title = document.createElement('div');
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'service-category-toggle';
+                toggle.setAttribute('aria-expanded', 'false');
 
+                const title = document.createElement('span');
                 title.className = 'service-category-title';
-
                 title.textContent = cat.nombre;
 
-                section.appendChild(title);
+                const count = document.createElement('span');
+                count.className = 'service-category-count';
+                count.textContent = String(items.length);
+
+                const icon = document.createElement('span');
+                icon.className = 'service-category-icon';
+                icon.textContent = '>';
+
+                toggle.appendChild(title);
+                toggle.appendChild(count);
+                toggle.appendChild(icon);
+                section.appendChild(toggle);
+
+                const content = document.createElement('div');
+                content.className = 'service-category-content';
+                section.appendChild(content);
+
+                toggle.addEventListener('click', () => {
+                    const isOpen = section.classList.toggle('open');
+                    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                });
 
                 items.forEach(servicio => {
 
@@ -3381,11 +3603,27 @@
 
                     checkbox.dataset.serviceId = servicio.id;
 
+                    const selectWrapper = document.createElement('label');
+                    selectWrapper.className = 'service-select';
+
+                    const textBlock = document.createElement('div');
+                    textBlock.className = 'service-texts';
+
                     const name = document.createElement('span');
-
                     name.className = 'service-name';
-
                     name.textContent = servicio.nombre;
+                    textBlock.appendChild(name);
+
+                    const descriptionText = getServiceDescriptionPlainText(servicio.descripcion);
+                    if (descriptionText) {
+                        const description = document.createElement('span');
+                        description.className = 'service-description';
+                        description.textContent = descriptionText;
+                        textBlock.appendChild(description);
+                    }
+
+                    selectWrapper.appendChild(checkbox);
+                    selectWrapper.appendChild(textBlock);
 
                     const price = document.createElement('span');
 
@@ -3437,15 +3675,15 @@
 
                     });
 
-                    item.appendChild(checkbox);
+                    const pricingWrapper = document.createElement('div');
+                    pricingWrapper.className = 'service-pricing';
+                    pricingWrapper.appendChild(price);
+                    pricingWrapper.appendChild(qty);
 
-                    item.appendChild(name);
+                    item.appendChild(selectWrapper);
+                    item.appendChild(pricingWrapper);
 
-                    item.appendChild(price);
-
-                    item.appendChild(qty);
-
-                    section.appendChild(item);
+                    content.appendChild(item);
 
                 });
 
@@ -3995,3 +4233,4 @@
 </body>
 
 </html>
+

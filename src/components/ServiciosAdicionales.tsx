@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen, ArrowUp, ArrowDown, ListOrdered } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen, ListOrdered, GripVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
@@ -43,6 +43,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   const [showOrdenCategoriasDialog, setShowOrdenCategoriasDialog] = useState(false);
   const [categoriasOrdenDraft, setCategoriasOrdenDraft] = useState<CategoriaServicio[]>([]);
   const [savingOrdenCategorias, setSavingOrdenCategorias] = useState(false);
+  const [draggingCategoriaId, setDraggingCategoriaId] = useState<number | null>(null);
+  const [dragOverCategoriaId, setDragOverCategoriaId] = useState<number | null>(null);
 
   // Confirm dialogs
   const [confirmDeleteCategoria, setConfirmDeleteCategoria] = useState<{ open: boolean; categoriaId: number | null }>({
@@ -225,15 +227,44 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     setShowOrdenCategoriasDialog(true);
   };
 
-  const moveCategoriaInDraft = (index: number, direction: -1 | 1) => {
+  const reorderCategoriasInDraft = (draggedCategoriaId: number, targetCategoriaId: number) => {
+    if (draggedCategoriaId === targetCategoriaId) return;
+
     setCategoriasOrdenDraft((prev) => {
-      const targetIndex = index + direction;
-      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const draggedIndex = prev.findIndex((categoria) => categoria.id === draggedCategoriaId);
+      const targetIndex = prev.findIndex((categoria) => categoria.id === targetCategoriaId);
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+
       const next = [...prev];
-      const [movedCategoria] = next.splice(index, 1);
+      const [movedCategoria] = next.splice(draggedIndex, 1);
       next.splice(targetIndex, 0, movedCategoria);
       return next;
     });
+  };
+
+  const handleCategoriaDragStart = (categoriaId: number) => {
+    setDraggingCategoriaId(categoriaId);
+    setDragOverCategoriaId(categoriaId);
+  };
+
+  const handleCategoriaDragOver = (event: React.DragEvent<HTMLDivElement>, categoriaId: number) => {
+    event.preventDefault();
+    if (dragOverCategoriaId !== categoriaId) {
+      setDragOverCategoriaId(categoriaId);
+    }
+  };
+
+  const handleCategoriaDrop = (event: React.DragEvent<HTMLDivElement>, targetCategoriaId: number) => {
+    event.preventDefault();
+    if (draggingCategoriaId === null) return;
+    reorderCategoriasInDraft(draggingCategoriaId, targetCategoriaId);
+    setDragOverCategoriaId(null);
+    setDraggingCategoriaId(null);
+  };
+
+  const handleCategoriaDragEnd = () => {
+    setDragOverCategoriaId(null);
+    setDraggingCategoriaId(null);
   };
 
   const handleSaveOrdenCategorias = async () => {
@@ -259,6 +290,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       setShowOrdenCategoriasDialog(false);
       setCategoriasOrdenDraft([]);
+      setDragOverCategoriaId(null);
+      setDraggingCategoriaId(null);
       setMessage({ type: 'success', text: 'Orden de categorias actualizado correctamente' });
       await loadData();
       setTimeout(() => setMessage(null), 3000);
@@ -574,7 +607,11 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         onOpenChange={(open) => {
           if (savingOrdenCategorias) return;
           setShowOrdenCategoriasDialog(open);
-          if (!open) setCategoriasOrdenDraft([]);
+          if (!open) {
+            setCategoriasOrdenDraft([]);
+            setDragOverCategoriaId(null);
+            setDraggingCategoriaId(null);
+          }
         }}
       >
         <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden p-0">
@@ -585,45 +622,41 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           <div className="flex max-h-[calc(85vh-5rem)] flex-col">
             <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
               <p className="text-sm text-gray-600">
-                Usa las flechas para mover cada categoria y luego guarda el orden.
+                Agarra y arrastra cada categoria para reordenarla. Al final, guarda los cambios.
               </p>
 
               {categoriasOrdenDraft.length === 0 ? (
                 <p className="text-sm text-gray-500">No hay categorias para ordenar.</p>
               ) : (
                 <div className="space-y-2">
-                  {categoriasOrdenDraft.map((categoria, index) => (
+                  {categoriasOrdenDraft.map((categoria, index) => {
+                    const isDragOver = dragOverCategoriaId === categoria.id;
+                    const isDragging = draggingCategoriaId === categoria.id;
+
+                    return (
                     <div
                       key={categoria.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2"
+                      draggable={!savingOrdenCategorias}
+                      onDragStart={() => handleCategoriaDragStart(categoria.id)}
+                      onDragOver={(event) => handleCategoriaDragOver(event, categoria.id)}
+                      onDrop={(event) => handleCategoriaDrop(event, categoria.id)}
+                      onDragEnd={handleCategoriaDragEnd}
+                      className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                        isDragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'
+                      } ${isDragging ? 'opacity-60' : ''} ${savingOrdenCategorias ? 'cursor-not-allowed' : 'cursor-grab'}`}
                     >
-                      <div className="min-w-0 pr-2">
-                        <p className="text-xs text-gray-500">Posicion {index + 1}</p>
-                        <p className="truncate text-sm text-gray-900">{categoria.nombre}</p>
+                      <div className="flex min-w-0 items-center gap-2 pr-2">
+                        <GripVertical className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-500">Posicion {index + 1}</p>
+                          <p className="truncate text-sm text-gray-900">{categoria.nombre}</p>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => moveCategoriaInDraft(index, -1)}
-                          disabled={index === 0 || savingOrdenCategorias}
-                          className="rounded-lg p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                          title="Mover arriba"
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveCategoriaInDraft(index, 1)}
-                          disabled={index === categoriasOrdenDraft.length - 1 || savingOrdenCategorias}
-                          className="rounded-lg p-2 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                          title="Mover abajo"
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </button>
-                      </div>
+                      <p className="text-xs text-gray-500">Arrastrar</p>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -634,6 +667,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                 onClick={() => {
                   setShowOrdenCategoriasDialog(false);
                   setCategoriasOrdenDraft([]);
+                  setDragOverCategoriaId(null);
+                  setDraggingCategoriaId(null);
                 }}
                 disabled={savingOrdenCategorias}
                 className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"

@@ -173,16 +173,9 @@ export function Dashboard({ perfil }: DashboardProps) {
         ? (facturacionMensualActualCalc / facturacionMensualPotencialCalc) * 100
         : 0;
 
-      // KPIs de negocio (globales)
-      const { data: reservasMetricasData, error: reservasMetricasError } = await supabase
-        .from('reservas')
-        .select('id, estado, monto');
-
-      if (reservasMetricasError) throw reservasMetricasError;
-
-      const reservasMetricas = reservasMetricasData || [];
-      const totalSolicitudesCalc = reservasMetricas.length;
-      const totalConfirmadasCalc = reservasMetricas.filter(
+      // KPIs de negocio mensuales (segun mes seleccionado)
+      const totalSolicitudesCalc = reservasMensuales.length;
+      const totalConfirmadasCalc = reservasMensuales.filter(
         (reservaMetrica) => reservaMetrica.estado === 'Confirmado' || reservaMetrica.estado === 'Pagado',
       ).length;
       const porcentajeConfirmacionCalc = totalSolicitudesCalc > 0
@@ -190,7 +183,7 @@ export function Dashboard({ perfil }: DashboardProps) {
         : 0;
 
       const estadosConCapital = new Set(['Confirmado', 'Pagado']);
-      const reservasConCapital = reservasMetricas.filter((reservaMetrica) =>
+      const reservasConCapital = reservasMensuales.filter((reservaMetrica) =>
         estadosConCapital.has(reservaMetrica.estado),
       );
       const capitalObtenidoCalc = reservasConCapital.reduce(
@@ -303,7 +296,7 @@ export function Dashboard({ perfil }: DashboardProps) {
               <CheckCircle2 className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Reservas Confirmadas / Solicitadas</p>
+          <p className="text-gray-600 text-sm mb-1">Reservas Confirmadas / Solicitadas (Mes)</p>
           <p className="text-3xl text-gray-900">{totalConfirmadas} / {totalSolicitudes}</p>
           <p className="text-sm text-blue-700 mt-1">{porcentajeConfirmacion.toFixed(1)}% de conversion</p>
         </div>
@@ -314,7 +307,7 @@ export function Dashboard({ perfil }: DashboardProps) {
               <Wallet className="w-6 h-6 text-purple-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Capital Obtenido</p>
+          <p className="text-gray-600 text-sm mb-1">Capital Obtenido (Mes)</p>
           <p className="text-3xl text-gray-900">{formatCurrency(capitalObtenido)}</p>
         </div>
 
@@ -324,7 +317,7 @@ export function Dashboard({ perfil }: DashboardProps) {
               <ReceiptText className="w-6 h-6 text-green-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Ticket Promedio</p>
+          <p className="text-gray-600 text-sm mb-1">Ticket Promedio (Mes)</p>
           <p className="text-3xl text-gray-900">{formatCurrency(ticketPromedioPagado)}</p>
         </div>
 

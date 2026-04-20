@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { buildPresupuestoFileName, generatePresupuestoDocumento } from '../utils/presupuesto';
 import { AlertCircle, CalendarDays, CheckCircle, Package } from 'lucide-react';
+import { projectId } from '../utils/supabase/info';
 import {
   hasNonWhitespaceValue,
   preventInvalidNumberKeys,
@@ -12,7 +12,6 @@ import {
   getReservaPendingConflictIds,
   ReservaPendingConflictComparable,
 } from '../utils/reservaPendingConflict';
-import { deletePresupuestoFile } from '../utils/reservaDeletion';
 import { RichTextDescription } from './RichTextDescription';
 import {
   getAllowedReservaEstadoTransitions,
@@ -110,8 +109,60 @@ const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | nul
   return Math.floor((endTimestamp - startTimestamp) / MILLISECONDS_PER_DAY) + 1;
 };
 
+const buildProtectedFunctionEndpoints = (path: string) => [
+  `https://${projectId}.supabase.co/functions/v1/server/${path}`,
+  `https://${projectId}.supabase.co/functions/v1/${path}`,
+  `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/${path}`,
+  `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/${path}`,
+];
+
+const parseServerResponse = async (response: Response) => {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+};
+
+const invokeProtectedFunction = async (path: string, body: Record<string, unknown>) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
+
+  if (!accessToken) {
+    throw new Error('No se pudo obtener la sesion actual.');
+  }
+
+  let lastError: Error | null = null;
+
+  for (const endpoint of buildProtectedFunctionEndpoints(path)) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const payload = await parseServerResponse(response);
+      if (response.ok) {
+        return payload;
+      }
+
+      lastError = new Error(payload?.error || `HTTP ${response.status}`);
+    } catch (error: any) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError || new Error('No se pudo completar la operacion solicitada.');
+};
+
 export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProps) {
-  const CLIENTE_PDF_NOMBRE = 'Reserva sin cliente';
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
     backgroundColor: '#fff8ed',
@@ -491,12 +542,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     }
 
     const selectedSalon = salones.find(s => s.id === idSalon) || null;
-    const selectedDistribucionData = idDistribucion
-      ? distribuciones.find(d => d.id === idDistribucion) || null
-      : null;
-    const tipoEventoNombre = hasNonWhitespaceValue(observacionesSanitizadas)
-      ? observacionesSanitizadas.split('\n')[0].trim()
-      : null;
     const fechaInicioIsoString = new Date(fechaInicio).toISOString();
     const fechaFinIsoString = new Date(fechaFin).toISOString();
 
@@ -637,42 +682,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           presupuestoErrorMessage =
             'No se encontró el salón seleccionado para generar el presupuesto.';
         } else {
-          const serviciosDetalle = Array.from(selectedServicios.entries())
-            .map(([idServicio, cantidad]) => {
-              const servicioInfo = servicios.find(s => s.id === idServicio);
-              return servicioInfo ? { servicio: servicioInfo, cantidad } : null;
-            })
-            .filter((item): item is { servicio: Servicio; cantidad: number } => item !== null);
-
           try {
-            if (reserva?.presupuesto_url) {
-              await deletePresupuestoFile(reserva.presupuesto_url);
-            }
-
-            const fileName = buildPresupuestoFileName({
-              nombreBase: nombreClienteSanitizado || CLIENTE_PDF_NOMBRE,
-              fechaInicio: fechaInicioIsoString,
-              fallbackEvento: selectedSalon.nombre,
-            });
-
-            await generatePresupuestoDocumento({
+            await invokeProtectedFunction('upsert-presupuesto', {
               reservaId,
-              salon: selectedSalon,
-              distribucion: selectedDistribucionData,
-              cliente: {
-                nombre: nombreClienteSanitizado || CLIENTE_PDF_NOMBRE,
-                email: emailClienteSanitizado || null,
-                telefono: telefonoClienteSanitizado || null,
-              },
-              fechaInicio: fechaInicioIsoString,
-              fechaFin: fechaFinIsoString,
-              tipoEvento: tipoEventoNombre,
-              totalSalon: monto,
-              precioSalonDiario: salonDailyPrice,
-              diasSalon: eventDaysForMonto,
-              cantidadPersonas: totalPersonas,
-              servicios: serviciosDetalle,
-              storagePath: `reservas/${reservaId}/${fileName}`,
+              presupuestoPath: reserva?.presupuesto_url || null,
             });
           } catch (error: any) {
             presupuestoErrorMessage =

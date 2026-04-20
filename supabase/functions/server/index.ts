@@ -106,6 +106,98 @@ const buildPresupuestoFileName = (input: {
   return `${evento} - ${fecha}.pdf`;
 };
 
+const hasNonWhitespaceValue = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+const extractTipoEventoFromObservaciones = (observaciones?: string | null) => {
+  if (!hasNonWhitespaceValue(observaciones)) return null;
+
+  const firstLine = observaciones
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  return firstLine || null;
+};
+
+const formatDatePartInTimeZone = (value: string | Date, timeZone = HOTEL_TIME_ZONE) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) return null;
+  return `${year}-${month}-${day}`;
+};
+
+const parseIsoDateToUtcTimestamp = (isoDate: string): number | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  const utcTimestamp = Date.UTC(year, month - 1, day);
+  const parsedDate = new Date(utcTimestamp);
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return utcTimestamp;
+};
+
+const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | null): number => {
+  if (!startIsoDate || !endIsoDate) return 1;
+
+  const startTimestamp = parseIsoDateToUtcTimestamp(startIsoDate);
+  const endTimestamp = parseIsoDateToUtcTimestamp(endIsoDate);
+  if (startTimestamp === null || endTimestamp === null || endTimestamp < startTimestamp) {
+    return 1;
+  }
+
+  return Math.floor((endTimestamp - startTimestamp) / DAY_MS) + 1;
+};
+
+const getEventDaysCountFromDateTimes = (
+  startValue?: string | null,
+  endValue?: string | null,
+  timeZone = HOTEL_TIME_ZONE,
+) => {
+  const startDatePart = startValue ? formatDatePartInTimeZone(startValue, timeZone) : null;
+  const endDatePart = endValue ? formatDatePartInTimeZone(endValue, timeZone) : null;
+  return getEventDaysCount(startDatePart, endDatePart);
+};
+
+const resolveSalonDays = (
+  requestedDays: unknown,
+  startValue?: string | null,
+  endValue?: string | null,
+) => {
+  const parsedRequestedDays = Math.floor(Number(requestedDays) || 0);
+  if (parsedRequestedDays > 0) return parsedRequestedDays;
+  return getEventDaysCountFromDateTimes(startValue, endValue);
+};
+
 const PUBLIC_RESERVA_NOTIFICATION_ORIGIN = "salones_form";
 const RESERVA_EXPIRATION_NOTIFICATION_ORIGIN = "reserva_vencimiento_auto";
 const RESERVA_AUTO_CANCEL_DAYS = 7;
@@ -116,6 +208,7 @@ const RESERVA_ALERTA_INICIO_EVENTO = "vencimiento_inicio_evento";
 const RESERVA_ALERTA_CANCELACION_AUTOMATICA = "cancelacion_automatica";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESUPUESTOS_BUCKET = "presupuestos";
+const HOTEL_TIME_ZONE = "America/Argentina/Cordoba";
 const PRESUPUESTO_EMAIL_LINK_TTL_SECONDS = 60 * 60 * 24 * 7;
 const PRESUPUESTO_SHORT_LINK_MIN_TTL_SECONDS = 60;
 const PRESUPUESTO_SHORT_LINK_SIGNED_URL_TTL_SECONDS = 90;
@@ -298,6 +391,7 @@ type PublicReservaPayload = {
   fecha_fin: string;
   tipo_evento?: string | null;
   cantidad: number;
+  dias_salon?: number | null;
   id_distribucion?: number | null;
   salon_id?: number | null;
   salon_nombre?: string | null;
@@ -476,6 +570,9 @@ const buildPresupuestoPdf = async (
     fechaInicio: string;
     fechaFin: string;
     tipoEvento?: string | null;
+    totalSalon: number;
+    precioSalonDiario?: number | null;
+    diasSalon?: number | null;
     cantidadPersonas: number;
     servicios: PresupuestoServicio[];
   },
@@ -532,7 +629,12 @@ const buildPresupuestoPdf = async (
     return acc + unit * cantidad;
   }, 0);
 
-  const totalGeneral = input.salon.precio_base + totalServicios;
+  const salonDailyPrice = Number(input.precioSalonDiario ?? input.salon.precio_base) || 0;
+  const salonDays = Math.max(1, Math.floor(Number(input.diasSalon) || 1));
+  const totalSalon = Number.isFinite(Number(input.totalSalon))
+    ? Number(input.totalSalon)
+    : salonDailyPrice * salonDays;
+  const totalGeneral = totalSalon + totalServicios;
   const logoDataUrl = await loadLogoDataUrl();
   const fechaEmision = new Date();
   const fechaVencimiento = addDays(fechaEmision, 7);
@@ -643,7 +745,7 @@ const buildPresupuestoPdf = async (
           body: [
             [
               { text: "Salón y descripción", style: "detailTableHeader" },
-              { text: "Cantidad", style: "detailTableHeader", alignment: "center" },
+              { text: "Cantidad (dÃ­as)", style: "detailTableHeader", alignment: "center" },
               { text: "Precio unitario", style: "detailTableHeader", alignment: "right" },
               { text: "Subtotal", style: "detailTableHeader", alignment: "right" },
             ],
@@ -654,16 +756,16 @@ const buildPresupuestoPdf = async (
                   : [{ text: input.salon.nombre, bold: true }],
                 style: "tableCell",
               },
-              { text: "1", style: "tableCell", alignment: "center" },
-              { text: formatCurrency(input.salon.precio_base), style: "tableCell", alignment: "right" },
-              { text: formatCurrency(input.salon.precio_base), style: "tableCell", alignment: "right" },
+              { text: String(salonDays), style: "tableCell", alignment: "center" },
+              { text: formatCurrency(salonDailyPrice), style: "tableCell", alignment: "right" },
+              { text: formatCurrency(totalSalon), style: "tableCell", alignment: "right" },
             ],
           ],
         },
         layout: cardTableLayout,
         margin: [0, 0, 0, 16],
       },
-      { text: "Servicios adicionales solicitados", style: "infoTitle" },
+      { text: "Servicios adicionales", style: "infoTitle" },
       {
         table: {
           widths: ["*", "auto", "auto", "auto"],
@@ -685,7 +787,7 @@ const buildPresupuestoPdf = async (
           body: [
             [
               { text: "Total salón", alignment: "right", style: "totalLabelCard" },
-              { text: formatCurrency(input.salon.precio_base), alignment: "right", style: "totalValueCard" },
+              { text: formatCurrency(totalSalon), alignment: "right", style: "totalValueCard" },
             ],
             [
               { text: "Total servicios", alignment: "right", style: "totalLabelCard" },
@@ -1691,6 +1793,181 @@ const deletePresupuestoFromStorage = async (
   return { deleted: false as const };
 };
 
+const loadReservaPresupuestoContext = async (
+  supabaseAdmin: SupabaseClient,
+  reservaId: number,
+) => {
+  const { data: reservaData, error: reservaError } = await supabaseAdmin
+    .from("reservas")
+    .select(
+      "id, id_salon, id_distribucion, cliente_nombre, cliente_email, cliente_telefono, fecha_inicio, fecha_fin, cantidad_personas, monto, observaciones, presupuesto_url",
+    )
+    .eq("id", reservaId)
+    .maybeSingle();
+
+  if (reservaError) {
+    throw new Error(`No se pudo obtener la reserva (${reservaError.message}).`);
+  }
+
+  if (!reservaData) {
+    throw new Error("Reserva no encontrada.");
+  }
+
+  const { data: salonData, error: salonError } = await supabaseAdmin
+    .from("salones")
+    .select("id, nombre, descripcion, precio_base, capacidad")
+    .eq("id", reservaData.id_salon)
+    .maybeSingle();
+
+  if (salonError) {
+    throw new Error(`No se pudo obtener el salÃ³n (${salonError.message}).`);
+  }
+
+  if (!salonData) {
+    throw new Error("No se encontrÃ³ el salÃ³n asociado a la reserva.");
+  }
+
+  let distribucionData: { id: number; nombre: string; capacidad: number } | null = null;
+  if (reservaData.id_distribucion) {
+    const { data, error } = await supabaseAdmin
+      .from("distribuciones")
+      .select("id, nombre, capacidad")
+      .eq("id", reservaData.id_distribucion)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`No se pudo obtener la distribuciÃ³n (${error.message}).`);
+    }
+
+    distribucionData = data || null;
+  }
+
+  const { data: reservaServiciosData, error: reservaServiciosError } = await supabaseAdmin
+    .from("reserva_servicios")
+    .select("cantidad, servicio:servicios(id, nombre, descripcion, precio, categoria:categorias_servicios(id, nombre, descripcion))")
+    .eq("id_reserva", reservaId);
+
+  if (reservaServiciosError) {
+    throw new Error(`No se pudieron obtener los servicios de la reserva (${reservaServiciosError.message}).`);
+  }
+
+  const serviciosDetalle: PresupuestoServicio[] = (reservaServiciosData || [])
+    .map((item: any) => {
+      const servicioInfo = item?.servicio;
+      if (!servicioInfo) return null;
+
+      return {
+        servicio: servicioInfo,
+        cantidad: Number(item?.cantidad) || 1,
+      };
+    })
+    .filter((item): item is PresupuestoServicio => Boolean(item));
+
+  const tipoEvento = extractTipoEventoFromObservaciones(reservaData.observaciones);
+  const salonDailyPrice = Number(salonData.precio_base) || 0;
+  const totalSalon = Number(reservaData.monto) || 0;
+  const salonDaysFromMonto = salonDailyPrice > 0 && totalSalon > 0
+    ? Math.max(1, Math.round(totalSalon / salonDailyPrice))
+    : 0;
+  const salonDays = salonDaysFromMonto || getEventDaysCountFromDateTimes(
+    reservaData.fecha_inicio,
+    reservaData.fecha_fin,
+  );
+
+  return {
+    reserva: reservaData,
+    salon: salonData,
+    distribucion: distribucionData,
+    cliente: {
+      nombre: reservaData.cliente_nombre || "Reserva sin cliente",
+      email: reservaData.cliente_email || null,
+      telefono: reservaData.cliente_telefono || null,
+    },
+    fechaInicio: reservaData.fecha_inicio,
+    fechaFin: reservaData.fecha_fin,
+    tipoEvento,
+    totalSalon,
+    precioSalonDiario: salonDailyPrice,
+    diasSalon: salonDays,
+    cantidadPersonas: Number(reservaData.cantidad_personas) || 0,
+    servicios: serviciosDetalle,
+  };
+};
+
+const upsertPresupuestoForReserva = async (
+  supabaseAdmin: SupabaseClient,
+  reservaId: number,
+  previousStoragePath?: string | null,
+) => {
+  const context = await loadReservaPresupuestoContext(supabaseAdmin, reservaId);
+
+  const fileName = buildPresupuestoFileName({
+    nombreBase: context.cliente.nombre?.trim() || null,
+    tipoEvento: context.tipoEvento,
+    fechaInicio: context.fechaInicio,
+    fallbackEvento: context.salon.nombre,
+  });
+  const storagePath = `reservas/${reservaId}/${fileName}`;
+
+  const previousNormalizedPath = normalizePresupuestoStoragePath(
+    previousStoragePath || context.reserva.presupuesto_url,
+  );
+  const nextNormalizedPath = normalizePresupuestoStoragePath(storagePath);
+
+  if (
+    previousNormalizedPath
+    && nextNormalizedPath
+    && previousNormalizedPath !== nextNormalizedPath
+  ) {
+    const deleteStorageResult = await deletePresupuestoFromStorage(supabaseAdmin, [previousNormalizedPath]);
+    if ("error" in deleteStorageResult && deleteStorageResult.error) {
+      throw new Error(deleteStorageResult.error);
+    }
+  }
+
+  const pdfBuffer = await buildPresupuestoPdf({
+    reservaId,
+    salon: context.salon,
+    distribucion: context.distribucion,
+    cliente: context.cliente,
+    fechaInicio: context.fechaInicio,
+    fechaFin: context.fechaFin,
+    tipoEvento: context.tipoEvento,
+    totalSalon: context.totalSalon,
+    precioSalonDiario: context.precioSalonDiario,
+    diasSalon: context.diasSalon,
+    cantidadPersonas: context.cantidadPersonas,
+    servicios: context.servicios,
+  });
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(PRESUPUESTOS_BUCKET)
+    .upload(storagePath, pdfBuffer, {
+      cacheControl: "3600",
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(`No se pudo subir el presupuesto al storage (${uploadError.message}).`);
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("reservas")
+    .update({ presupuesto_url: storagePath })
+    .eq("id", reservaId);
+
+  if (updateError) {
+    throw new Error(`No se pudo actualizar la reserva con el presupuesto (${updateError.message}).`);
+  }
+
+  return {
+    storagePath,
+    fileName,
+    context,
+  };
+};
+
 const toValidDate = (value?: string | null) => {
   if (!value) return null;
   const date = new Date(value);
@@ -2262,6 +2539,55 @@ const sendPresupuestoEmailHandler = async (c: any) => {
 app.post("/make-server-484a241a/send-presupuesto-email", sendPresupuestoEmailHandler);
 app.post("/server/make-server-484a241a/send-presupuesto-email", sendPresupuestoEmailHandler);
 
+const upsertPresupuestoHandler = async (c: any) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const accessCheck = await requireBackofficeUser(
+      supabaseAdmin,
+      accessToken,
+      "regenerate reservation budgets",
+    );
+
+    if ("status" in accessCheck) {
+      return c.json(accessCheck.body, accessCheck.status);
+    }
+
+    const body = await c.req.json();
+    const reservaId = Number(body?.reservaId);
+    const presupuestoPathFromBody = typeof body?.presupuestoPath === "string"
+      ? body.presupuestoPath.trim()
+      : "";
+
+    if (!Number.isFinite(reservaId) || reservaId <= 0) {
+      return c.json({ error: "Missing required field: reservaId" }, 400);
+    }
+
+    const result = await upsertPresupuestoForReserva(
+      supabaseAdmin,
+      reservaId,
+      presupuestoPathFromBody || null,
+    );
+
+    return c.json({
+      success: true,
+      reservaId,
+      storagePath: result.storagePath,
+      fileName: result.fileName,
+    });
+  } catch (error) {
+    console.error("Error in upsert-presupuesto endpoint:", error);
+    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+  }
+};
+
+app.post("/make-server-484a241a/upsert-presupuesto", upsertPresupuestoHandler);
+app.post("/server/make-server-484a241a/upsert-presupuesto", upsertPresupuestoHandler);
+
 const deleteReservaHandler = async (c: any) => {
   try {
     const accessToken = extractAccessToken(c.req.header("Authorization"));
@@ -2763,6 +3089,7 @@ const publicReservaHandler = async (c) => {
       fecha_fin: fechaFin,
       tipo_evento: tipoEvento,
       cantidad,
+      dias_salon: diasSalon,
       id_distribucion: idDistribucion,
       salon_id: salonId,
       salon_nombre: salonNombre,
@@ -2856,10 +3183,12 @@ const publicReservaHandler = async (c) => {
       });
     }
 
-    const observacionesParts = [
-      tipoEvento ? `Tipo de evento: ${tipoEvento}` : null,
-      observaciones ? `Observaciones: ${observaciones}` : null,
-    ].filter(Boolean);
+    const observacionesText = hasNonWhitespaceValue(observaciones) ? observaciones.trim() : null;
+    const tipoEventoReserva =
+      extractTipoEventoFromObservaciones(observacionesText)
+      || (hasNonWhitespaceValue(tipoEvento) ? tipoEvento.trim() : null);
+    const salonDays = resolveSalonDays(diasSalon, fechaInicio, fechaFin);
+    const salonTotal = (Number(salonData.precio_base) || 0) * salonDays;
 
     const reservaPayload = {
       cliente_nombre: nombre,
@@ -2870,9 +3199,9 @@ const publicReservaHandler = async (c) => {
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
       estado: "Pendiente",
-      monto: salonData.precio_base ?? 0,
+      monto: salonTotal,
       cantidad_personas: totalPersonas,
-      observaciones: observacionesParts.length > 0 ? observacionesParts.join("\n") : null,
+      observaciones: observacionesText,
     };
 
     const { data: reservaData, error: reservaError } = await supabaseAdmin
@@ -2905,7 +3234,7 @@ const publicReservaHandler = async (c) => {
           clienteTelefono: formatOptionalText(telefono, "No informado"),
           salonNombre: formatOptionalText(salonData.nombre, "No informado"),
           distribucionNombre: distribucionData?.nombre ?? null,
-          tipoEvento,
+          tipoEvento: tipoEventoReserva,
           cantidadPersonas: totalPersonas,
           fechaInicio,
           fechaFin,
@@ -2974,76 +3303,37 @@ const publicReservaHandler = async (c) => {
     let signed = false;
     let signedErrorMsg: string | undefined = undefined;
     let shortDownloadUrl: string | undefined = undefined;
-    const fileName = buildPresupuestoFileName({
-      nombreBase: nombre?.trim() || null,
-      fechaInicio,
-      fallbackEvento: salonData.nombre,
-    });
-    const storagePath = `reservas/${reservaData.id}/${fileName}`;
+    let storagePath: string | undefined = undefined;
+    let fileName: string | undefined = undefined;
 
     try {
-      const pdfBuffer = await buildPresupuestoPdf({
-        reservaId: reservaData.id,
-        salon: {
-          nombre: salonData.nombre,
-          descripcion: salonData.descripcion,
-          precio_base: Number(salonData.precio_base) || 0,
-          capacidad: salonData.capacidad,
-        },
-        distribucion: distribucionData,
-        cliente: {
-          nombre: nombre?.trim() || "Reserva sin cliente",
-          email,
-          telefono,
-        },
-        fechaInicio,
-        fechaFin,
-        tipoEvento,
-        cantidadPersonas: totalPersonas,
-        servicios: serviciosDetalle,
-      });
+      const upsertResult = await upsertPresupuestoForReserva(supabaseAdmin, reservaData.id);
+      storagePath = upsertResult.storagePath;
+      fileName = upsertResult.fileName;
+      uploaded = true;
 
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from("presupuestos")
-        .upload(storagePath, pdfBuffer, {
-          cacheControl: "3600",
-          contentType: "application/pdf",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        uploadErrorMsg = uploadError?.message || String(uploadError);
-        console.error("Error subiendo presupuesto:", uploadErrorMsg);
-        // don't fail the whole request; just continue without download URL
+      const signedUrlResult = await createPresupuestoSignedUrl(supabaseAdmin, upsertResult.storagePath, 60 * 15);
+      if ("error" in signedUrlResult) {
+        signedErrorMsg = signedUrlResult.error;
+        console.error("Error creando URL firmada:", signedErrorMsg);
       } else {
-        uploaded = true;
-        await supabaseAdmin
-          .from("reservas")
-          .update({ presupuesto_url: storagePath })
-          .eq("id", reservaData.id);
-
-        const signedUrlResult = await createPresupuestoSignedUrl(supabaseAdmin, storagePath, 60 * 15);
-        if ("error" in signedUrlResult) {
-          signedErrorMsg = signedUrlResult.error;
-          console.error("Error creando URL firmada:", signedErrorMsg);
-        } else {
-          signed = true;
-          downloadUrl = signedUrlResult.signedUrl;
-          try {
-            const shortLinkResult = await createPresupuestoShortLink(reservaData.id, 60 * 15);
-            shortDownloadUrl = shortLinkResult?.shortUrl;
-          } catch (shortLinkError) {
-            console.warn(
-              "No se pudo generar enlace corto para descarga de presupuesto publico:",
-              shortLinkError,
-            );
-          }
+        signed = true;
+        downloadUrl = signedUrlResult.signedUrl;
+        try {
+          const shortLinkResult = await createPresupuestoShortLink(reservaData.id, 60 * 15);
+          shortDownloadUrl = shortLinkResult?.shortUrl;
+        } catch (shortLinkError) {
+          console.warn(
+            "No se pudo generar enlace corto para descarga de presupuesto publico:",
+            shortLinkError,
+          );
         }
       }
 
       pdfGenerated = true;
     } catch (err) {
       pdfError = err?.message || String(err);
+      uploadErrorMsg = pdfError;
       console.warn("PDF generation failed or not available:", pdfError);
       // proceed without downloadUrl
     }
@@ -3093,6 +3383,7 @@ app.post("/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
 app.post("/send-presupuesto-email", proxyTo("/make-server-484a241a/send-presupuesto-email"));
+app.post("/upsert-presupuesto", proxyTo("/make-server-484a241a/upsert-presupuesto"));
 app.post("/delete-reserva", proxyTo("/make-server-484a241a/delete-reserva"));
 app.post("/process-reserva-vencimiento", proxyTo("/make-server-484a241a/process-reserva-vencimiento"));
 app.get("/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));
@@ -3107,6 +3398,7 @@ app.post("/server/delete-user", proxyTo("/make-server-484a241a/delete-user"));
 app.post("/server/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/server/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
 app.post("/server/send-presupuesto-email", proxyTo("/make-server-484a241a/send-presupuesto-email"));
+app.post("/server/upsert-presupuesto", proxyTo("/make-server-484a241a/upsert-presupuesto"));
 app.post("/server/delete-reserva", proxyTo("/make-server-484a241a/delete-reserva"));
 app.post("/server/process-reserva-vencimiento", proxyTo("/make-server-484a241a/process-reserva-vencimiento"));
 app.get("/server/public-catalog", proxyTo("/make-server-484a241a/public-catalog"));

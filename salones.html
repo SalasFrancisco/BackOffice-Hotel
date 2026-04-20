@@ -3301,6 +3301,42 @@
             return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         };
 
+        const parseIsoDateToUtcTimestamp = (isoDate) => {
+            const match = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return null;
+
+            const year = Number(match[1]);
+            const month = Number(match[2]);
+            const day = Number(match[3]);
+            if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+                return null;
+            }
+
+            const utcTimestamp = Date.UTC(year, month - 1, day);
+            const parsedDate = new Date(utcTimestamp);
+            if (
+                parsedDate.getUTCFullYear() !== year
+                || parsedDate.getUTCMonth() !== month - 1
+                || parsedDate.getUTCDate() !== day
+            ) {
+                return null;
+            }
+
+            return utcTimestamp;
+        };
+
+        const getEventDaysCount = (startIsoDate, endIsoDate) => {
+            if (!startIsoDate || !endIsoDate) return 1;
+
+            const startTimestamp = parseIsoDateToUtcTimestamp(startIsoDate);
+            const endTimestamp = parseIsoDateToUtcTimestamp(endIsoDate);
+            if (startTimestamp === null || endTimestamp === null || endTimestamp < startTimestamp) {
+                return 1;
+            }
+
+            return Math.floor((endTimestamp - startTimestamp) / (24 * 60 * 60 * 1000)) + 1;
+        };
+
         const isoDateToShortDate = (value) => {
             const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
             if (!match) return '';
@@ -4239,6 +4275,8 @@
                 tipo_evento: tipoEvento,
 
                 cantidad,
+
+                dias_salon: getEventDaysCount(fechaInicioIso, fechaFinIso),
 
                 id_distribucion: distribucionId || null,
 

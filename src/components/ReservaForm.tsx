@@ -8,10 +8,6 @@ import {
   sanitizeIntegerInput,
   sanitizePhoneInput,
 } from '../utils/formSanitizers';
-import {
-  getReservaPendingConflictIds,
-  ReservaPendingConflictComparable,
-} from '../utils/reservaPendingConflict';
 import { RichTextDescription } from './RichTextDescription';
 import {
   getAllowedReservaEstadoTransitions,
@@ -602,37 +598,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
     try {
       setLoading(true);
-
-      if (!reserva && estado !== 'Cancelado') {
-        const { data: pendingReservasData, error: pendingReservasError } = await supabase
-          .from('reservas')
-          .select('id, id_salon, estado, fecha_inicio, fecha_fin')
-          .eq('id_salon', idSalon)
-          .eq('estado', 'Pendiente');
-
-        if (pendingReservasError) throw pendingReservasError;
-
-        const nuevaReservaComparable: ReservaPendingConflictComparable = {
-          id: 0,
-          id_salon: idSalon,
-          estado,
-          fecha_inicio: fechaInicioIsoString,
-          fecha_fin: fechaFinIsoString,
-        };
-
-        const pendingConflictIds = getReservaPendingConflictIds(
-          nuevaReservaComparable,
-          (pendingReservasData || []) as ReservaPendingConflictComparable[],
-        );
-
-        if (pendingConflictIds.length > 0) {
-          setMessage({
-            type: 'error',
-            text: `No se puede crear la reserva: coincide con reserva(s) pendiente(s) del mismo salón y fecha (${pendingConflictIds.map((id) => `#${id}`).join(', ')}).`,
-          });
-          return;
-        }
-      }
 
       const { data: userData } = await supabase.auth.getUser();
       const eventDaysForMonto = getEventDaysCount(fechaInicioIso, fechaFinIso);

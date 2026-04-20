@@ -8,6 +8,7 @@ import {
   sanitizeIntegerInput,
   sanitizePhoneInput,
 } from '../utils/formSanitizers';
+import { InfoDialog } from './InfoDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
   getAllowedReservaEstadoTransitions,
@@ -207,7 +208,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [message, setMessage] = useState<{ text: string } | null>(null);
+  const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
   
   // Selected services: Map<servicioId, cantidad>
   const [selectedServicios, setSelectedServicios] = useState<Map<number, number>>(new Map());
@@ -393,6 +395,13 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     onDirtyChange?.(isFormDirty);
   }, [loadingData, isFormDirty, onDirtyChange]);
 
+  const showWarningDialog = (description: string, title = 'Revisá la reserva') => {
+    setWarningDialog({
+      title,
+      description,
+    });
+  };
+
   const loadInitialData = async () => {
     try {
       setLoadingData(true);
@@ -449,7 +458,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       }
     } catch (err: any) {
       console.error('Error loading data:', err);
-      setMessage({ type: 'error', text: err.message });
+      showWarningDialog(err.message, 'No se pudo cargar el formulario');
     } finally {
       setLoadingData(false);
     }
@@ -533,6 +542,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    setWarningDialog(null);
 
     const nombreClienteSanitizado = nombreCliente.trim();
     const emailClienteSanitizado = emailCliente.trim();
@@ -556,18 +566,18 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       || !fechaFin
       || !cantidadPersonasSanitizada
     ) {
-      setMessage({ type: 'error', text: 'Por favor complete todos los campos requeridos' });
+      showWarningDialog('Por favor complete todos los campos requeridos');
       return;
     }
 
     if (!fechaInicioIso || !fechaFinIso) {
-      setMessage({ type: 'error', text: 'Use formato de fecha dd/mm/aa en inicio y fin.' });
+      showWarningDialog('Use formato de fecha dd/mm/aa en inicio y fin.');
       return;
     }
 
     const totalPersonas = parseInt(cantidadPersonasSanitizada, 10);
     if (!totalPersonas || totalPersonas <= 0) {
-      setMessage({ type: 'error', text: 'Ingrese una cantidad de personas valida' });
+      showWarningDialog('Ingrese una cantidad de personas valida');
       return;
     }
 
@@ -579,20 +589,19 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     now.setSeconds(0, 0);
 
     if (new Date(fechaInicio) < now) {
-      setMessage({ type: 'error', text: 'La fecha de inicio no puede ser anterior al momento actual' });
+      showWarningDialog('La fecha de inicio no puede ser anterior al momento actual');
       return;
     }
 
     if (new Date(fechaFin) <= new Date(fechaInicio)) {
-      setMessage({ type: 'error', text: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+      showWarningDialog('La fecha de fin debe ser posterior a la fecha de inicio');
       return;
     }
 
     if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
-      setMessage({
-        type: 'error',
-        text: 'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
-      });
+      showWarningDialog(
+        'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+      );
       return;
     }
 
@@ -697,19 +706,16 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       if (presupuestoErrorMessage) {
         setInitialFormSnapshot(currentFormSnapshot);
         onDirtyChange?.(false);
-        setMessage({
-          type: 'error',
-          text: reserva
+        showWarningDialog(
+          reserva
             ? `Reserva actualizada, pero no se pudo regenerar el presupuesto: ${presupuestoErrorMessage}`
             : `Reserva creada, pero no se pudo generar el presupuesto: ${presupuestoErrorMessage}`,
-        });
+          reserva ? 'Reserva actualizada con advertencias' : 'Reserva creada con advertencias',
+        );
       } else {
         setInitialFormSnapshot(currentFormSnapshot);
         onDirtyChange?.(false);
-        setMessage({
-          type: 'success',
-          text: reserva ? 'Reserva actualizada correctamente' : 'Reserva creada correctamente',
-        });
+        setMessage({ text: reserva ? 'Reserva actualizada correctamente' : 'Reserva creada correctamente' });
 
         setTimeout(() => {
           onClose(true);
@@ -717,7 +723,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       }
     } catch (err: any) {
       console.error('Error saving reserva:', err);
-      setMessage({ type: 'error', text: err.message });
+      showWarningDialog(
+        err.message,
+        reserva ? 'No se pudo actualizar la reserva' : 'No se pudo crear la reserva',
+      );
     } finally {
       setLoading(false);
     }
@@ -738,20 +747,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     <div className="p-2">
       {message && (
         <div
-          className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
-            message.type === 'success'
-              ? 'bg-green-50 border border-green-200'
-              : 'bg-red-50 border border-red-200'
-          }`}
+          className="flex items-start gap-2 p-3 rounded-lg mb-6 bg-green-50 border border-green-200"
         >
-          {message.type === 'success' ? (
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          )}
-          <p className={`text-sm ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-            {message.text}
-          </p>
+          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <p className="text-sm text-green-800">{message.text}</p>
         </div>
       )}
 
@@ -1202,6 +1201,18 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           </button>
         </div>
       </form>
+
+      <InfoDialog
+        open={warningDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWarningDialog(null);
+          }
+        }}
+        title={warningDialog?.title || 'Advertencia'}
+        description={warningDialog?.description || ''}
+        actionText="Cerrar"
+      />
     </div>
   );
 }

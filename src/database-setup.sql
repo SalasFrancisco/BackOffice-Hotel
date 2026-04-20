@@ -1,4 +1,4 @@
--- ============================================
+﻿-- ============================================
 -- HOTEL RESERVATION BACK-OFFICE DATABASE
 -- Execute this SQL in Supabase SQL Editor
 -- ============================================
@@ -99,6 +99,41 @@ alter table public.reservas drop constraint if exists reservas_no_solape_excl;
 alter table public.reservas add constraint reservas_no_solape_excl
   exclude using gist (id_salon with =, rango with &&)
   where (estado in ('Confirmado','Pagado'));
+
+drop trigger if exists reservas_block_locked_overlap on public.reservas;
+drop function if exists public.prevent_reserva_overlap_with_locked_reservas();
+
+create or replace function public.prevent_reserva_overlap_with_locked_reservas()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.estado = 'Cancelado' then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from public.reservas r
+    where r.id <> coalesce(new.id, -1)
+      and r.id_salon = new.id_salon
+      and tstzrange(r.fecha_inicio, r.fecha_fin, '[)') && tstzrange(new.fecha_inicio, new.fecha_fin, '[)')
+      and r.estado in ('Confirmado', 'Pagado')
+  ) then
+    raise exception using
+      errcode = '23P01',
+      message = 'Ya existe una reserva bloqueante en ese rango para el salón seleccionado.';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger reservas_block_locked_overlap
+before insert or update of id_salon, fecha_inicio, fecha_fin, estado
+on public.reservas
+for each row
+execute function public.prevent_reserva_overlap_with_locked_reservas();
 
 -- Pagos (Payments) - Optional
 create table if not exists public.pagos (
@@ -332,9 +367,9 @@ create policy service_role_all_perfiles on public.perfiles
 
 -- Salones
 insert into public.salones (nombre, capacidad, precio_base, descripcion) values
-  ('Gran Salón', 200, 15000.00, 'Salón principal con equipamiento completo para eventos grandes'),
-  ('Salón Norte', 80, 8000.00, 'Salón mediano ideal para reuniones corporativas'),
-  ('Salón Terraza', 50, 6000.00, 'Espacio al aire libre con vista panorámica')
+  ('Gran SalÃ³n', 200, 15000.00, 'SalÃ³n principal con equipamiento completo para eventos grandes'),
+  ('SalÃ³n Norte', 80, 8000.00, 'SalÃ³n mediano ideal para reuniones corporativas'),
+  ('SalÃ³n Terraza', 50, 6000.00, 'Espacio al aire libre con vista panorÃ¡mica')
 on conflict do nothing;
 
 
@@ -387,7 +422,7 @@ on conflict do nothing;
 -- Sample reservations (uncomment after creating users)
 -- insert into public.reservas (cliente_nombre, cliente_email, cliente_telefono, id_salon, fecha_inicio, fecha_fin, estado, monto, observaciones, creado_por) values
 --   ('Cliente Demo', 'demo1@ejemplo.com', '+54 11 1111 1111', 1, '2025-10-20 18:00:00+00', '2025-10-20 23:00:00+00', 'Confirmado', 15000.00, 'Evento corporativo anual', 'UUID-OF-USER'),
---   ('Cliente Demo', 'demo2@ejemplo.com', '+54 11 2222 2222', 2, '2025-10-22 14:00:00+00', '2025-10-22 18:00:00+00', 'Pendiente', 8000.00, 'Reunión de directorio', 'UUID-OF-USER'),
+--   ('Cliente Demo', 'demo2@ejemplo.com', '+54 11 2222 2222', 2, '2025-10-22 14:00:00+00', '2025-10-22 18:00:00+00', 'Pendiente', 8000.00, 'ReuniÃ³n de directorio', 'UUID-OF-USER'),
 --   ('Cliente Demo', 'demo3@ejemplo.com', '+54 11 3333 3333', 3, '2025-10-25 21:00:00+00', '2025-10-26 02:00:00+00', 'Pagado', 6000.00, 'Cena de gala - cruza medianoche', 'UUID-OF-USER');
 
 -- ============================================

@@ -107,6 +107,64 @@ const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | nul
 };
 
 const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
+const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(['Confirmado', 'Pagado']);
+
+type ReservaOverlapComparable = {
+  id: number;
+  id_salon: number;
+  estado: Reserva['estado'];
+  fecha_inicio: string;
+  fecha_fin: string;
+};
+
+const toReservaTimeTimestamp = (value: string): number | null => {
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+const hasReservaTimeOverlap = (
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string,
+) => {
+  const startATimestamp = toReservaTimeTimestamp(startA);
+  const endATimestamp = toReservaTimeTimestamp(endA);
+  const startBTimestamp = toReservaTimeTimestamp(startB);
+  const endBTimestamp = toReservaTimeTimestamp(endB);
+
+  if (
+    startATimestamp === null
+    || endATimestamp === null
+    || startBTimestamp === null
+    || endBTimestamp === null
+  ) {
+    return false;
+  }
+
+  return startATimestamp < endBTimestamp && startBTimestamp < endATimestamp;
+};
+
+const getBlockingReservas = (
+  targetReserva: ReservaOverlapComparable,
+  reservas: ReservaOverlapComparable[],
+) => {
+  if (targetReserva.estado === 'Cancelado') {
+    return [];
+  }
+
+  return reservas
+    .filter((item) => item.id !== targetReserva.id)
+    .filter((item) => Number(item.id_salon) === Number(targetReserva.id_salon))
+    .filter((item) => ESTADOS_BLOQUEANTES.has(item.estado))
+    .filter((item) => hasReservaTimeOverlap(
+      targetReserva.fecha_inicio,
+      targetReserva.fecha_fin,
+      item.fecha_inicio,
+      item.fecha_fin,
+    ))
+    .sort((a, b) => a.id - b.id);
+};
 
 const getDateTimePartsInHotelTimeZone = (value?: string | null) => {
   if (!value) return null;
@@ -608,6 +666,38 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     try {
       setLoading(true);
 
+      const { data: reservasSalonData, error: reservasSalonError } = await supabase
+        .from('reservas')
+        .select('id, id_salon, estado, fecha_inicio, fecha_fin')
+        .eq('id_salon', idSalon);
+
+      if (reservasSalonError) {
+        throw reservasSalonError;
+      }
+
+      const blockingReservas = getBlockingReservas(
+        {
+          id: reserva?.id || 0,
+          id_salon: idSalon,
+          estado,
+          fecha_inicio: fechaInicioIsoString,
+          fecha_fin: fechaFinIsoString,
+        },
+        (reservasSalonData || []) as ReservaOverlapComparable[],
+      );
+
+      if (blockingReservas.length > 0) {
+        const blockingReservasText = blockingReservas
+          .map((item) => `#${item.id} (${item.estado})`)
+          .join(', ');
+
+        showWarningDialog(
+          `El salón ya está bloqueado en ese rango por la(s) reserva(s): ${blockingReservasText}.`,
+          'Horario no disponible',
+        );
+        return;
+      }
+
       const { data: userData } = await supabase.auth.getUser();
       const eventDaysForMonto = getEventDaysCount(fechaInicioIso, fechaFinIso);
       const salonDailyPrice = selectedSalon?.precio_base || 0;
@@ -649,7 +739,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
       if (error) {
         if (error.code === '23P01' || error.message.includes('reservas_no_solape_excl')) {
-          throw new Error('Ya existe una reserva en ese rango de fechas para el salón seleccionado. Por favor elija otro horario.');
+          throw new Error(
+            error.message?.includes('Ya existe una reserva bloqueante')
+              ? error.message
+              : 'Ya existe una reserva bloqueante en ese rango para el salón seleccionado. Por favor elija otro horario.',
+          );
         }
         throw error;
       }

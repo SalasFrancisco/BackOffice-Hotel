@@ -117,6 +117,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'America/Argentina/Cordoba',
     });
   };
 

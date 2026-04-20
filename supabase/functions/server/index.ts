@@ -49,6 +49,7 @@ const formatDate = (isoDate: string) => {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: HOTEL_TIME_ZONE,
   });
 };
 
@@ -57,6 +58,7 @@ const formatTime = (isoDate: string) => {
   return date.toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: HOTEL_TIME_ZONE,
   });
 };
 
@@ -71,6 +73,7 @@ const formatDateValue = (date: Date) =>
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: HOTEL_TIME_ZONE,
   });
 
 const sanitizeFileNamePart = (value: string) =>

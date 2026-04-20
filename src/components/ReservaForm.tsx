@@ -109,6 +109,40 @@ const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | nul
   return Math.floor((endTimestamp - startTimestamp) / MILLISECONDS_PER_DAY) + 1;
 };
 
+const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
+
+const getDateTimePartsInHotelTimeZone = (value?: string | null) => {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: HOTEL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  const hour = parts.find((part) => part.type === 'hour')?.value;
+  const minute = parts.find((part) => part.type === 'minute')?.value;
+
+  if (!year || !month || !day || !hour || !minute) {
+    return null;
+  }
+
+  return {
+    isoDate: `${year}-${month}-${day}`,
+    time: `${hour}:${minute}`,
+  };
+};
+
 const buildProtectedFunctionEndpoints = (path: string) => [
   `https://${projectId}.supabase.co/functions/v1/server/${path}`,
   `https://${projectId}.supabase.co/functions/v1/${path}`,
@@ -188,19 +222,19 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [telefonoCliente, setTelefonoCliente] = useState(sanitizePhoneInput(reserva?.cliente_telefono || ''));
   const [idSalon, setIdSalon] = useState(reserva?.id_salon || 0);
   const [idDistribucion, setIdDistribucion] = useState(reserva?.id_distribucion || 0);
-  const initialFechaInicio = reserva ? new Date(reserva.fecha_inicio).toISOString().slice(0, 16) : '';
-  const initialFechaFin = reserva ? new Date(reserva.fecha_fin).toISOString().slice(0, 16) : '';
+  const initialFechaInicioParts = reserva ? getDateTimePartsInHotelTimeZone(reserva.fecha_inicio) : null;
+  const initialFechaFinParts = reserva ? getDateTimePartsInHotelTimeZone(reserva.fecha_fin) : null;
   const [fechaInicioDate, setFechaInicioDate] = useState(
-    initialFechaInicio ? isoDateToShortDate(initialFechaInicio.slice(0, 10)) : '',
+    initialFechaInicioParts ? isoDateToShortDate(initialFechaInicioParts.isoDate) : '',
   );
   const [fechaInicioHora, setFechaInicioHora] = useState(
-    initialFechaInicio ? initialFechaInicio.slice(11, 16) : '',
+    initialFechaInicioParts?.time || '',
   );
   const [fechaFinDate, setFechaFinDate] = useState(
-    initialFechaFin ? isoDateToShortDate(initialFechaFin.slice(0, 10)) : '',
+    initialFechaFinParts ? isoDateToShortDate(initialFechaFinParts.isoDate) : '',
   );
   const [fechaFinHora, setFechaFinHora] = useState(
-    initialFechaFin ? initialFechaFin.slice(11, 16) : '',
+    initialFechaFinParts?.time || '',
   );
   const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
   const fechaInicioPickerRef = useRef<HTMLInputElement | null>(null);

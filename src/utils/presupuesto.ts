@@ -35,6 +35,7 @@ export type PresupuestoPayload = {
 };
 
 const PRESUPUESTOS_BUCKET = 'presupuestos';
+const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
 const SALONES_HEADER_LOGO_URL = 'https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png';
 const LOCAL_LOGO_PATH = `${import.meta.env.BASE_URL}QuintoCente.png`;
 const LOGO_PATH_CANDIDATES = [SALONES_HEADER_LOGO_URL, LOCAL_LOGO_PATH];
@@ -144,6 +145,7 @@ const formatDate = (isoDate: string) => {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: HOTEL_TIME_ZONE,
   });
 };
 
@@ -152,6 +154,7 @@ const formatTime = (isoDate: string) => {
   return date.toLocaleTimeString('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: HOTEL_TIME_ZONE,
   });
 };
 
@@ -166,6 +169,7 @@ const formatDateValue = (date: Date) =>
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: HOTEL_TIME_ZONE,
   });
 
 const sanitizeFileNamePart = (value: string) =>

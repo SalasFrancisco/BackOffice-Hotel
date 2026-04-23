@@ -139,6 +139,12 @@ const formatCurrency = (value: number) =>
     minimumFractionDigits: 2,
   }).format(value);
 
+const formatBillableDayUnits = (value: number) =>
+  new Intl.NumberFormat('es-AR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+
 const formatDate = (isoDate: string) => {
   const date = new Date(isoDate);
   return date.toLocaleDateString('es-AR', {
@@ -421,7 +427,10 @@ export async function generatePresupuestoDocumento({
   }, 0);
 
   const salonDailyPrice = Number(precioSalonDiarioInput ?? salon.precio_base) || 0;
-  const salonDays = Math.max(1, Math.floor(Number(diasSalonInput) || 1));
+  const parsedSalonDays = Number(diasSalonInput);
+  const salonDays = Number.isFinite(parsedSalonDays) && parsedSalonDays > 0
+    ? Math.round(parsedSalonDays * 100) / 100
+    : 1;
   const totalGeneral = totalSalon + totalServicios;
   const capacidadMaxima =
     distribucion?.capacidad && distribucion.capacidad > 0
@@ -545,7 +554,7 @@ export async function generatePresupuestoDocumento({
                   : [{ text: salon.nombre, bold: true }],
                 style: 'tableCell',
               },
-              { text: String(salonDays), style: 'tableCell', alignment: 'center' },
+              { text: formatBillableDayUnits(salonDays), style: 'tableCell', alignment: 'center' },
               { text: formatCurrency(salonDailyPrice), style: 'tableCell', alignment: 'right' },
               { text: formatCurrency(totalSalon), style: 'tableCell', alignment: 'right' },
             ],

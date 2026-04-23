@@ -67,6 +67,8 @@ const parseShortDateToIso = (value: string): string | null => {
 };
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const PARTIAL_SALON_DAY_RATE = 0.65;
+const PARTIAL_SALON_DAY_THRESHOLD_MINUTES = 15 * 60;
 
 const parseIsoDateToUtcTimestamp = (isoDate: string): number | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
@@ -104,6 +106,65 @@ const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | nul
   }
 
   return Math.floor((endTimestamp - startTimestamp) / MILLISECONDS_PER_DAY) + 1;
+};
+
+const parseTimeToMinutes = (value: string | null | undefined): number | null => {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value ?? '').trim());
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (
+    !Number.isInteger(hours)
+    || !Number.isInteger(minutes)
+    || hours < 0
+    || hours > 23
+    || minutes < 0
+    || minutes > 59
+  ) {
+    return null;
+  }
+
+  return (hours * 60) + minutes;
+};
+
+const roundBillableDayUnits = (value: number): number =>
+  Math.round(value * 100) / 100;
+
+const formatBillableDayUnits = (value: number): string =>
+  new Intl.NumberFormat('es-AR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+
+const calculateSalonBillableDayUnits = ({
+  startIsoDate,
+  endIsoDate,
+  startTime,
+  endTime,
+}: {
+  startIsoDate: string | null;
+  endIsoDate: string | null;
+  startTime: string | null | undefined;
+  endTime: string | null | undefined;
+}): number => {
+  const totalDays = getEventDaysCount(startIsoDate, endIsoDate);
+  if (totalDays <= 1) return 1;
+
+  const startMinutes = parseTimeToMinutes(startTime);
+  const endMinutes = parseTimeToMinutes(endTime);
+  const startDayRate =
+    startMinutes !== null && startMinutes >= PARTIAL_SALON_DAY_THRESHOLD_MINUTES
+      ? PARTIAL_SALON_DAY_RATE
+      : 1;
+  const endDayRate =
+    endMinutes !== null && endMinutes < PARTIAL_SALON_DAY_THRESHOLD_MINUTES
+      ? PARTIAL_SALON_DAY_RATE
+      : 1;
+
+  return roundBillableDayUnits(
+    Math.max(1, Math.max(0, totalDays - 2) + startDayRate + endDayRate),
+  );
 };
 
 const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
@@ -350,14 +411,30 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
   const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
   const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
-  const eventDaysCount = getEventDaysCount(fechaInicioIsoFromInput, fechaFinIsoFromInput);
+  const eventCalendarDaysCount = getEventDaysCount(fechaInicioIsoFromInput, fechaFinIsoFromInput);
+  const eventBillableDayUnits = calculateSalonBillableDayUnits({
+    startIsoDate: fechaInicioIsoFromInput,
+    endIsoDate: fechaFinIsoFromInput,
+    startTime: fechaInicioHora,
+    endTime: fechaFinHora,
+  });
 
   const currentSalon = salones.find(s => s.id === idSalon) || null;
   const currentSalonDailyPrice = currentSalon?.precio_base || 0;
-  const currentReservaTotal = currentSalonDailyPrice * eventDaysCount;
+  const currentReservaTotal = currentSalonDailyPrice * eventBillableDayUnits;
   const currentDistribucion = idDistribucion
     ? distribuciones.find(d => d.id === idDistribucion) || null
     : null;
+  const startDayIsPartial = eventCalendarDaysCount > 1 && (
+    (parseTimeToMinutes(fechaInicioHora) ?? -1) >= PARTIAL_SALON_DAY_THRESHOLD_MINUTES
+  );
+  const endDayIsPartial = eventCalendarDaysCount > 1 && (
+    (parseTimeToMinutes(fechaFinHora) ?? PARTIAL_SALON_DAY_THRESHOLD_MINUTES) < PARTIAL_SALON_DAY_THRESHOLD_MINUTES
+  );
+  const billingAdjustments = [
+    startDayIsPartial ? 'dia inicial al 65%' : null,
+    endDayIsPartial ? 'dia final al 65%' : null,
+  ].filter((value): value is string => Boolean(value));
   const totalPersonasNumber = parseInt(cantidadPersonas, 10) || 0;
   const salonesRecomendadosData = useMemo(() => {
     const salonesOrdenadosPorNombre = [...salones].sort((a, b) =>
@@ -699,7 +776,12 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       }
 
       const { data: userData } = await supabase.auth.getUser();
-      const eventDaysForMonto = getEventDaysCount(fechaInicioIso, fechaFinIso);
+      const eventDaysForMonto = calculateSalonBillableDayUnits({
+        startIsoDate: fechaInicioIso,
+        endIsoDate: fechaFinIso,
+        startTime: fechaInicioHora,
+        endTime: fechaFinHora,
+      });
       const salonDailyPrice = selectedSalon?.precio_base || 0;
       const monto = salonDailyPrice * eventDaysForMonto;
 
@@ -1153,8 +1235,14 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             <p className="text-sm text-blue-800">
               <strong>Monto de la reserva:</strong> ${currentReservaTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               <span className="text-xs block mt-1">
-                ({currentSalonDailyPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por dia x {eventDaysCount} {eventDaysCount === 1 ? 'dia' : 'dias'})
+                ({currentSalonDailyPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por dia x {formatBillableDayUnits(eventBillableDayUnits)} dias facturables)
               </span>
+              {billingAdjustments.length > 0 && (
+                <span className="text-xs block mt-1">
+                  Aplicando {billingAdjustments.join(' y ')}
+                  {eventCalendarDaysCount > 2 ? '. Los dias entre el inicial y el final se cobran al 100%.' : '.'}
+                </span>
+              )}
             </p>
           </div>
         )}

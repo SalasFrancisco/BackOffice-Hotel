@@ -43,6 +43,12 @@ const formatCurrency = (value: number) =>
     minimumFractionDigits: 2,
   }).format(value);
 
+const formatBillableDayUnits = (value: number) =>
+  new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+
 const formatDate = (isoDate: string) => {
   const date = new Date(isoDate);
   return date.toLocaleDateString("es-AR", {
@@ -143,6 +149,24 @@ const formatDatePartInTimeZone = (value: string | Date, timeZone = HOTEL_TIME_ZO
   return `${year}-${month}-${day}`;
 };
 
+const formatTimePartInTimeZone = (value: string | Date, timeZone = HOTEL_TIME_ZONE) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const hour = parts.find((part) => part.type === "hour")?.value;
+  const minute = parts.find((part) => part.type === "minute")?.value;
+  if (!hour || !minute) return null;
+
+  return `${hour}:${minute}`;
+};
+
 const parseIsoDateToUtcTimestamp = (isoDate: string): number | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
   if (!match) return null;
@@ -181,6 +205,48 @@ const getEventDaysCount = (startIsoDate: string | null, endIsoDate: string | nul
   return Math.floor((endTimestamp - startTimestamp) / DAY_MS) + 1;
 };
 
+const parseTimeTextToMinutes = (value?: string | null): number | null => {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value ?? "").trim());
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (
+    !Number.isInteger(hours)
+    || !Number.isInteger(minutes)
+    || hours < 0
+    || hours > 23
+    || minutes < 0
+    || minutes > 59
+  ) {
+    return null;
+  }
+
+  return (hours * 60) + minutes;
+};
+
+const roundBillableDayUnits = (value: number) =>
+  Math.round(value * 100) / 100;
+
+const calculateSalonBillableDayUnits = (input: {
+  startIsoDate: string | null;
+  endIsoDate: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+}) => {
+  const totalDays = getEventDaysCount(input.startIsoDate, input.endIsoDate);
+  if (totalDays <= 1) return 1;
+
+  const startMinutes = parseTimeTextToMinutes(input.startTime);
+  const endMinutes = parseTimeTextToMinutes(input.endTime);
+  const startDayRate = startMinutes !== null && startMinutes >= (15 * 60) ? 0.65 : 1;
+  const endDayRate = endMinutes !== null && endMinutes < (15 * 60) ? 0.65 : 1;
+
+  return roundBillableDayUnits(
+    Math.max(1, Math.max(0, totalDays - 2) + startDayRate + endDayRate),
+  );
+};
+
 const getEventDaysCountFromDateTimes = (
   startValue?: string | null,
   endValue?: string | null,
@@ -191,14 +257,38 @@ const getEventDaysCountFromDateTimes = (
   return getEventDaysCount(startDatePart, endDatePart);
 };
 
+const calculateSalonBillableDayUnitsFromDateTimes = (
+  startValue?: string | null,
+  endValue?: string | null,
+  timeZone = HOTEL_TIME_ZONE,
+) => {
+  const startDatePart = startValue ? formatDatePartInTimeZone(startValue, timeZone) : null;
+  const endDatePart = endValue ? formatDatePartInTimeZone(endValue, timeZone) : null;
+  const startTimePart = startValue ? formatTimePartInTimeZone(startValue, timeZone) : null;
+  const endTimePart = endValue ? formatTimePartInTimeZone(endValue, timeZone) : null;
+
+  return calculateSalonBillableDayUnits({
+    startIsoDate: startDatePart,
+    endIsoDate: endDatePart,
+    startTime: startTimePart,
+    endTime: endTimePart,
+  });
+};
+
 const resolveSalonDays = (
   requestedDays: unknown,
   startValue?: string | null,
   endValue?: string | null,
 ) => {
-  const parsedRequestedDays = Math.floor(Number(requestedDays) || 0);
-  if (parsedRequestedDays > 0) return parsedRequestedDays;
-  return getEventDaysCountFromDateTimes(startValue, endValue);
+  const calculatedDays = calculateSalonBillableDayUnitsFromDateTimes(startValue, endValue);
+  if (calculatedDays > 0) return calculatedDays;
+
+  const parsedRequestedDays = Number(requestedDays);
+  if (Number.isFinite(parsedRequestedDays) && parsedRequestedDays > 0) {
+    return roundBillableDayUnits(parsedRequestedDays);
+  }
+
+  return 1;
 };
 
 const RESERVA_BLOCKING_ESTADOS = new Set(["Confirmado", "Pagado"]);
@@ -693,7 +783,10 @@ const buildPresupuestoPdf = async (
   }, 0);
 
   const salonDailyPrice = Number(input.precioSalonDiario ?? input.salon.precio_base) || 0;
-  const salonDays = Math.max(1, Math.floor(Number(input.diasSalon) || 1));
+  const parsedSalonDays = Number(input.diasSalon);
+  const salonDays = Number.isFinite(parsedSalonDays) && parsedSalonDays > 0
+    ? roundBillableDayUnits(parsedSalonDays)
+    : 1;
   const totalSalon = Number.isFinite(Number(input.totalSalon))
     ? Number(input.totalSalon)
     : salonDailyPrice * salonDays;
@@ -819,7 +912,7 @@ const buildPresupuestoPdf = async (
                   : [{ text: input.salon.nombre, bold: true }],
                 style: "tableCell",
               },
-              { text: String(salonDays), style: "tableCell", alignment: "center" },
+              { text: formatBillableDayUnits(salonDays), style: "tableCell", alignment: "center" },
               { text: formatCurrency(salonDailyPrice), style: "tableCell", alignment: "right" },
               { text: formatCurrency(totalSalon), style: "tableCell", alignment: "right" },
             ],
@@ -1930,9 +2023,9 @@ const loadReservaPresupuestoContext = async (
   const salonDailyPrice = Number(salonData.precio_base) || 0;
   const totalSalon = Number(reservaData.monto) || 0;
   const salonDaysFromMonto = salonDailyPrice > 0 && totalSalon > 0
-    ? Math.max(1, Math.round(totalSalon / salonDailyPrice))
+    ? roundBillableDayUnits(totalSalon / salonDailyPrice)
     : 0;
-  const salonDays = salonDaysFromMonto || getEventDaysCountFromDateTimes(
+  const salonDays = salonDaysFromMonto || calculateSalonBillableDayUnitsFromDateTimes(
     reservaData.fecha_inicio,
     reservaData.fecha_fin,
   );

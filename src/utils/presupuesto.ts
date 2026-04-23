@@ -279,19 +279,6 @@ const parseTimeTextToMinutes = (value: string) => {
   return (hours * 60) + minutes;
 };
 
-const getReservaExactaLabel = (fechaInicio: string, fechaFin: string) => {
-  const fechaInicioLabel = formatDate(fechaInicio);
-  const fechaFinLabel = formatDate(fechaFin);
-  const horaInicioLabel = formatTime(fechaInicio);
-  const horaFinLabel = formatTime(fechaFin);
-
-  if (fechaInicioLabel === fechaFinLabel) {
-    return `${fechaInicioLabel}\n${horaInicioLabel} a ${horaFinLabel}`;
-  }
-
-  return `${fechaInicioLabel} ${horaInicioLabel}\nal\n${fechaFinLabel} ${horaFinLabel}`;
-};
-
 const getSalonBillingNotes = (fechaInicio: string, fechaFin: string) => {
   const startDatePart = getDatePartInHotelTimeZone(fechaInicio);
   const endDatePart = getDatePartInHotelTimeZone(fechaFin);
@@ -591,7 +578,6 @@ export async function generatePresupuestoDocumento({
     ? Math.round(parsedSalonDays * 100) / 100
     : 1;
   const totalGeneral = totalSalon + totalServicios;
-  const reservaExactaLabel = getReservaExactaLabel(fechaInicio, fechaFin);
   const salonBillingNotes = getSalonBillingNotes(fechaInicio, fechaFin);
   const capacidadMaxima =
     distribucion?.capacidad && distribucion.capacidad > 0
@@ -700,7 +686,7 @@ export async function generatePresupuestoDocumento({
       { text: 'Salón contratado', style: 'infoTitle' },
       {
         table: {
-          widths: ['*', 120, 'auto', 'auto'],
+          widths: ['*', 'auto', 'auto'],
           body: [
             [
               { text: 'Salón y descripción', style: 'detailTableHeader' },

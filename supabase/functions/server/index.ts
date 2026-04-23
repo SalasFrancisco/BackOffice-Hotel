@@ -125,6 +125,24 @@ const normalizePdfDocumentNode = (value: unknown): unknown => {
   return value;
 };
 
+const normalizeSalonContractTable = (docDefinition: Record<string, unknown>) => {
+  const content = Array.isArray(docDefinition.content) ? docDefinition.content : [];
+
+  content.forEach((item) => {
+    if (!item || typeof item !== "object" || !("table" in item)) return;
+
+    const table = (item as { table?: { widths?: unknown[]; body?: unknown[] } }).table;
+    const widths = Array.isArray(table?.widths) ? table.widths : null;
+    const body = Array.isArray(table?.body) ? table.body : null;
+    const headerRow = Array.isArray(body?.[0]) ? body[0] as unknown[] : null;
+
+    if (!widths || !body || !headerRow) return;
+    if (widths.length !== 3 || headerRow.length !== 4) return;
+
+    body[0] = [headerRow[0], headerRow[2], headerRow[3]];
+  });
+};
+
 const formatDate = (isoDate: string) => {
   const date = new Date(isoDate);
   return date.toLocaleDateString("es-AR", {
@@ -350,19 +368,6 @@ const calculateSalonBillableDayUnitsFromDateTimes = (
     startTime: startTimePart,
     endTime: endTimePart,
   });
-};
-
-const getReservaExactaLabel = (fechaInicio: string, fechaFin: string) => {
-  const fechaInicioLabel = formatDate(fechaInicio);
-  const fechaFinLabel = formatDate(fechaFin);
-  const horaInicioLabel = formatTime(fechaInicio);
-  const horaFinLabel = formatTime(fechaFin);
-
-  if (fechaInicioLabel === fechaFinLabel) {
-    return `${fechaInicioLabel}\n${horaInicioLabel} a ${horaFinLabel}`;
-  }
-
-  return `${fechaInicioLabel} ${horaInicioLabel}\nal\n${fechaFinLabel} ${horaFinLabel}`;
 };
 
 const getSalonBillingNotes = (fechaInicio: string, fechaFin: string) => {
@@ -908,7 +913,6 @@ const buildPresupuestoPdf = async (
     ? Number(input.totalSalon)
     : salonDailyPrice * salonDays;
   const totalGeneral = totalSalon + totalServicios;
-  const reservaExactaLabel = getReservaExactaLabel(input.fechaInicio, input.fechaFin);
   const salonBillingNotes = getSalonBillingNotes(input.fechaInicio, input.fechaFin);
   const logoDataUrl = await loadLogoDataUrl();
   const fechaEmision = new Date();
@@ -1016,7 +1020,7 @@ const buildPresupuestoPdf = async (
       { text: "Salón contratado", style: "infoTitle" },
       {
         table: {
-          widths: ["*", 120, "auto", "auto"],
+          widths: ["*", "auto", "auto"],
           body: [
             [
               { text: "Salón y descripción", style: "detailTableHeader" },
@@ -1037,7 +1041,6 @@ const buildPresupuestoPdf = async (
                   })),
                 ],
               },
-              { text: reservaExactaLabel, style: "tableCell", alignment: "center" },
               { text: formatCurrency(salonDailyPrice), style: "tableCell", alignment: "right" },
               { text: formatCurrency(totalSalon), style: "tableCell", alignment: "right" },
             ],
@@ -1124,6 +1127,7 @@ const buildPresupuestoPdf = async (
     defaultStyle: { fontSize: 10 },
   };
 
+  normalizeSalonContractTable(docDefinition as Record<string, unknown>);
   normalizePdfDocumentNode(docDefinition);
 
   const pdfBuffer = await new Promise<Uint8Array>((resolve, reject) => {

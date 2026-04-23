@@ -36,6 +36,16 @@ const ESTADO_COLORS = {
   Cancelado: '#B0B7C3',
 };
 
+const getReservaServiciosTotal = (reserva: Reserva) =>
+  (reserva.reserva_servicios || []).reduce((acc, item) => {
+    const cantidad = Number(item?.cantidad) || 0;
+    const precio = Number(item?.servicio?.precio) || 0;
+    return acc + (cantidad * precio);
+  }, 0);
+
+const getReservaMontoTotal = (reserva: Reserva) =>
+  (Number(reserva.monto) || 0) + getReservaServiciosTotal(reserva);
+
 export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: ReservasProps) {
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
@@ -110,7 +120,13 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         .select(`
           *,
           salon:salones(*),
-          distribucion:distribuciones(*)
+          distribucion:distribuciones(*),
+          reserva_servicios(
+            cantidad,
+            servicio:servicios(
+              precio
+            )
+          )
         `)
         .order('fecha_inicio', { ascending: false });
 
@@ -380,7 +396,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       case 'estado':
         return reserva.estado || '';
       case 'monto':
-        return Number(reserva.monto) || 0;
+        return getReservaMontoTotal(reserva);
       default:
         return '';
     }
@@ -635,7 +651,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                     onClick={() => handleSort('monto')}
                     className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
                   >
-                    Monto
+                    Monto Total
                     {renderSortIcon('monto')}
                   </button>
                 </th>
@@ -672,6 +688,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
                   const clienteEmail = reserva.cliente_email?.trim() || '';
                   const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
+                  const totalServicios = getReservaServiciosTotal(reserva);
+                  const totalReserva = getReservaMontoTotal(reserva);
                   const sendPresupuestoTitle = sendingPresupuestoId === reserva.id
                     ? 'Enviando presupuesto...'
                     : !reserva.presupuesto_url
@@ -704,7 +722,17 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
-                          ${Number(reserva.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              ${totalReserva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                            </div>
+                            {totalServicios > 0 && (
+                              <div className="mt-1 text-xs text-gray-500">
+                                Salon: ${(Number(reserva.monto) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                {' '}+ Servicios: ${totalServicios.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">

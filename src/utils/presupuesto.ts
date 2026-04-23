@@ -76,6 +76,81 @@ www.quintocentenariohotel.com
 let pdfFontsReady = false;
 let logoDataUrlCache: string | null | undefined;
 
+const PRESUPUESTO_TEXT_REPLACEMENTS: Array<[string, string]> = [
+  ['TelÃ©fono', 'Teléfono'],
+  ['SalÃ³n', 'Salón'],
+  ['DistribuciÃ³n', 'Distribución'],
+  ['Sin distribuciÃ³n definida', 'Sin distribución definida'],
+  ['Capacidad mÃ¡xima', 'Capacidad máxima'],
+  ['Fecha de emisiÃ³n', 'Fecha de emisión'],
+  ['VÃ¡lido hasta', 'Válido hasta'],
+  ['7 dÃ­as corridos', '7 días corridos'],
+  ['InformaciÃ³n del cliente', 'Información del cliente'],
+  ['InformaciÃ³n del evento', 'Información del evento'],
+  ['SalÃ³n contratado', 'Salón contratado'],
+  ['SalÃ³n y descripciÃ³n', 'Salón y descripción'],
+  ['Cantidad (dÃ­as)', 'Reserva exacta'],
+  ['Servicio y descripciÃ³n', 'Servicio y descripción'],
+  ['Total salÃ³n', 'Total salón'],
+];
+
+const PRESUPUESTO_MOJIBAKE_REPLACEMENTS: Array<[string, string]> = [
+  ['\u00C3\u00A1', '\u00E1'],
+  ['\u00C3\u00A9', '\u00E9'],
+  ['\u00C3\u00AD', '\u00ED'],
+  ['\u00C3\u00B3', '\u00F3'],
+  ['\u00C3\u00BA', '\u00FA'],
+  ['\u00C3\u00B1', '\u00F1'],
+  ['\u00C3\u0081', '\u00C1'],
+  ['\u00C3\u0089', '\u00C9'],
+  ['\u00C3\u008D', '\u00CD'],
+  ['\u00C3\u0093', '\u00D3'],
+  ['\u00C3\u009A', '\u00DA'],
+  ['\u00C3\u0091', '\u00D1'],
+  ['\u00C3\u0192\u00C2\u00A1', '\u00E1'],
+  ['\u00C3\u0192\u00C2\u00A9', '\u00E9'],
+  ['\u00C3\u0192\u00C2\u00AD', '\u00ED'],
+  ['\u00C3\u0192\u00C2\u00B3', '\u00F3'],
+  ['\u00C3\u0192\u00C2\u00BA', '\u00FA'],
+  ['\u00C3\u0192\u00C2\u00B1', '\u00F1'],
+  ['\u00C3\u0192\u00E2\u20AC\u0161', '\u00C1'],
+  ['\u00C3\u0192\u2030', '\u00C9'],
+  ['\u00C3\u0192\u00C2\u008D', '\u00CD'],
+  ['\u00C3\u0192\u00C2\u0093', '\u00D3'],
+  ['\u00C3\u0192\u00C2\u009A', '\u00DA'],
+  ['\u00C3\u0192\u00C2\u0091', '\u00D1'],
+];
+
+const normalizePresupuestoText = (value: string): string =>
+  PRESUPUESTO_MOJIBAKE_REPLACEMENTS.reduce(
+    (acc, [searchValue, replaceValue]) => acc.split(searchValue).join(replaceValue),
+    PRESUPUESTO_TEXT_REPLACEMENTS.reduce(
+      (acc, [searchValue, replaceValue]) => acc.split(searchValue).join(replaceValue),
+      value,
+    ),
+  );
+
+const normalizePdfDocumentNode = (value: unknown): unknown => {
+  if (typeof value === 'string') {
+    return normalizePresupuestoText(value);
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => {
+      value[index] = normalizePdfDocumentNode(item);
+    });
+    return value;
+  }
+
+  if (value && typeof value === 'object') {
+    Object.entries(value as Record<string, unknown>).forEach(([key, nestedValue]) => {
+      (value as Record<string, unknown>)[key] = normalizePdfDocumentNode(nestedValue);
+    });
+  }
+
+  return value;
+};
+
 const ensurePdfFonts = () => {
   if (pdfFontsReady) return;
 
@@ -160,8 +235,92 @@ const formatTime = (isoDate: string) => {
   return date.toLocaleTimeString('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
+    hourCycle: 'h23',
     timeZone: HOTEL_TIME_ZONE,
   });
+};
+
+const getDatePartInHotelTimeZone = (isoDate: string) => {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: HOTEL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  if (!year || !month || !day) return null;
+
+  return `${year}-${month}-${day}`;
+};
+
+const parseTimeTextToMinutes = (value: string) => {
+  const match = /^(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (
+    !Number.isInteger(hours)
+    || !Number.isInteger(minutes)
+    || hours < 0
+    || hours > 23
+    || minutes < 0
+    || minutes > 59
+  ) {
+    return null;
+  }
+
+  return (hours * 60) + minutes;
+};
+
+const getReservaExactaLabel = (fechaInicio: string, fechaFin: string) => {
+  const fechaInicioLabel = formatDate(fechaInicio);
+  const fechaFinLabel = formatDate(fechaFin);
+  const horaInicioLabel = formatTime(fechaInicio);
+  const horaFinLabel = formatTime(fechaFin);
+
+  if (fechaInicioLabel === fechaFinLabel) {
+    return `${fechaInicioLabel}\n${horaInicioLabel} a ${horaFinLabel}`;
+  }
+
+  return `${fechaInicioLabel} ${horaInicioLabel}\nal\n${fechaFinLabel} ${horaFinLabel}`;
+};
+
+const getSalonBillingNotes = (fechaInicio: string, fechaFin: string) => {
+  const startDatePart = getDatePartInHotelTimeZone(fechaInicio);
+  const endDatePart = getDatePartInHotelTimeZone(fechaFin);
+  if (!startDatePart || !endDatePart || startDatePart === endDatePart) {
+    return [] as string[];
+  }
+
+  const notes: string[] = [];
+  const startMinutes = parseTimeTextToMinutes(formatTime(fechaInicio));
+  const endMinutes = parseTimeTextToMinutes(formatTime(fechaFin));
+
+  if (startMinutes !== null && startMinutes >= (15 * 60)) {
+    notes.push('Día inicial: se cobra el 65% del salón por media jornada.');
+  }
+
+  if (endMinutes !== null && endMinutes < (15 * 60)) {
+    notes.push('Día final: se cobra el 65% del salón por media jornada.');
+  }
+
+  if (startDatePart !== endDatePart) {
+    const startDate = new Date(`${startDatePart}T00:00:00Z`);
+    const endDate = new Date(`${endDatePart}T00:00:00Z`);
+    const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (totalDays > 2) {
+      notes.push('Los días intermedios se cobran al 100% del valor diario del salón.');
+    }
+  }
+
+  return notes;
 };
 
 const addDays = (date: Date, days: number) => {
@@ -432,6 +591,8 @@ export async function generatePresupuestoDocumento({
     ? Math.round(parsedSalonDays * 100) / 100
     : 1;
   const totalGeneral = totalSalon + totalServicios;
+  const reservaExactaLabel = getReservaExactaLabel(fechaInicio, fechaFin);
+  const salonBillingNotes = getSalonBillingNotes(fechaInicio, fechaFin);
   const capacidadMaxima =
     distribucion?.capacidad && distribucion.capacidad > 0
       ? distribucion.capacidad
@@ -539,22 +700,28 @@ export async function generatePresupuestoDocumento({
       { text: 'Salón contratado', style: 'infoTitle' },
       {
         table: {
-          widths: ['*', 'auto', 'auto', 'auto'],
+          widths: ['*', 120, 'auto', 'auto'],
           body: [
             [
               { text: 'Salón y descripción', style: 'detailTableHeader' },
-              { text: 'Cantidad (días)', style: 'detailTableHeader', alignment: 'center' },
+              { text: 'Reserva exacta', style: 'detailTableHeader', alignment: 'center' },
               { text: 'Precio unitario', style: 'detailTableHeader', alignment: 'right' },
               { text: 'Subtotal', style: 'detailTableHeader', alignment: 'right' },
             ],
             [
               {
-                text: salon.descripcion
-                  ? [{ text: salon.nombre, bold: true }, `\n${salon.descripcion}`]
-                  : [{ text: salon.nombre, bold: true }],
-                style: 'tableCell',
+                stack: [
+                  salon.descripcion
+                    ? { text: [{ text: salon.nombre, bold: true }, `\n${salon.descripcion}`], style: 'tableCell' }
+                    : { text: [{ text: salon.nombre, bold: true }], style: 'tableCell' },
+                  ...salonBillingNotes.map((note) => ({
+                    text: note,
+                    style: 'tableCellSecondary',
+                    margin: [0, 4, 0, 0] as [number, number, number, number],
+                  })),
+                ],
               },
-              { text: formatBillableDayUnits(salonDays), style: 'tableCell', alignment: 'center' },
+              { text: reservaExactaLabel, style: 'tableCell', alignment: 'center' },
               { text: formatCurrency(salonDailyPrice), style: 'tableCell', alignment: 'right' },
               { text: formatCurrency(totalSalon), style: 'tableCell', alignment: 'right' },
             ],
@@ -639,6 +806,8 @@ export async function generatePresupuestoDocumento({
     },
     defaultStyle: { fontSize: 10 },
   };
+
+  normalizePdfDocumentNode(docDefinition);
 
   const pdfBuffer = await new Promise<Uint8Array>((resolve, reject) => {
     try {

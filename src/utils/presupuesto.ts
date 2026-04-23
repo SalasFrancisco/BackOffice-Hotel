@@ -704,7 +704,6 @@ export async function generatePresupuestoDocumento({
           body: [
             [
               { text: 'Salón y descripción', style: 'detailTableHeader' },
-              { text: 'Reserva exacta', style: 'detailTableHeader', alignment: 'center' },
               { text: 'Precio unitario', style: 'detailTableHeader', alignment: 'right' },
               { text: 'Subtotal', style: 'detailTableHeader', alignment: 'right' },
             ],
@@ -721,7 +720,6 @@ export async function generatePresupuestoDocumento({
                   })),
                 ],
               },
-              { text: reservaExactaLabel, style: 'tableCell', alignment: 'center' },
               { text: formatCurrency(salonDailyPrice), style: 'tableCell', alignment: 'right' },
               { text: formatCurrency(totalSalon), style: 'tableCell', alignment: 'right' },
             ],

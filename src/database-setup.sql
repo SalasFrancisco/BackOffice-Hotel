@@ -16,8 +16,11 @@ create table if not exists public.salones (
   nombre text not null,
   capacidad int not null,
   precio_base numeric(12,2) not null default 0,
-  descripcion text
+  descripcion text,
+  activo boolean not null default true
 );
+
+alter table public.salones add column if not exists activo boolean not null default true;
 
 -- Distribuciones de salones (Room Layouts/Distributions)
 create table if not exists public.distribuciones (
@@ -178,8 +181,11 @@ create table if not exists public.servicios (
   nombre text not null,
   descripcion text,
   precio numeric(12,2) not null default 0,
+  activo boolean not null default true,
   creado_en timestamptz default now()
 );
+
+alter table public.servicios add column if not exists activo boolean not null default true;
 
 -- Tabla intermedia: Servicios asociados a una reserva
 create table if not exists public.reserva_servicios (

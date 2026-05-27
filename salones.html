@@ -4004,10 +4004,10 @@
                 };
 
                 const [salonesRes, distribRes, categoriasRes, serviciosRes] = await Promise.all([
-                    fetch(`${restBase}/salones?select=*&order=nombre`, { headers }),
+                    fetch(`${restBase}/salones?select=*&order=nombre&activo=eq.true`, { headers }),
                     fetch(`${restBase}/distribuciones?select=*&order=nombre`, { headers }),
                     fetch(`${restBase}/categorias_servicios?select=*&order=nombre`, { headers }),
-                    fetch(`${restBase}/servicios?select=*,categoria:categorias_servicios(*)&order=nombre`, { headers }),
+                    fetch(`${restBase}/servicios?select=*,categoria:categorias_servicios(*)&order=nombre&activo=eq.true`, { headers }),
                 ]);
 
                 if (!salonesRes.ok || !distribRes.ok || !categoriasRes.ok || !serviciosRes.ok) {

@@ -408,12 +408,12 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     try {
       const { error } = await supabase
         .from('servicios')
-        .delete()
+        .update({ activo: false })
         .eq('id', confirmDeleteServicio.servicioId);
 
       if (error) throw error;
       
-      setMessage({ type: 'success', text: 'Servicio eliminado correctamente' });
+      setMessage({ type: 'success', text: 'Servicio deshabilitado correctamente' });
       setConfirmDeleteServicio({ open: false, servicioId: null });
       loadData();
       setTimeout(() => setMessage(null), 3000);

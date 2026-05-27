@@ -18,6 +18,7 @@ export type Salon = {
   capacidad: number;
   precio_base: number;
   descripcion?: string;
+  activo?: boolean | null;
 };
 
 export type Distribucion = {
@@ -43,6 +44,7 @@ export type Servicio = {
   nombre: string;
   descripcion?: string;
   precio: number;
+  activo?: boolean | null;
   creado_en: string;
   categoria?: CategoriaServicio;
 };

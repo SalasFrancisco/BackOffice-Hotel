@@ -181,7 +181,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
 
       const { error: deleteError } = await supabase
         .from('salones')
-        .delete()
+        .update({ activo: false })
         .eq('id', confirmDelete.salonId);
 
       if (deleteError) throw deleteError;
@@ -189,7 +189,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       const reservasEliminadasText = reservasDelSalon.length > 0
         ? ` y ${reservasDelSalon.length} reserva(s) asociada(s)`
         : '';
-      setMessage({ type: 'success', text: `Salón eliminado correctamente${reservasEliminadasText}` });
+      setMessage({ type: 'success', text: `Salón deshabilitado correctamente${reservasEliminadasText}` });
       setConfirmDelete({ open: false, salonId: null });
       loadSalones();
       setTimeout(() => setMessage(null), 3000);

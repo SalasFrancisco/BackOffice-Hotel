@@ -68,6 +68,52 @@ alter table public.reservas add column if not exists cliente_email text;
 alter table public.reservas add column if not exists cliente_telefono text;
 
 -- ============================================
+-- AUDITORÍA DE RESERVAS
+-- ============================================
+
+create table if not exists public.auditoria_reservas (
+  id bigint generated always as identity primary key,
+  id_reserva bigint not null references public.reservas(id) on delete cascade,
+  estado_anterior text not null,
+  estado_nuevo text not null,
+  usuario_id uuid,
+  accion text not null default 'UPDATE',
+  creado_en timestamptz not null default now()
+);
+
+create or replace function public.audit_reserva_estado_cambio()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  v_claims jsonb;
+  v_usuario_id uuid;
+begin
+  if TG_OP = 'UPDATE' and old.estado is distinct from new.estado then
+    v_claims := nullif(current_setting('request.jwt.claims', true), '')::jsonb;
+    v_usuario_id := auth.uid();
+
+    if v_usuario_id is null and v_claims is not null then
+      v_usuario_id := (v_claims ->> 'sub')::uuid;
+    end if;
+
+    insert into public.auditoria_reservas (id_reserva, estado_anterior, estado_nuevo, usuario_id)
+    values (new.id, old.estado, new.estado, v_usuario_id);
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists reservas_audit_estado_cambio on public.reservas;
+create trigger reservas_audit_estado_cambio
+after update of estado
+on public.reservas
+for each row
+execute function public.audit_reserva_estado_cambio();
+
+-- ============================================
 -- STORAGE: PRESUPUESTOS
 -- ============================================
 

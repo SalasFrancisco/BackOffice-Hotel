@@ -39,6 +39,8 @@ const clearPasswordRecoveryUrl = () => {
   window.history.replaceState({}, document.title, nextUrl.toString());
 };
 
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
@@ -194,6 +196,40 @@ export default function App() {
     setPerfil(null);
     setCurrentPage('dashboard');
   };
+
+  useEffect(() => {
+    if (!session) return;
+
+    let inactivityTimer: ReturnType<typeof window.setTimeout> | null = null;
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+      }
+
+      inactivityTimer = window.setTimeout(() => {
+        void handleLogout();
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+
+    resetInactivityTimer();
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, resetInactivityTimer, true);
+    });
+
+    return () => {
+      if (inactivityTimer) {
+        window.clearTimeout(inactivityTimer);
+      }
+
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, resetInactivityTimer, true);
+      });
+    };
+  }, [session]);
 
   const executeNavigation = ({ page, reservaId }: NavigationRequest) => {
     setCurrentPage(page);

@@ -1,9 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { supabase, Perfil } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
 import { AlertCircle, CheckCircle, Shield, User, Plus, Edit, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
+
+const hasUppercase = (value: string) => /[A-Z]/.test(value);
+const hasLowercase = (value: string) => /[a-z]/.test(value);
+const hasNumber = (value: string) => /\d/.test(value);
+
+const isSecurePassword = (value: string) =>
+  hasUppercase(value) && hasLowercase(value) && hasNumber(value);
 
 export function Usuarios() {
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
@@ -28,6 +35,21 @@ export function Usuarios() {
   const [editEmail, setEditEmail] = useState('');
   const [editRol, setEditRol] = useState<'ADMIN' | 'OPERADOR'>('OPERADOR');
   const [editPassword, setEditPassword] = useState('');
+
+  const newPasswordChecks = useMemo(() => [
+    { label: 'Al menos una mayúscula', ok: hasUppercase(newPassword) },
+    { label: 'Al menos una minúscula', ok: hasLowercase(newPassword) },
+    { label: 'Al menos un número', ok: hasNumber(newPassword) },
+  ], [newPassword]);
+
+  const editPasswordChecks = useMemo(() => [
+    { label: 'Al menos una mayúscula', ok: hasUppercase(editPassword) },
+    { label: 'Al menos una minúscula', ok: hasLowercase(editPassword) },
+    { label: 'Al menos un número', ok: hasNumber(editPassword) },
+  ], [editPassword]);
+
+  const canCreateUser = isSecurePassword(newPassword) && hasNonWhitespaceValue(newEmail) && hasNonWhitespaceValue(newNombre);
+  const canUpdatePassword = editPassword.trim().length === 0 || isSecurePassword(editPassword);
 
   useEffect(() => {
     loadPerfiles();
@@ -120,6 +142,14 @@ export function Usuarios() {
 
     if (!hasNonWhitespaceValue(newEmailSanitizado) || !hasNonWhitespaceValue(newPassword) || !hasNonWhitespaceValue(newNombreSanitizado) || !newRol) {
       setMessage({ type: 'error', text: 'Todos los campos son requeridos' });
+      return;
+    }
+
+    if (!isSecurePassword(newPassword)) {
+      setMessage({
+        type: 'error',
+        text: 'La contraseña debe incluir al menos una mayúscula, una minúscula y un número.',
+      });
       return;
     }
 
@@ -246,8 +276,8 @@ export function Usuarios() {
       }
 
       if (editPassword.trim().length > 0) {
-        if (editPassword.trim().length < 6) {
-          throw new Error('La nueva contraseña debe tener al menos 6 caracteres');
+        if (!isSecurePassword(editPassword.trim())) {
+          throw new Error('La nueva contraseña debe incluir al menos una mayúscula, una minúscula y un número.');
         }
 
         const { response: resetResponse, payload: resetPayload } = await callServerEndpoint(
@@ -423,11 +453,16 @@ export function Usuarios() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  minLength={6}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="••••••••"
                 />
-                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+                <ul className="mt-2 space-y-1 text-xs">
+                  {newPasswordChecks.map((item) => (
+                    <li key={item.label} className={item.ok ? 'text-green-700' : 'text-gray-500'}>
+                      {item.ok ? '✓' : '•'} {item.label}
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               <div>
@@ -462,7 +497,7 @@ export function Usuarios() {
               </button>
               <button
                 type="submit"
-                disabled={creating}
+                disabled={creating || !canCreateUser}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {creating ? 'Creando...' : 'Crear Usuario'}
@@ -534,11 +569,16 @@ export function Usuarios() {
                 type="password"
                 value={editPassword}
                 onChange={(e) => setEditPassword(e.target.value)}
-                minLength={6}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Completa solo si quieres cambiarla"
               />
-              <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {editPasswordChecks.map((item) => (
+                  <li key={item.label} className={item.ok ? 'text-green-700' : 'text-gray-500'}>
+                    {item.ok ? '✓' : '•'} {item.label}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
@@ -555,7 +595,7 @@ export function Usuarios() {
               </button>
               <button
                 type="submit"
-                disabled={editing}
+                disabled={editing || !canUpdatePassword}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {editing ? 'Guardando...' : 'Actualizar'}

@@ -474,6 +474,52 @@
 
         }
 
+        .form-group.consent-group {
+
+            margin-top: 6px;
+
+        }
+
+        .checkbox-label {
+
+            display: flex;
+
+            align-items: flex-start;
+
+            gap: 10px;
+
+            color: #2f3b4a;
+
+            font-size: 12px;
+
+            line-height: 1.45;
+
+            cursor: pointer;
+
+        }
+
+        .checkbox-label input {
+
+            width: 16px;
+
+            height: 16px;
+
+            margin-top: 2px;
+
+            accent-color: var(--primary);
+
+            flex-shrink: 0;
+
+        }
+
+        .btn-submit:disabled {
+
+            opacity: 0.55;
+
+            cursor: not-allowed;
+
+        }
+
         .form-disclaimer {
 
             margin: 8px 0 0;
@@ -2357,6 +2403,18 @@
 
                             rows="3"></textarea></div>
 
+                    <div class="form-group consent-group">
+
+                        <label class="checkbox-label" for="consentimientoPresupuesto">
+
+                            <input type="checkbox" id="consentimientoPresupuesto">
+
+                            <span>Acepto que la información brindada sea utilizada únicamente para la elaboración de este presupuesto.</span>
+
+                        </label>
+
+                    </div>
+
                     <div class="form-disclaimer">
                         Importante: la informacion enviada por este formulario es orientativa. El presupuesto y la reserva final quedaran sujetos a validacion y confirmacion del hotel.
                     </div>
@@ -4067,6 +4125,30 @@
 
         const submitButton = formTesis.querySelector('button[type="submit"]');
 
+        const consentimientoPresupuesto = document.getElementById('consentimientoPresupuesto');
+
+        const updateSubmitButtonState = () => {
+
+            if (!submitButton || !consentimientoPresupuesto) return;
+
+            submitButton.disabled = !consentimientoPresupuesto.checked;
+
+        };
+
+        if (submitButton) {
+
+            submitButton.disabled = true;
+
+        }
+
+        if (consentimientoPresupuesto) {
+
+            consentimientoPresupuesto.addEventListener('change', updateSubmitButtonState);
+
+            updateSubmitButtonState();
+
+        }
+
         const statusModalOverlay = document.getElementById('statusModalOverlay');
 
         const statusModalCard = document.getElementById('statusModalCard');
@@ -4217,6 +4299,14 @@
             const salonNombre = hiddenSalonNombre.value.trim();
 
             const observaciones = document.getElementById('observaciones').value.trim();
+
+            if (!consentimientoPresupuesto || !consentimientoPresupuesto.checked) {
+
+                setStatus('Debe aceptar el uso de la información para elaborar el presupuesto antes de enviar el formulario.', true);
+
+                return;
+
+            }
 
             if (!hasNonWhitespaceValue(nombre) || !hasNonWhitespaceValue(email) || !telefono) {
 
@@ -4413,6 +4503,8 @@
                 renderServicios();
 
                 updateCapacityWarning();
+
+                updateSubmitButtonState();
 
             } catch (error) {
 

@@ -3726,9 +3726,27 @@ const publicReservaHandler = async (c) => {
     }
 
     const selectedServicios = Array.isArray(servicios) ? servicios : [];
-    const serviciosIds = selectedServicios
-      .map((item) => Number(item?.id_servicio))
-      .filter((id) => Number.isFinite(id) && id > 0);
+    const selectedServiciosNormalizados: Array<{ id_servicio: number; cantidad: number }> = [];
+
+    for (const item of selectedServicios) {
+      const servicioId = Number(item?.id_servicio);
+      const cantidadServicio = Number(item?.cantidad);
+
+      if (!Number.isInteger(servicioId) || servicioId <= 0) {
+        return c.json({ error: "Servicio adicional invalido" }, 400);
+      }
+
+      if (!Number.isInteger(cantidadServicio) || cantidadServicio <= 0) {
+        return c.json({ error: "Complete la cantidad de todos los servicios adicionales seleccionados" }, 400);
+      }
+
+      selectedServiciosNormalizados.push({
+        id_servicio: servicioId,
+        cantidad: cantidadServicio,
+      });
+    }
+
+    const serviciosIds = selectedServiciosNormalizados.map((item) => item.id_servicio);
 
     const serviciosDetalle: PresupuestoServicio[] = [];
     if (serviciosIds.length > 0) {
@@ -3742,13 +3760,12 @@ const publicReservaHandler = async (c) => {
       } else {
         const serviciosMap = new Map<number, typeof serviciosData[number]>();
         (serviciosData || []).forEach((item) => serviciosMap.set(item.id, item));
-        selectedServicios.forEach((item) => {
-          const servicioInfo = serviciosMap.get(Number(item.id_servicio));
+        selectedServiciosNormalizados.forEach((item) => {
+          const servicioInfo = serviciosMap.get(item.id_servicio);
           if (!servicioInfo) return;
-          const cantidadServicio = Number(item.cantidad) || 1;
           serviciosDetalle.push({
             servicio: servicioInfo,
-            cantidad: cantidadServicio,
+            cantidad: item.cantidad,
           });
         });
       }

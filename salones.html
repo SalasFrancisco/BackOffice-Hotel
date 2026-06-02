@@ -3905,14 +3905,6 @@
 
                         qty.value = sanitizeIntegerInput(qty.value);
 
-                        const value = parseInt(qty.value, 10);
-
-                        if (!value || value < 1) {
-
-                            qty.value = '1';
-
-                        }
-
                     });
 
                     const pricingWrapper = document.createElement('div');
@@ -4358,21 +4350,36 @@
 
             }
 
-            const serviciosSeleccionados = Array.from(serviciosContainer.querySelectorAll('input[type="checkbox"]:checked'))
+            const serviciosSeleccionados = [];
+            const selectedServicioCheckboxes = Array.from(serviciosContainer.querySelectorAll('input[type="checkbox"]:checked'));
 
-                .map((checkbox) => {
+            for (const checkbox of selectedServicioCheckboxes) {
 
-                    const serviceId = parseInt(checkbox.dataset.serviceId, 10);
+                const serviceId = parseInt(checkbox.dataset.serviceId, 10);
 
-                    const qtyInput = checkbox.closest('.service-item').querySelector('input[type="number"]');
+                const serviceItem = checkbox.closest('.service-item');
+                const qtyInput = serviceItem ? serviceItem.querySelector('input[type="number"]') : null;
+                const serviceName = serviceItem ? serviceItem.querySelector('.service-name')?.textContent?.trim() : '';
 
-                    qtyInput.value = sanitizeIntegerInput(qtyInput.value);
+                if (!qtyInput) {
+                    setStatus('No se pudo validar la cantidad de un servicio adicional seleccionado.', true);
+                    return;
+                }
 
-                    const cantidadServicio = parseInt(qtyInput.value, 10) || 1;
+                qtyInput.value = sanitizeIntegerInput(qtyInput.value);
 
-                    return { id_servicio: serviceId, cantidad: cantidadServicio };
+                const cantidadServicio = parseInt(qtyInput.value, 10);
 
-                });
+                if (!Number.isInteger(cantidadServicio) || cantidadServicio <= 0) {
+                    const suffix = serviceName ? ` (${serviceName})` : '';
+                    setStatus(`Complete una cantidad valida para el servicio adicional seleccionado${suffix}.`, true);
+                    qtyInput.focus();
+                    return;
+                }
+
+                serviciosSeleccionados.push({ id_servicio: serviceId, cantidad: cantidadServicio });
+
+            }
 
             const tipoEvento = hasNonWhitespaceValue(observaciones)
                 ? observaciones.split('\n')[0].trim()

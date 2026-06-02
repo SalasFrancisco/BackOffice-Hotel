@@ -14,6 +14,29 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing Supabase environment variables");
 }
 
+const parseCsvEnv = (value?: string | null) =>
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const parsePositiveIntegerEnv = (
+  value: string | undefined,
+  fallback: number,
+) => {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const ALLOWED_ORIGINS = parseCsvEnv(Deno.env.get("ALLOWED_ORIGINS"));
+const RATE_LIMIT_HASH_SECRET =
+  Deno.env.get("RATE_LIMIT_HASH_SECRET") || SUPABASE_SERVICE_ROLE_KEY;
+
+const isOriginAllowed = (origin: string) => {
+  if (!ALLOWED_ORIGINS.length) return true;
+  return ALLOWED_ORIGINS.includes(origin);
+};
+
 const app = new Hono();
 
 app.use("*", logger(console.log));
@@ -21,10 +44,13 @@ app.use("*", logger(console.log));
 app.use(
   "/*",
   cors({
-    origin: "*",
+    origin: (origin) => {
+      if (!origin) return ALLOWED_ORIGINS.length ? "" : "*";
+      return isOriginAllowed(origin) ? origin : "";
+    },
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
+    exposeHeaders: ["Content-Length", "Retry-After"],
     maxAge: 600,
   }),
 );
@@ -484,12 +510,34 @@ const RESERVA_ALERTA_CANCELACION_AUTOMATICA = "cancelacion_automatica";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PRESUPUESTOS_BUCKET = "presupuestos";
 const HOTEL_TIME_ZONE = "America/Argentina/Cordoba";
-const PRESUPUESTO_EMAIL_LINK_TTL_SECONDS = 60 * 60 * 24 * 7;
+const PRESUPUESTO_EMAIL_LINK_TTL_SECONDS = parsePositiveIntegerEnv(
+  Deno.env.get("PRESUPUESTO_EMAIL_LINK_TTL_SECONDS"),
+  60 * 60 * 24 * 7,
+);
+const PRESUPUESTO_PUBLIC_LINK_TTL_SECONDS = parsePositiveIntegerEnv(
+  Deno.env.get("PRESUPUESTO_PUBLIC_LINK_TTL_SECONDS"),
+  60 * 15,
+);
 const PRESUPUESTO_SHORT_LINK_MIN_TTL_SECONDS = 60;
 const PRESUPUESTO_SHORT_LINK_SIGNED_URL_TTL_SECONDS = 90;
 const PRESUPUESTO_SHORT_LINK_SIGNATURE_LENGTH = 16;
 const PRESUPUESTO_SHORT_LINK_ROUTE_SEGMENT = "p";
 const TEXT_ENCODER = new TextEncoder();
+const PUBLIC_RESERVA_RATE_LIMIT = {
+  maxCount: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_RESERVA_RATE_LIMIT_MAX"), 5),
+  windowSeconds: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_RESERVA_RATE_LIMIT_WINDOW_SECONDS"), 600),
+  blockSeconds: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_RESERVA_RATE_LIMIT_BLOCK_SECONDS"), 600),
+};
+const PASSWORD_RESET_RATE_LIMIT = {
+  maxCount: parsePositiveIntegerEnv(Deno.env.get("PASSWORD_RESET_RATE_LIMIT_MAX"), 3),
+  windowSeconds: parsePositiveIntegerEnv(Deno.env.get("PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS"), 900),
+  blockSeconds: parsePositiveIntegerEnv(Deno.env.get("PASSWORD_RESET_RATE_LIMIT_BLOCK_SECONDS"), 900),
+};
+const PUBLIC_CATALOG_RATE_LIMIT = {
+  maxCount: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_CATALOG_RATE_LIMIT_MAX"), 120),
+  windowSeconds: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_CATALOG_RATE_LIMIT_WINDOW_SECONDS"), 60),
+  blockSeconds: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_CATALOG_RATE_LIMIT_BLOCK_SECONDS"), 60),
+};
 
 const SALONES_HEADER_LOGO_URL = "https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png";
 const LOCAL_LOGO_URL = new URL("./assets/QuintoCente.png", import.meta.url);
@@ -1149,6 +1197,78 @@ function createServiceClient(): SupabaseClient {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
+
+type RateLimitConfig = {
+  maxCount: number;
+  windowSeconds: number;
+  blockSeconds: number;
+};
+
+const bytesToHex = (bytes: Uint8Array) =>
+  Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+const getClientIp = (c: any) => {
+  const forwardedFor = c.req.header("x-forwarded-for");
+  if (forwardedFor) {
+    const firstIp = forwardedFor.split(",")[0]?.trim();
+    if (firstIp) return firstIp;
+  }
+
+  return (
+    c.req.header("cf-connecting-ip")
+    || c.req.header("x-real-ip")
+    || "unknown"
+  );
+};
+
+const buildRateLimitKey = async (scope: string, identifiers: string[]) => {
+  const normalizedIdentifiers = identifiers
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(":");
+  const source = `${RATE_LIMIT_HASH_SECRET}:${scope}:${normalizedIdentifiers}`;
+  const digest = await crypto.subtle.digest("SHA-256", TEXT_ENCODER.encode(source));
+  return `${scope}:${bytesToHex(new Uint8Array(digest))}`;
+};
+
+const applyRateLimit = async (
+  c: any,
+  supabaseAdmin: SupabaseClient,
+  scope: string,
+  identifiers: string[],
+  config: RateLimitConfig,
+) => {
+  const key = await buildRateLimitKey(scope, identifiers);
+  const { data, error } = await supabaseAdmin.rpc("check_rate_limit", {
+    p_key: key,
+    p_max_count: config.maxCount,
+    p_window_seconds: config.windowSeconds,
+    p_block_seconds: config.blockSeconds,
+  });
+
+  if (error) {
+    console.warn(`Rate limit skipped for ${scope}:`, error.message);
+    return null;
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result || result.allowed !== false) {
+    return null;
+  }
+
+  const retryAfterSeconds = Number(result.retry_after_seconds) || config.blockSeconds;
+  const response = c.json(
+    {
+      error: "Demasiadas solicitudes. Intente nuevamente mas tarde.",
+      retryAfterSeconds,
+    },
+    429,
+  );
+  response.headers.set("Retry-After", String(retryAfterSeconds));
+  return response;
+};
 
 type SmtpConfig = {
   host: string;
@@ -2291,13 +2411,23 @@ const getMetadataNumber = (metadata: Record<string, unknown>, key: string) => {
 app.post("/make-server-484a241a/request-password-reset", async (c) => {
   try {
     const supabaseAdmin = createServiceClient();
-    const smtpConfig = getSmtpConfig();
     const body = await c.req.json();
     const email = typeof body?.email === "string" ? body.email.trim() : "";
 
     if (!email) {
       return c.json({ error: "Missing required field: email" }, 400);
     }
+
+    const rateLimitResponse = await applyRateLimit(
+      c,
+      supabaseAdmin,
+      "password-reset",
+      [getClientIp(c), email],
+      PASSWORD_RESET_RATE_LIMIT,
+    );
+    if (rateLimitResponse) return rateLimitResponse;
+
+    const smtpConfig = getSmtpConfig();
 
     const redirectTo = buildPasswordRecoveryRedirectUrl(c, body?.redirectTo);
     if (!redirectTo) {
@@ -2659,10 +2789,14 @@ app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
     }
 
     const supabaseAdmin = createServiceClient();
-    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+    const accessCheck = await requireBackofficeUser(
+      supabaseAdmin,
+      accessToken,
+      "open reservation budgets",
+    );
 
-    if (userError || !userData?.user) {
-      return c.json({ error: "Invalid authorization token" }, 401);
+    if ("status" in accessCheck) {
+      return c.json(accessCheck.body, accessCheck.status);
     }
 
     const body = await c.req.json();
@@ -3289,6 +3423,14 @@ app.post("/server/make-server-484a241a/process-reserva-vencimiento", processRese
 const publicCatalogHandler = async (c) => {
   try {
     const supabaseAdmin = createServiceClient();
+    const rateLimitResponse = await applyRateLimit(
+      c,
+      supabaseAdmin,
+      "public-catalog",
+      [getClientIp(c)],
+      PUBLIC_CATALOG_RATE_LIMIT,
+    );
+    if (rateLimitResponse) return rateLimitResponse;
 
     const [{ data: salones, error: salonesError }, { data: distribuciones, error: distError }, { data: categorias, error: catError }, { data: servicios, error: servError }] =
       await Promise.all([
@@ -3384,6 +3526,16 @@ const publicReservaHandler = async (c) => {
       servicios,
     } = body ?? {};
 
+    const supabaseAdmin = createServiceClient();
+    const rateLimitResponse = await applyRateLimit(
+      c,
+      supabaseAdmin,
+      "public-reserva",
+      [getClientIp(c), String(email || telefono || nombre || "anonymous")],
+      PUBLIC_RESERVA_RATE_LIMIT,
+    );
+    if (rateLimitResponse) return rateLimitResponse;
+
     if (!nombre || !email || !telefono || !fechaInicio || !fechaFin || !cantidad) {
       return c.json(
         { error: "Missing required fields: nombre, email, telefono, fecha_inicio, fecha_fin, cantidad" },
@@ -3415,8 +3567,6 @@ const publicReservaHandler = async (c) => {
     if (fechaFinDate <= fechaInicioDate) {
       return c.json({ error: "La fecha de fin debe ser posterior a la fecha de inicio" }, 400);
     }
-
-    const supabaseAdmin = createServiceClient();
 
     let salonQuery = supabaseAdmin.from("salones").select("*").limit(1);
     if (salonId) {
@@ -3633,7 +3783,11 @@ const publicReservaHandler = async (c) => {
       fileName = upsertResult.fileName;
       uploaded = true;
 
-      const signedUrlResult = await createPresupuestoSignedUrl(supabaseAdmin, upsertResult.storagePath, 60 * 15);
+      const signedUrlResult = await createPresupuestoSignedUrl(
+        supabaseAdmin,
+        upsertResult.storagePath,
+        PRESUPUESTO_PUBLIC_LINK_TTL_SECONDS,
+      );
       if ("error" in signedUrlResult) {
         signedErrorMsg = signedUrlResult.error;
         console.error("Error creando URL firmada:", signedErrorMsg);
@@ -3641,7 +3795,10 @@ const publicReservaHandler = async (c) => {
         signed = true;
         downloadUrl = signedUrlResult.signedUrl;
         try {
-          const shortLinkResult = await createPresupuestoShortLink(reservaData.id, 60 * 15);
+          const shortLinkResult = await createPresupuestoShortLink(
+            reservaData.id,
+            PRESUPUESTO_PUBLIC_LINK_TTL_SECONDS,
+          );
           shortDownloadUrl = shortLinkResult?.shortUrl;
         } catch (shortLinkError) {
           console.warn(

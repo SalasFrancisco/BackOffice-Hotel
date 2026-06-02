@@ -6,6 +6,7 @@
 create or replace function public.validate_reserva_estado_transition()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   if old.estado = new.estado then

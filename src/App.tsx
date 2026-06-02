@@ -391,6 +391,46 @@ export default function App() {
               </div>
               <pre id="fix-sql" className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto text-xs">
 {`-- Fix infinite recursion in RLS policies
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS text
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT rol FROM public.perfiles WHERE user_id = auth.uid();
+$$;
+
+CREATE OR REPLACE FUNCTION public.prevent_unsafe_self_perfil_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() = OLD.user_id AND public.get_user_role() <> 'ADMIN' THEN
+    IF NEW.user_id IS DISTINCT FROM OLD.user_id THEN
+      RAISE EXCEPTION 'No puede modificar el usuario del perfil';
+    END IF;
+
+    IF NEW.rol IS DISTINCT FROM OLD.rol THEN
+      RAISE EXCEPTION 'No puede modificar el rol del perfil';
+    END IF;
+
+    IF NEW.creado_en IS DISTINCT FROM OLD.creado_en THEN
+      RAISE EXCEPTION 'No puede modificar la fecha de creacion del perfil';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS perfiles_prevent_unsafe_self_update ON public.perfiles;
+CREATE TRIGGER perfiles_prevent_unsafe_self_update
+BEFORE UPDATE ON public.perfiles
+FOR EACH ROW EXECUTE FUNCTION public.prevent_unsafe_self_perfil_update();
+
 DROP POLICY IF EXISTS admin_all_perfiles ON public.perfiles;
 DROP POLICY IF EXISTS users_read_own_perfil ON public.perfiles;
 DROP POLICY IF EXISTS users_read_all_perfiles ON public.perfiles;
@@ -399,8 +439,14 @@ DROP POLICY IF EXISTS users_update_own_perfil ON public.perfiles;
 DROP POLICY IF EXISTS service_role_all_perfiles ON public.perfiles;
 
 -- Create policies without recursion
-CREATE POLICY "authenticated_read_perfiles" ON public.perfiles
-  FOR SELECT TO authenticated USING (true);
+CREATE POLICY "admin_all_perfiles" ON public.perfiles
+  FOR ALL TO authenticated
+  USING (public.get_user_role() = 'ADMIN')
+  WITH CHECK (public.get_user_role() = 'ADMIN');
+
+CREATE POLICY "users_read_own_perfil" ON public.perfiles
+  FOR SELECT TO authenticated
+  USING (auth.uid() = user_id);
 
 CREATE POLICY "users_update_own_perfil" ON public.perfiles
   FOR UPDATE TO authenticated

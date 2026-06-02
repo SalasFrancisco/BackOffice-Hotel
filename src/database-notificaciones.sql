@@ -39,28 +39,39 @@ drop policy if exists users_insert_notificaciones_leidas on public.notificacione
 drop policy if exists users_delete_notificaciones_leidas on public.notificaciones_leidas;
 
 create policy admin_all_notificaciones on public.notificaciones
-  for all using (public.get_user_role() = 'ADMIN');
+  for all
+  to authenticated
+  using (public.get_user_role() = 'ADMIN')
+  with check (public.get_user_role() = 'ADMIN');
 
 create policy operador_read_notificaciones on public.notificaciones
-  for select using (public.get_user_role() in ('ADMIN', 'OPERADOR'));
-
-create policy operador_insert_notificaciones on public.notificaciones
-  for insert with check (public.get_user_role() in ('ADMIN', 'OPERADOR'));
+  for select
+  to authenticated
+  using (public.get_user_role() in ('ADMIN', 'OPERADOR'));
 
 create policy admin_all_notificaciones_leidas on public.notificaciones_leidas
-  for all using (public.get_user_role() = 'ADMIN');
+  for all
+  to authenticated
+  using (public.get_user_role() = 'ADMIN')
+  with check (public.get_user_role() = 'ADMIN');
 
 create policy users_select_notificaciones_leidas on public.notificaciones_leidas
-  for select using (auth.uid() = user_id);
+  for select
+  to authenticated
+  using (auth.uid() = user_id);
 
 create policy users_insert_notificaciones_leidas on public.notificaciones_leidas
-  for insert with check (
+  for insert
+  to authenticated
+  with check (
     auth.uid() = user_id
     and public.get_user_role() in ('ADMIN', 'OPERADOR')
   );
 
 create policy users_delete_notificaciones_leidas on public.notificaciones_leidas
-  for delete using (auth.uid() = user_id);
+  for delete
+  to authenticated
+  using (auth.uid() = user_id);
 
 -- 3) TRIGGERS AUTOMATICOS SOBRE RESERVAS
 create or replace function public.generar_notificacion_reserva()

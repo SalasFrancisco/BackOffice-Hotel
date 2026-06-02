@@ -3245,8 +3245,13 @@
 
         // --- LOGICA SELECTOR INTELIGENTE ---
 
-        const PROJECT_ID = 'gcmkqbilhtkexexwumux';
-        const PUBLIC_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjbWtxYmlsaHRrZXhleHd1bXV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1ODU1OTksImV4cCI6MjA3OTE2MTU5OX0.9dPbyp_0pj2eZQ7dEEwWlmT2PhaoL1_nl6FPrv5rVH0';
+        const readPublicEnv = (value) => {
+            const normalized = String(value || '').trim();
+            return normalized && !normalized.startsWith('%') ? normalized : '';
+        };
+
+        const PROJECT_ID = readPublicEnv('%VITE_SUPABASE_PROJECT_ID%');
+        const PUBLIC_ANON_KEY = readPublicEnv('%VITE_SUPABASE_ANON_KEY%');
         // Primary base used previously (function deployed as `server`)
         const PUBLIC_API_BASE = `https://${PROJECT_ID}.supabase.co/functions/v1/server/make-server-484a241a`;
         // Alternate base in case the function was deployed without the `server` prefix

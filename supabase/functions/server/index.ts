@@ -3437,7 +3437,11 @@ const publicCatalogHandler = async (c) => {
         supabaseAdmin.from("salones").select("*").or("activo.is.null,activo.eq.true").order("nombre"),
         supabaseAdmin.from("distribuciones").select("*").order("nombre"),
         supabaseAdmin.from("categorias_servicios").select("*").order("nombre"),
-        supabaseAdmin.from("servicios").select("*, categoria:categorias_servicios(*)").or("activo.is.null,activo.eq.true").order("nombre"),
+        supabaseAdmin
+          .from("servicios")
+          .select("id, id_categoria, nombre, descripcion, activo, categoria:categorias_servicios(id, nombre, descripcion)")
+          .or("activo.is.null,activo.eq.true")
+          .order("nombre"),
       ]);
 
     if (salonesError || distError || catError || servError) {

@@ -1070,16 +1070,6 @@
 
         }
 
-        .service-price {
-
-            font-size: 11px;
-
-            color: #666;
-
-            font-weight: 700;
-
-        }
-
         .service-pricing {
 
             display: flex;
@@ -3881,12 +3871,6 @@
                     selectWrapper.appendChild(checkboxWrap);
                     selectWrapper.appendChild(textBlock);
 
-                    const price = document.createElement('span');
-
-                    price.className = 'service-price';
-
-                    price.textContent = `$${Number(servicio.precio || 0).toLocaleString('es-AR')}`;
-
                     const qty = document.createElement('input');
 
                     qty.type = 'number';
@@ -3933,7 +3917,6 @@
 
                     const pricingWrapper = document.createElement('div');
                     pricingWrapper.className = 'service-pricing';
-                    pricingWrapper.appendChild(price);
                     pricingWrapper.appendChild(qty);
 
                     item.appendChild(selectWrapper);
@@ -4012,7 +3995,7 @@
                     fetch(`${restBase}/salones?select=*&order=nombre&activo=eq.true`, { headers }),
                     fetch(`${restBase}/distribuciones?select=*&order=nombre`, { headers }),
                     fetch(`${restBase}/categorias_servicios?select=*&order=nombre`, { headers }),
-                    fetch(`${restBase}/servicios?select=*,categoria:categorias_servicios(*)&order=nombre&activo=eq.true`, { headers }),
+                    fetch(`${restBase}/servicios?select=id,id_categoria,nombre,descripcion,activo,categoria:categorias_servicios(id,nombre,descripcion)&order=nombre&activo=eq.true`, { headers }),
                 ]);
 
                 if (!salonesRes.ok || !distribRes.ok || !categoriasRes.ok || !serviciosRes.ok) {
@@ -4043,8 +4026,7 @@
                     id: s.id,
                     id_categoria: s.id_categoria ?? (s.categoria ? s.categoria.id : 0),
                     nombre: s.nombre,
-                    descripcion: s.descripcion,
-                    precio: s.precio
+                    descripcion: s.descripcion
                 }));
 
                 updateSalonRecommendations();

@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { AlertCircle, CalendarDays, CheckCircle, Package } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle, ChevronLeft, ChevronRight, Package, X } from 'lucide-react';
 import { projectId } from '../utils/supabase/info';
 import {
   hasNonWhitespaceValue,
@@ -26,13 +26,6 @@ const HORARIO_OPCIONES = Array.from({ length: 48 }, (_, index) => {
   const minutos = index % 2 === 0 ? '00' : '30';
   return `${hora}:${minutos}`;
 });
-
-const formatShortDateInput = (value: string): string => {
-  const digits = value.replace(/\D/g, '').slice(0, 6);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 6)}`;
-};
 
 const isoDateToShortDate = (isoDate: string): string => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
@@ -182,7 +175,13 @@ type AvailabilityReserva = ReservaOverlapComparable & {
   cliente_nombre?: string | null;
 };
 
-type AvailabilityStatus = 'disponible' | 'pendiente' | 'ocupado';
+type DatePickerTarget = 'inicio' | 'fin';
+
+type CalendarDayAvailability = {
+  available: Salon[];
+  pending: Salon[];
+  occupied: Salon[];
+};
 
 const toReservaTimeTimestamp = (value: string): number | null => {
   const timestamp = new Date(value).getTime();
@@ -265,14 +264,37 @@ const getDateTimePartsInHotelTimeZone = (value?: string | null) => {
   };
 };
 
-const formatAvailabilityDateTime = (value: string) =>
+const AVAILABILITY_WEEK_DAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+
+const padDatePart = (value: number) => String(value).padStart(2, '0');
+
+const buildIsoDateFromParts = (year: number, monthIndex: number, day: number) =>
+  `${year}-${padDatePart(monthIndex + 1)}-${padDatePart(day)}`;
+
+const buildLocalDateFromIsoDate = (isoDate: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText] = match;
+  return new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+};
+
+const formatAvailabilityMonthLabel = (date: Date) =>
   new Intl.DateTimeFormat('es-AR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+
+const formatLongAvailabilityDate = (isoDate: string) => {
+  const date = buildLocalDateFromIsoDate(isoDate);
+  if (!date) return '';
+
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'long',
     day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: HOTEL_TIME_ZONE,
-  }).format(new Date(value));
+    month: 'long',
+  }).format(date);
+};
 
 const buildProtectedFunctionEndpoints = (path: string) => [
   `https://${projectId}.supabase.co/functions/v1/server/${path}`,
@@ -342,9 +364,12 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
-  const [loadingAvailability, setLoadingAvailability] = useState(false);
-  const [availabilityError, setAvailabilityError] = useState('');
-  const [availabilityReservas, setAvailabilityReservas] = useState<AvailabilityReserva[]>([]);
+  const [activeDatePicker, setActiveDatePicker] = useState<DatePickerTarget | null>(null);
+  const [availabilityCalendarDate, setAvailabilityCalendarDate] = useState(() => new Date());
+  const [calendarPreviewIsoDate, setCalendarPreviewIsoDate] = useState('');
+  const [loadingCalendarAvailability, setLoadingCalendarAvailability] = useState(false);
+  const [calendarAvailabilityError, setCalendarAvailabilityError] = useState('');
+  const [calendarMonthReservas, setCalendarMonthReservas] = useState<AvailabilityReserva[]>([]);
   const [message, setMessage] = useState<{ text: string } | null>(null);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
   
@@ -372,8 +397,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     initialFechaFinParts?.time || '',
   );
   const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
-  const fechaInicioPickerRef = useRef<HTMLInputElement | null>(null);
-  const fechaFinPickerRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setEstado(reserva?.estado || 'Pendiente');
@@ -429,30 +452,23 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
   const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
   const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
-  const hasCompleteDateTimeSelection = Boolean(
-    fechaInicioIsoFromInput && fechaFinIsoFromInput && fechaInicioHora && fechaFinHora,
-  );
-  const selectedDateTimeRange = useMemo(() => {
-    if (!fechaInicioIsoFromInput || !fechaFinIsoFromInput || !fechaInicioHora || !fechaFinHora) {
-      return null;
-    }
+  const availabilityCalendarCells = useMemo(() => {
+    const year = availabilityCalendarDate.getFullYear();
+    const monthIndex = availabilityCalendarDate.getMonth();
+    const firstDayOfMonth = new Date(year, monthIndex, 1);
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const leadingEmptyDays = firstDayOfMonth.getDay();
 
-    const start = new Date(`${fechaInicioIsoFromInput}T${fechaInicioHora}`);
-    const end = new Date(`${fechaFinIsoFromInput}T${fechaFinHora}`);
-
-    if (
-      Number.isNaN(start.getTime())
-      || Number.isNaN(end.getTime())
-      || end <= start
-    ) {
-      return null;
-    }
-
-    return {
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
-    };
-  }, [fechaInicioIsoFromInput, fechaFinIsoFromInput, fechaInicioHora, fechaFinHora]);
+    return [
+      ...Array.from({ length: leadingEmptyDays }, () => null as number | null),
+      ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+    ];
+  }, [availabilityCalendarDate]);
+  const selectedPickerIsoDate = activeDatePicker === 'inicio'
+    ? fechaInicioIsoFromInput
+    : activeDatePicker === 'fin'
+      ? fechaFinIsoFromInput
+      : null;
   const eventCalendarDaysCount = getEventDaysCount(fechaInicioIsoFromInput, fechaFinIsoFromInput);
   const eventBillableDayUnits = calculateSalonBillableDayUnits({
     startIsoDate: fechaInicioIsoFromInput,
@@ -510,46 +526,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       suggested: recommended[0] || null,
     };
   }, [salones, totalPersonasNumber]);
-  const salonAvailability = useMemo(() => {
-    if (!selectedDateTimeRange) {
-      return [];
-    }
-
-    const currentReservaId = reserva?.id || 0;
-
-    return salones
-      .map((salon) => {
-        const overlaps = availabilityReservas
-          .filter((item) => item.id !== currentReservaId)
-          .filter((item) => Number(item.id_salon) === Number(salon.id))
-          .filter((item) => hasReservaTimeOverlap(
-            selectedDateTimeRange.startIso,
-            selectedDateTimeRange.endIso,
-            item.fecha_inicio,
-            item.fecha_fin,
-          ));
-        const blockingReservas = overlaps.filter((item) => ESTADOS_BLOQUEANTES.has(item.estado));
-        const pendingReservas = overlaps.filter((item) => item.estado === 'Pendiente');
-        const status: AvailabilityStatus = blockingReservas.length > 0
-          ? 'ocupado'
-          : pendingReservas.length > 0
-            ? 'pendiente'
-            : 'disponible';
-
-        return {
-          salon,
-          status,
-          blockingReservas,
-          pendingReservas,
-        };
-      })
-      .sort((a, b) => {
-        const statusOrder: Record<AvailabilityStatus, number> = { disponible: 0, pendiente: 1, ocupado: 2 };
-        const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-        if (statusDiff !== 0) return statusDiff;
-        return String(a.salon.nombre || '').localeCompare(String(b.salon.nombre || ''), 'es');
-      });
-  }, [availabilityReservas, reserva?.id, salones, selectedDateTimeRange]);
   const formatSalonOptionLabel = (salon: Salon) => (
     `${salon.nombre} - Cap: ${salon.capacidad} - ${
       Number(salon.precio_base || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
@@ -585,50 +561,67 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   }, []);
 
   useEffect(() => {
-    if (!selectedDateTimeRange) {
-      setAvailabilityReservas([]);
-      setAvailabilityError('');
-      setLoadingAvailability(false);
+    if (!activeDatePicker) {
       return;
     }
 
     let isActive = true;
+    const monthStart = new Date(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth(),
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
+    const monthEnd = new Date(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
 
-    const loadAvailability = async () => {
+    const loadCalendarAvailability = async () => {
       try {
-        setLoadingAvailability(true);
-        setAvailabilityError('');
+        setLoadingCalendarAvailability(true);
+        setCalendarAvailabilityError('');
 
         const { data, error } = await supabase
           .from('reservas')
           .select('id, id_salon, estado, fecha_inicio, fecha_fin, cliente_nombre')
-          .lt('fecha_inicio', selectedDateTimeRange.endIso)
-          .gt('fecha_fin', selectedDateTimeRange.startIso)
+          .lt('fecha_inicio', monthEnd.toISOString())
+          .gt('fecha_fin', monthStart.toISOString())
           .neq('estado', 'Cancelado');
 
         if (error) throw error;
         if (isActive) {
-          setAvailabilityReservas((data || []) as AvailabilityReserva[]);
+          setCalendarMonthReservas(
+            ((data || []) as AvailabilityReserva[]).filter((item) => item.estado !== 'Cancelado'),
+          );
         }
       } catch (err: any) {
-        console.error('Error loading availability:', err);
+        console.error('Error loading calendar availability:', err);
         if (isActive) {
-          setAvailabilityError(err?.message || 'No se pudo consultar la disponibilidad.');
-          setAvailabilityReservas([]);
+          setCalendarAvailabilityError(err?.message || 'No se pudo consultar la disponibilidad.');
+          setCalendarMonthReservas([]);
         }
       } finally {
         if (isActive) {
-          setLoadingAvailability(false);
+          setLoadingCalendarAvailability(false);
         }
       }
     };
 
-    void loadAvailability();
+    void loadCalendarAvailability();
 
     return () => {
       isActive = false;
     };
-  }, [selectedDateTimeRange?.startIso, selectedDateTimeRange?.endIso]);
+  }, [activeDatePicker, availabilityCalendarDate]);
 
   useEffect(() => {
     if (idSalon) {
@@ -798,16 +791,237 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     return servicios.filter((servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false);
   };
 
-  const openNativeDatePicker = (pickerRef: { current: HTMLInputElement | null }) => {
-    const picker = pickerRef.current;
-    if (!picker) return;
-
-    if (typeof picker.showPicker === 'function') {
-      picker.showPicker();
-      return;
+  const getAvailabilityForIsoDate = (isoDate: string): CalendarDayAvailability => {
+    const date = buildLocalDateFromIsoDate(isoDate);
+    if (!date) {
+      return {
+        available: salones,
+        pending: [],
+        occupied: [],
+      };
     }
 
-    picker.click();
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+    const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
+    const dayStartIso = dayStart.toISOString();
+    const dayEndIso = dayEnd.toISOString();
+    const currentReservaId = reserva?.id || 0;
+
+    return salones.reduce<CalendarDayAvailability>(
+      (summary, salon) => {
+        const overlappingReservas = calendarMonthReservas
+          .filter((item) => item.id !== currentReservaId)
+          .filter((item) => Number(item.id_salon) === Number(salon.id))
+          .filter((item) => hasReservaTimeOverlap(
+            dayStartIso,
+            dayEndIso,
+            item.fecha_inicio,
+            item.fecha_fin,
+          ));
+        const hasBlockingReserva = overlappingReservas.some((item) => ESTADOS_BLOQUEANTES.has(item.estado));
+        const hasPendingReserva = overlappingReservas.some((item) => item.estado === 'Pendiente');
+
+        if (hasBlockingReserva) {
+          summary.occupied.push(salon);
+        } else if (hasPendingReserva) {
+          summary.pending.push(salon);
+        } else {
+          summary.available.push(salon);
+        }
+
+        return summary;
+      },
+      {
+        available: [],
+        pending: [],
+        occupied: [],
+      },
+    );
+  };
+
+  const getSalonNamesText = (items: Salon[]) => (
+    items.length > 0
+      ? items.map((salon) => salon.nombre).join(', ')
+      : 'Sin salones'
+  );
+
+  const getAvailabilityTitle = (availability: CalendarDayAvailability) => [
+    `Disponibles: ${getSalonNamesText(availability.available)}`,
+    `En consulta: ${getSalonNamesText(availability.pending)}`,
+    `Ocupados: ${getSalonNamesText(availability.occupied)}`,
+  ].join('\n');
+
+  const openAvailabilityCalendar = (target: DatePickerTarget) => {
+    const isoDate = target === 'inicio' ? fechaInicioIsoFromInput : fechaFinIsoFromInput;
+    const relatedIsoDate = target === 'inicio' ? fechaFinIsoFromInput : fechaInicioIsoFromInput;
+    const now = new Date();
+    const fallbackIsoDate = buildIsoDateFromParts(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const nextIsoDate = isoDate || relatedIsoDate || fallbackIsoDate;
+    const nextDate = buildLocalDateFromIsoDate(nextIsoDate) || new Date();
+
+    setActiveDatePicker(target);
+    setAvailabilityCalendarDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    setCalendarPreviewIsoDate(nextIsoDate);
+  };
+
+  const closeAvailabilityCalendar = () => {
+    setActiveDatePicker(null);
+  };
+
+  const moveAvailabilityCalendarMonth = (offset: number) => {
+    const nextDate = new Date(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth() + offset,
+      1,
+    );
+    setAvailabilityCalendarDate(nextDate);
+    setCalendarPreviewIsoDate(buildIsoDateFromParts(
+      nextDate.getFullYear(),
+      nextDate.getMonth(),
+      1,
+    ));
+  };
+
+  const selectAvailabilityCalendarDate = (day: number) => {
+    if (!activeDatePicker) return;
+
+    const isoDate = buildIsoDateFromParts(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth(),
+      day,
+    );
+    const shortDate = isoDateToShortDate(isoDate);
+
+    if (activeDatePicker === 'inicio') {
+      setFechaInicioDate(shortDate);
+      if (!fechaFinIsoFromInput || fechaFinIsoFromInput < isoDate) {
+        setFechaFinDate(shortDate);
+      }
+    } else {
+      setFechaFinDate(shortDate);
+      if (!fechaInicioIsoFromInput) {
+        setFechaInicioDate(shortDate);
+      }
+    }
+
+    setCalendarPreviewIsoDate(isoDate);
+    setActiveDatePicker(null);
+  };
+
+  const previewDayAvailability = calendarPreviewIsoDate
+    ? getAvailabilityForIsoDate(calendarPreviewIsoDate)
+    : null;
+
+  const renderAvailabilityCalendar = (target: DatePickerTarget) => {
+    if (activeDatePicker !== target) return null;
+
+    return (
+      <div className="bo-date-picker-popover" role="dialog" aria-label="Calendario de disponibilidad">
+        <div className="bo-date-picker-header">
+          <button
+            type="button"
+            onClick={() => moveAvailabilityCalendarMonth(-1)}
+            className="bo-date-picker-nav-button"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <p className="bo-date-picker-title">
+              {target === 'inicio' ? 'Fecha de inicio' : 'Fecha de fin'}
+            </p>
+            <p className="bo-date-picker-month">
+              {formatAvailabilityMonthLabel(availabilityCalendarDate)}
+            </p>
+          </div>
+          <div className="bo-date-picker-header-actions">
+            <button
+              type="button"
+              onClick={() => moveAvailabilityCalendarMonth(1)}
+              className="bo-date-picker-nav-button"
+              aria-label="Mes siguiente"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={closeAvailabilityCalendar}
+              className="bo-date-picker-nav-button"
+              aria-label="Cerrar calendario"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="bo-date-picker-weekdays" aria-hidden="true">
+          {AVAILABILITY_WEEK_DAYS.map((dayName) => (
+            <span key={dayName}>{dayName}</span>
+          ))}
+        </div>
+
+        <div className="bo-date-picker-calendar-grid">
+          {availabilityCalendarCells.map((day, index) => {
+            if (day === null) {
+              return <span key={`empty-${index}`} className="bo-date-picker-empty-day" />;
+            }
+
+            const isoDate = buildIsoDateFromParts(
+              availabilityCalendarDate.getFullYear(),
+              availabilityCalendarDate.getMonth(),
+              day,
+            );
+            const availability = getAvailabilityForIsoDate(isoDate);
+            const isSelected = selectedPickerIsoDate === isoDate;
+            const isPreviewed = calendarPreviewIsoDate === isoDate;
+
+            return (
+              <button
+                key={isoDate}
+                type="button"
+                onClick={() => selectAvailabilityCalendarDate(day)}
+                onMouseEnter={() => setCalendarPreviewIsoDate(isoDate)}
+                onFocus={() => setCalendarPreviewIsoDate(isoDate)}
+                className={`bo-date-picker-day${isSelected ? ' is-selected' : ''}${isPreviewed ? ' is-previewed' : ''}`}
+                title={getAvailabilityTitle(availability)}
+              >
+                <span className="bo-date-picker-day-number">{day}</span>
+                <span className="bo-date-picker-day-status is-available">
+                  {availability.available.length} disp
+                </span>
+                <span className="bo-date-picker-day-status is-pending">
+                  {availability.pending.length} cons
+                </span>
+                <span className="bo-date-picker-day-status is-occupied">
+                  {availability.occupied.length} ocup
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {calendarAvailabilityError ? (
+          <div className="bo-date-picker-message is-error">
+            {calendarAvailabilityError}
+          </div>
+        ) : loadingCalendarAvailability ? (
+          <div className="bo-date-picker-message">Consultando disponibilidad...</div>
+        ) : previewDayAvailability && calendarPreviewIsoDate ? (
+          <div className="bo-date-picker-summary">
+            <p className="bo-date-picker-summary-date">
+              {formatLongAvailabilityDate(calendarPreviewIsoDate)}
+            </p>
+            <p><strong>Disponibles:</strong> {getSalonNamesText(previewDayAvailability.available)}</p>
+            <p><strong>En consulta:</strong> {getSalonNamesText(previewDayAvailability.pending)}</p>
+            <p><strong>Ocupados:</strong> {getSalonNamesText(previewDayAvailability.occupied)}</p>
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1233,38 +1447,19 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               Inicio <span className="text-red-500">*</span>
             </label>
             <div className="bo-date-time-grid">
-              <div>
+              <div className="bo-date-picker-field">
                 <label className="block text-xs text-gray-600 mb-1">Fecha</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={fechaInicioDate}
-                    onChange={(e) => setFechaInicioDate(formatShortDateInput(e.target.value))}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="dd/mm/aa"
-                    required
-                    className={`${DATE_TIME_FIELD_CLASS} flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => openNativeDatePicker(fechaInicioPickerRef)}
-                    className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    title="Seleccionar fecha"
-                    aria-label="Seleccionar fecha de inicio"
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                  </button>
-                  <input
-                    ref={fechaInicioPickerRef}
-                    type="date"
-                    value={fechaInicioIsoFromInput || ''}
-                    onChange={(e) => setFechaInicioDate(isoDateToShortDate(e.target.value))}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openAvailabilityCalendar('inicio')}
+                  className={`${DATE_TIME_FIELD_CLASS} bo-date-picker-trigger`}
+                  aria-expanded={activeDatePicker === 'inicio'}
+                >
+                  <span className={fechaInicioDate ? 'text-gray-900' : 'text-gray-500'}>
+                    {fechaInicioDate || 'Seleccionar fecha'}
+                  </span>
+                  <CalendarDays className="h-4 w-4 text-gray-500" />
+                </button>
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Horario</label>
@@ -1290,38 +1485,19 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               Fin <span className="text-red-500">*</span>
             </label>
             <div className="bo-date-time-grid">
-              <div>
+              <div className="bo-date-picker-field">
                 <label className="block text-xs text-gray-600 mb-1">Fecha</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={fechaFinDate}
-                    onChange={(e) => setFechaFinDate(formatShortDateInput(e.target.value))}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="dd/mm/aa"
-                    required
-                    className={`${DATE_TIME_FIELD_CLASS} flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => openNativeDatePicker(fechaFinPickerRef)}
-                    className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    title="Seleccionar fecha"
-                    aria-label="Seleccionar fecha de fin"
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                  </button>
-                  <input
-                    ref={fechaFinPickerRef}
-                    type="date"
-                    value={fechaFinIsoFromInput || ''}
-                    onChange={(e) => setFechaFinDate(isoDateToShortDate(e.target.value))}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openAvailabilityCalendar('fin')}
+                  className={`${DATE_TIME_FIELD_CLASS} bo-date-picker-trigger`}
+                  aria-expanded={activeDatePicker === 'fin'}
+                >
+                  <span className={fechaFinDate ? 'text-gray-900' : 'text-gray-500'}>
+                    {fechaFinDate || 'Seleccionar fecha'}
+                  </span>
+                  <CalendarDays className="h-4 w-4 text-gray-500" />
+                </button>
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Horario</label>
@@ -1343,99 +1519,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           </div>
         </div>
 
-        <div className="bo-card-compact rounded-lg border border-gray-200 bg-white p-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-              <h4 className="text-gray-900">Disponibilidad de salones</h4>
-              <p className="text-xs text-gray-600 mt-1">
-                Se actualiza con el rango de fecha y horario seleccionado.
-              </p>
-            </div>
-            {selectedDateTimeRange && (
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
-                {formatAvailabilityDateTime(selectedDateTimeRange.startIso)} - {formatAvailabilityDateTime(selectedDateTimeRange.endIso)}
-              </span>
-            )}
-          </div>
-
-          {!hasCompleteDateTimeSelection ? (
-            <p className="text-sm text-gray-500">
-              Complete fecha y horario de inicio y fin para ver disponibilidad.
-            </p>
-          ) : !selectedDateTimeRange ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              La fecha de fin debe ser posterior a la fecha de inicio.
-            </div>
-          ) : availabilityError ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {availabilityError}
-            </div>
-          ) : loadingAvailability ? (
-            <p className="text-sm text-gray-500">Consultando disponibilidad...</p>
-          ) : (
-            <>
-              <div className="bo-availability-grid gap-3">
-                {salonAvailability.map(({ salon, status, blockingReservas, pendingReservas }) => {
-                  const isSelectedSalon = Number(idSalon) === Number(salon.id);
-                  const isBlocked = status === 'ocupado';
-                  const statusLabel = status === 'disponible'
-                    ? 'Disponible'
-                    : status === 'pendiente'
-                      ? 'En consulta'
-                      : 'Ocupado';
-                  const statusClass = status === 'disponible'
-                    ? 'border-green-200 bg-green-50 text-green-800'
-                    : status === 'pendiente'
-                      ? 'border-amber-200 bg-amber-50 text-amber-800'
-                      : 'border-red-200 bg-red-50 text-red-800';
-                  const relatedReservas = blockingReservas.length > 0 ? blockingReservas : pendingReservas;
-
-                  return (
-                    <button
-                      key={salon.id}
-                      type="button"
-                      onClick={() => {
-                        if (!isBlocked) {
-                          setIdSalon(salon.id);
-                        }
-                      }}
-                      disabled={isBlocked}
-                      className={`rounded-lg border p-3 text-left transition-colors ${
-                        isSelectedSalon ? 'border-blue-400 ring-2 ring-blue-100' : 'border-gray-200'
-                      } ${isBlocked ? 'cursor-not-allowed opacity-80' : 'hover:border-blue-300 hover:bg-blue-50'}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-gray-900">{salon.nombre}</p>
-                          <p className="text-xs text-gray-600">Capacidad: {salon.capacidad}</p>
-                        </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusClass}`}>
-                          {statusLabel}
-                        </span>
-                      </div>
-                      {relatedReservas.length > 0 && (
-                        <p className="mt-2 text-xs text-gray-600">
-                          {relatedReservas.map((item) => `#${item.id} ${item.estado}`).join(', ')}
-                        </p>
-                      )}
-                      {!isBlocked && (
-                        <p className="mt-2 text-xs text-blue-700">
-                          {isSelectedSalon ? 'Salon seleccionado' : 'Seleccionar salon'}
-                        </p>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-600">
-                <span><strong className="text-green-700">Disponible:</strong> sin reservas bloqueantes.</span>
-                <span><strong className="text-amber-700">En consulta:</strong> hay reserva pendiente.</span>
-                <span><strong className="text-red-700">Ocupado:</strong> confirmado o pagado.</span>
-              </div>
-            </>
-          )}
-        </div>
+        {activeDatePicker && renderAvailabilityCalendar(activeDatePicker)}
 
         {/* Estado (solo editable cuando se está editando una reserva) */}
         {reserva && (

@@ -1,7 +1,7 @@
 {
   "id": "./",
   "name": "Hotel Back-Office Reservas",
-  "short_name": "Reservas",
+  "short_name": "Back-Office Reservas",
   "description": "Back office de reservas instalable para el Hotel Quinto Centenario.",
   "lang": "es-AR",
   "start_url": "./",

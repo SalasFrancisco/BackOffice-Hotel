@@ -17,6 +17,16 @@ type ReservaCalendarProps = {
   refreshKey?: number;
 };
 
+type SalonDayGroup = {
+  salonId: number;
+  salonName: string;
+  reservas: Reserva[];
+};
+
+type SelectedSalonDay = SalonDayGroup & {
+  day: number;
+};
+
 const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
 
@@ -36,6 +46,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   const [filterSalon, setFilterSalon] = useState<number | null>(null);
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
+  const [selectedSalonDay, setSelectedSalonDay] = useState<SelectedSalonDay | null>(null);
   const [showModal, setShowModal] = useState(false);
 
   const calendarDays = useMemo(() => {
@@ -62,13 +73,45 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const dayStart = new Date(year, month, day, 0, 0, 0);
-    const dayEnd = new Date(year, month, day, 23, 59, 59);
+    const dayEnd = new Date(year, month, day + 1, 0, 0, 0);
 
     return reservas.filter((reserva) => {
       const inicio = new Date(reserva.fecha_inicio);
       const fin = new Date(reserva.fecha_fin);
-      return inicio <= dayEnd && fin >= dayStart;
+      return inicio < dayEnd && fin > dayStart;
     });
+  };
+
+  const getSalonGroupsForDay = (day: number): SalonDayGroup[] => {
+    const dayReservas = getReservasForDay(day);
+    const groups = new Map<number, SalonDayGroup>();
+
+    dayReservas.forEach((reserva) => {
+      const salonId = Number(reserva.id_salon);
+      const salonName = reserva.salon?.nombre
+        || salones.find((salon) => Number(salon.id) === salonId)?.nombre
+        || 'Sin salon';
+      const group = groups.get(salonId);
+
+      if (group) {
+        group.reservas.push(reserva);
+      } else {
+        groups.set(salonId, {
+          salonId,
+          salonName,
+          reservas: [reserva],
+        });
+      }
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        reservas: [...group.reservas].sort(
+          (a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime(),
+        ),
+      }))
+      .sort((a, b) => a.salonName.localeCompare(b.salonName, 'es'));
   };
 
   const agendaDays = useMemo(() => (
@@ -76,10 +119,10 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
       .filter((day): day is number => day !== null)
       .map((day) => ({
         day,
-        reservas: getReservasForDay(day),
+        salonGroups: getSalonGroupsForDay(day),
       }))
-      .filter((item) => item.reservas.length > 0)
-  ), [calendarDays, reservas, currentDate]);
+      .filter((item) => item.salonGroups.length > 0)
+  ), [calendarDays, reservas, salones, currentDate]);
 
   const loadCalendarData = async () => {
     try {
@@ -145,8 +188,16 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   };
 
   const handleReservaClick = (reserva: Reserva) => {
+    setSelectedSalonDay(null);
     setSelectedReserva(reserva);
     setShowModal(true);
+  };
+
+  const handleSalonDayClick = (day: number, group: SalonDayGroup) => {
+    setSelectedSalonDay({
+      ...group,
+      day,
+    });
   };
 
   const handleModalClose = () => {
@@ -155,11 +206,23 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
     void loadCalendarData();
   };
 
+  const handleSalonDayModalClose = () => {
+    setSelectedSalonDay(null);
+  };
+
   const formatAgendaDate = (day: number) =>
     new Intl.DateTimeFormat('es-AR', {
       weekday: 'long',
       day: '2-digit',
       month: 'short',
+    }).format(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+
+  const formatSalonDayModalDate = (day: number) =>
+    new Intl.DateTimeFormat('es-AR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
     }).format(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
 
   return (
@@ -235,33 +298,32 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
 
         <div className="grid grid-cols-7 relative">
           {calendarDays.map((day, index) => {
-            const dayReservas = day ? getReservasForDay(day) : [];
+            const salonGroups = day ? getSalonGroupsForDay(day) : [];
             return (
               <div
                 key={`${day || 'empty'}-${index}`}
-                className={`min-h-[120px] p-2 border-b border-r border-gray-200 ${
+                className={`min-h-[140px] p-2 border-b border-r border-gray-200 ${
                   !day ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
                 }`}
               >
                 {day && (
                   <>
                     <div className="text-sm text-gray-900 mb-2">{day}</div>
-                    <div className="space-y-1">
-                      {dayReservas.map((reserva) => (
+                    <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                      {salonGroups.map((group) => (
                         <button
-                          key={`${reserva.id}-${day}`}
+                          key={`${group.salonId}-${day}`}
                           type="button"
-                          onClick={() => handleReservaClick(reserva)}
+                          onClick={() => handleSalonDayClick(day, group)}
                           className="w-full text-left px-3 py-2 rounded border border-gray-200 bg-gray-100 hover:bg-gray-200 transition-colors"
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs text-gray-700 font-medium truncate">
-                              #{reserva.id} - {reserva.cliente_nombre || 'Sin nombre'}
+                              {group.salonName}
                             </span>
-                            <span
-                              className="flex-shrink-0 rounded-full border border-white"
-                              style={{ backgroundColor: getEstadoColor(reserva.estado), width: '0.65rem', height: '0.65rem' }}
-                            />
+                            <span className="flex-shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                              {group.reservas.length} res.
+                            </span>
                           </div>
                         </button>
                       ))}
@@ -281,43 +343,46 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
           </div>
         ) : (
           <div className="bo-stack">
-            {agendaDays.map(({ day, reservas: reservasDelDia }) => (
-              <div key={day} className="rounded-lg border border-gray-200 bg-white p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h4 className="text-sm text-gray-900" style={{ textTransform: 'capitalize' }}>
-                    {formatAgendaDate(day)}
-                  </h4>
-                  <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                    {reservasDelDia.length} reserva(s)
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {reservasDelDia.map((reserva) => (
-                    <button
-                      key={`${reserva.id}-agenda-${day}`}
-                      type="button"
-                      onClick={() => handleReservaClick(reserva)}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm text-gray-900">
-                            #{reserva.id} - {reserva.cliente_nombre || 'Sin nombre'}
-                          </p>
-                          <p className="mt-1 text-xs text-gray-600">
-                            {reserva.salon?.nombre || 'Sin salon'} - {formatAgendaTime(reserva.fecha_inicio)} a {formatAgendaTime(reserva.fecha_fin)}
-                          </p>
+            {agendaDays.map(({ day, salonGroups }) => {
+              const totalReservas = salonGroups.reduce((total, group) => total + group.reservas.length, 0);
+
+              return (
+                <div key={day} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h4 className="text-sm text-gray-900" style={{ textTransform: 'capitalize' }}>
+                      {formatAgendaDate(day)}
+                    </h4>
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
+                      {totalReservas} reserva(s)
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {salonGroups.map((group) => (
+                      <button
+                        key={`${group.salonId}-agenda-${day}`}
+                        type="button"
+                        onClick={() => handleSalonDayClick(day, group)}
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-gray-900">
+                              {group.salonName}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-600">
+                              {group.reservas.length} reserva(s) asignada(s)
+                            </p>
+                          </div>
+                          <span className="mt-1 flex-shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">
+                            {group.reservas.length} res.
+                          </span>
                         </div>
-                        <span
-                          className="mt-1 flex-shrink-0 rounded-full border border-white"
-                          style={{ backgroundColor: getEstadoColor(reserva.estado), width: '0.75rem', height: '0.75rem' }}
-                        />
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -330,6 +395,70 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
           </div>
         ))}
       </div>
+
+      {selectedSalonDay && !showModal && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(1px)' }}
+        >
+          <div className="bo-dialog-content w-full max-w-2xl rounded-lg bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-5">
+              <div className="min-w-0">
+                <h3 className="text-gray-900">{selectedSalonDay.salonName}</h3>
+                <p className="mt-1 text-sm text-gray-600" style={{ textTransform: 'capitalize' }}>
+                  {formatSalonDayModalDate(selectedSalonDay.day)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSalonDayModalClose}
+                className="rounded-lg p-2 transition-colors hover:bg-gray-100"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-5">
+              {selectedSalonDay.reservas.map((reserva) => (
+                <button
+                  key={`${selectedSalonDay.day}-modal-${reserva.id}`}
+                  type="button"
+                  onClick={() => handleReservaClick(reserva)}
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:bg-gray-100"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-gray-900">
+                        #{reserva.id} - {reserva.cliente_nombre || 'Sin nombre'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-600">
+                        {formatAgendaTime(reserva.fecha_inicio)} a {formatAgendaTime(reserva.fecha_fin)}
+                      </p>
+                    </div>
+                    <span
+                      className="flex-shrink-0 rounded-full px-3 py-1 text-xs text-white"
+                      style={{ backgroundColor: getEstadoColor(reserva.estado) }}
+                    >
+                      {reserva.estado}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex justify-end border-t border-gray-200 bg-gray-50 p-5">
+              <button
+                type="button"
+                onClick={handleSalonDayModalClose}
+                className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800 transition-colors hover:bg-gray-300"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && selectedReserva && (
         <ReservaModal

@@ -185,6 +185,15 @@ textarea {
   padding-top: 0.75rem;
 }
 
+.bo-salon-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-salon-edit-button {
+  margin-top: auto;
+}
+
 .bo-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));

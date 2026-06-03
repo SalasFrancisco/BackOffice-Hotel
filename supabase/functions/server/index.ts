@@ -921,8 +921,9 @@ const buildPresupuestoPdf = async (
         pdfMake = (mod && (mod as any).default) || mod;
         pdfFonts = (fonts && (fonts as any).default) || fonts;
       } catch (err) {
-        const details = (localErr && localErr.message) ? ` (local: ${localErr.message})` : '';
-        throw new Error('PDF generation is not available in this environment: ' + (err?.message || err) + details);
+        const localMessage = getErrorMessage(localErr, "");
+        const details = localMessage ? ` (local: ${localMessage})` : "";
+        throw new Error(`PDF generation is not available in this environment: ${getErrorMessage(err, String(err))}${details}`);
       }
     }
   } catch (err) {
@@ -1193,7 +1194,7 @@ const buildPresupuestoPdf = async (
 };
 
 function createServiceClient(): SupabaseClient {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -1570,6 +1571,48 @@ const normalizeEmail = (value: unknown) => {
   const normalized = value.trim().toLowerCase();
   return normalized.length > 0 ? normalized : null;
 };
+
+function getErrorMessage(error: unknown, fallback = "Internal server error") {
+  if (error instanceof Error) return error.message;
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  }
+
+  const text = String(error ?? "");
+  return text.length > 0 ? text : fallback;
+}
+
+async function findAuthUserByEmail(supabaseAdmin: SupabaseClient, email: string) {
+  const targetEmail = normalizeEmail(email);
+  if (!targetEmail) return null;
+
+  const perPage = 100;
+
+  for (let page = 1; page <= 100; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = data?.users || [];
+    const match = users.find((user) => normalizeEmail(user.email) === targetEmail);
+
+    if (match) {
+      return match;
+    }
+
+    if (users.length < perPage) {
+      return null;
+    }
+  }
+
+  return null;
+}
 
 const formatOptionalText = (value: unknown, fallback: string) => {
   if (typeof value !== "string") return fallback;
@@ -2505,7 +2548,7 @@ app.post("/make-server-484a241a/request-password-reset", async (c) => {
     return c.json({ success: true });
   } catch (error: any) {
     console.error("Error in request-password-reset endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -2528,24 +2571,96 @@ app.post("/make-server-484a241a/create-user", async (c) => {
 
     const body = await c.req.json();
     const { email, password, nombre, rol } = body ?? {};
+    const sanitizedEmail = typeof email === "string" ? email.trim() : "";
+    const sanitizedNombre = typeof nombre === "string" ? nombre.trim() : "";
+    const normalizedRol = normalizeRole(rol);
 
-    if (!email || !password || !nombre || !rol) {
+    if (!sanitizedEmail || !password || !sanitizedNombre || !normalizedRol) {
       return c.json(
         { error: "Missing required fields: email, password, nombre, rol" },
         400,
       );
     }
 
-    if (!["ADMIN", "OPERADOR"].includes(rol)) {
+    if (!["ADMIN", "OPERADOR"].includes(normalizedRol)) {
       return c.json({ error: "Invalid role. Must be ADMIN or OPERADOR" }, 400);
     }
 
+    const existingAuthUser = await findAuthUserByEmail(supabaseAdmin, sanitizedEmail);
+
+    if (existingAuthUser) {
+      const { data: existingPerfil, error: existingPerfilError } = await supabaseAdmin
+        .from("perfiles")
+        .select("user_id, nombre, rol, activo")
+        .eq("user_id", existingAuthUser.id)
+        .maybeSingle();
+
+      if (existingPerfilError) {
+        console.error("Error loading existing perfil for create-user:", existingPerfilError);
+        return c.json({ error: "No se pudo validar el perfil existente" }, 500);
+      }
+
+      if (existingPerfil?.activo !== false && existingPerfil) {
+        return c.json({ error: "Ya existe un usuario activo con ese email" }, 409);
+      }
+
+      const { data: reactivatedUser, error: reactivateAuthError } =
+        await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+          email: sanitizedEmail,
+          password,
+          email_confirm: true,
+          ban_duration: "none",
+          user_metadata: {
+            ...existingAuthUser.user_metadata,
+            nombre: sanitizedNombre,
+          },
+          app_metadata: {
+            ...existingAuthUser.app_metadata,
+            role: normalizedRol,
+            active: true,
+          },
+        });
+
+      if (reactivateAuthError || !reactivatedUser?.user) {
+        console.error("Error reactivating auth user:", reactivateAuthError);
+        return c.json({ error: reactivateAuthError?.message ?? "Failed to reactivate user" }, 400);
+      }
+
+      const { error: perfilReactivateError } = await supabaseAdmin
+        .from("perfiles")
+        .upsert(
+          {
+            user_id: existingAuthUser.id,
+            nombre: sanitizedNombre,
+            rol: normalizedRol,
+            activo: true,
+          },
+          { onConflict: "user_id" },
+        );
+
+      if (perfilReactivateError) {
+        console.error("Error reactivating perfil:", perfilReactivateError);
+        return c.json({ error: "Failed to reactivate user profile" }, 500);
+      }
+
+      return c.json({
+        success: true,
+        reactivated: true,
+        user: {
+          id: reactivatedUser.user.id,
+          email: reactivatedUser.user.email,
+          nombre: sanitizedNombre,
+          rol: normalizedRol,
+        },
+      });
+    }
+
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: sanitizedEmail,
       password,
       email_confirm: true,
-      user_metadata: { nombre },
-      app_metadata: { role: rol, active: true },
+      user_metadata: { nombre: sanitizedNombre },
+      app_metadata: { role: normalizedRol, active: true },
     });
 
     if (createError || !newUser?.user) {
@@ -2558,8 +2673,8 @@ app.post("/make-server-484a241a/create-user", async (c) => {
       .insert([
         {
           user_id: newUser.user.id,
-          nombre,
-          rol,
+          nombre: sanitizedNombre,
+          rol: normalizedRol,
           activo: true,
         },
       ]);
@@ -2575,13 +2690,13 @@ app.post("/make-server-484a241a/create-user", async (c) => {
       user: {
         id: newUser.user.id,
         email: newUser.user.email,
-        nombre,
-        rol,
+        nombre: sanitizedNombre,
+        rol: normalizedRol,
       },
     });
   } catch (error) {
     console.error("Error in create-user endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -2625,7 +2740,7 @@ app.post("/make-server-484a241a/update-user-email", async (c) => {
     });
   } catch (error) {
     console.error("Error in update-user-email endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -2663,7 +2778,7 @@ app.post("/make-server-484a241a/get-user-email", async (c) => {
     });
   } catch (error) {
     console.error("Error in get-user-email endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -2747,7 +2862,7 @@ app.post("/make-server-484a241a/delete-user", async (c) => {
     return c.json({ success: true, userId, activo: false });
   } catch (error) {
     console.error("Error in delete-user endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -2789,7 +2904,7 @@ app.post("/make-server-484a241a/reset-user-password", async (c) => {
     return c.json({ success: true });
   } catch (error) {
     console.error("Error in reset-user-password endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -2902,7 +3017,7 @@ app.post("/make-server-484a241a/get-presupuesto-url", async (c) => {
     });
   } catch (error) {
     console.error("Error in get-presupuesto-url endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 });
 
@@ -3010,7 +3125,7 @@ const sendPresupuestoEmailHandler = async (c: any) => {
     });
   } catch (error) {
     console.error("Error in send-presupuesto-email endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 };
 
@@ -3059,7 +3174,7 @@ const upsertPresupuestoHandler = async (c: any) => {
     });
   } catch (error) {
     console.error("Error in upsert-presupuesto endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 };
 
@@ -3129,7 +3244,7 @@ const deleteReservaHandler = async (c: any) => {
     });
   } catch (error) {
     console.error("Error in delete-reserva endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 };
 
@@ -3470,14 +3585,14 @@ const processReservaVencimientoHandler = async (c: any) => {
     });
   } catch (error) {
     console.error("Error in process-reserva-vencimiento endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 };
 
 app.post("/make-server-484a241a/process-reserva-vencimiento", processReservaVencimientoHandler);
 app.post("/server/make-server-484a241a/process-reserva-vencimiento", processReservaVencimientoHandler);
 
-const publicCatalogHandler = async (c) => {
+const publicCatalogHandler = async (c: any) => {
   try {
     const supabaseAdmin = createServiceClient();
     const rateLimitResponse = await applyRateLimit(
@@ -3514,7 +3629,7 @@ const publicCatalogHandler = async (c) => {
     });
   } catch (error) {
     console.error("Error in public-catalog endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 };
 
@@ -3567,7 +3682,7 @@ const registerPublicReservaNotification = async (
   }
 };
 
-const publicReservaHandler = async (c) => {
+const publicReservaHandler = async (c: any) => {
   try {
     const body = (await c.req.json()) as PublicReservaPayload;
 
@@ -3818,8 +3933,15 @@ const publicReservaHandler = async (c) => {
         const serviciosMap = new Map<number, typeof serviciosData[number]>();
         (serviciosData || []).forEach((item) => serviciosMap.set(item.id, item));
         selectedServiciosNormalizados.forEach((item) => {
-          const servicioInfo = serviciosMap.get(item.id_servicio);
-          if (!servicioInfo) return;
+          const servicioInfoRaw = serviciosMap.get(item.id_servicio);
+          if (!servicioInfoRaw) return;
+          const categoriaRaw = (servicioInfoRaw as any).categoria;
+          const categoria = Array.isArray(categoriaRaw) ? (categoriaRaw[0] ?? null) : (categoriaRaw ?? null);
+          const servicioInfo = {
+            ...servicioInfoRaw,
+            categoria,
+          };
+
           serviciosDetalle.push({
             servicio: servicioInfo,
             cantidad: item.cantidad,
@@ -3888,7 +4010,7 @@ const publicReservaHandler = async (c) => {
 
       pdfGenerated = true;
     } catch (err) {
-      pdfError = err?.message || String(err);
+      pdfError = getErrorMessage(err, String(err));
       uploadErrorMsg = pdfError;
       console.warn("PDF generation failed or not available:", pdfError);
       // proceed without downloadUrl
@@ -3918,7 +4040,7 @@ const publicReservaHandler = async (c) => {
     return c.json(responseBody);
   } catch (error) {
     console.error("Error in public-reserva endpoint:", error);
-    return c.json({ error: error?.message ?? "Internal server error" }, 500);
+    return c.json({ error: getErrorMessage(error) }, 500);
   }
 };
 

@@ -184,7 +184,12 @@ export function Usuarios() {
         throw new Error(payload.error || 'Error al crear usuario');
       }
 
-      setMessage({ type: 'success', text: `Usuario ${newEmailSanitizado} creado correctamente` });
+      setMessage({
+        type: 'success',
+        text: payload.reactivated
+          ? `Usuario ${newEmailSanitizado} reactivado correctamente`
+          : `Usuario ${newEmailSanitizado} creado correctamente`,
+      });
       setShowCreateDialog(false);
       setNewEmail('');
       setNewPassword('');

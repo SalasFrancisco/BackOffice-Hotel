@@ -561,7 +561,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   }, []);
 
   useEffect(() => {
-    if (!activeDatePicker) {
+    if (!activeDatePicker || !idSalon) {
+      setCalendarMonthReservas([]);
+      setCalendarAvailabilityError('');
+      setLoadingCalendarAvailability(false);
       return;
     }
 
@@ -595,7 +598,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           .select('id, id_salon, estado, fecha_inicio, fecha_fin, cliente_nombre')
           .lt('fecha_inicio', monthEnd.toISOString())
           .gt('fecha_fin', monthStart.toISOString())
-          .neq('estado', 'Cancelado');
+          .neq('estado', 'Cancelado')
+          .eq('id_salon', idSalon);
 
         if (error) throw error;
         if (isActive) {
@@ -621,7 +625,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     return () => {
       isActive = false;
     };
-  }, [activeDatePicker, availabilityCalendarDate]);
+  }, [activeDatePicker, availabilityCalendarDate, idSalon]);
 
   useEffect(() => {
     if (idSalon) {
@@ -792,10 +796,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   };
 
   const getAvailabilityForIsoDate = (isoDate: string): CalendarDayAvailability => {
+    const availabilitySalones = currentSalon ? [currentSalon] : [];
     const date = buildLocalDateFromIsoDate(isoDate);
     if (!date) {
       return {
-        available: salones,
+        available: availabilitySalones,
         pending: [],
         occupied: [],
       };
@@ -807,7 +812,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     const dayEndIso = dayEnd.toISOString();
     const currentReservaId = reserva?.id || 0;
 
-    return salones.reduce<CalendarDayAvailability>(
+    return availabilitySalones.reduce<CalendarDayAvailability>(
       (summary, salon) => {
         const overlappingReservas = calendarMonthReservas
           .filter((item) => item.id !== currentReservaId)
@@ -839,16 +844,37 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     );
   };
 
-  const getSalonNamesText = (items: Salon[]) => (
-    items.length > 0
-      ? items.map((salon) => salon.nombre).join(', ')
-      : 'Sin salones'
-  );
+  const getSelectedSalonStatus = (availability: CalendarDayAvailability) => {
+    if (!currentSalon) {
+      return {
+        label: 'Sin salon',
+        className: 'is-neutral',
+      };
+    }
+
+    if (availability.occupied.length > 0) {
+      return {
+        label: 'Ocupado',
+        className: 'is-occupied',
+      };
+    }
+
+    if (availability.pending.length > 0) {
+      return {
+        label: 'En consulta',
+        className: 'is-pending',
+      };
+    }
+
+    return {
+      label: 'Disponible',
+      className: 'is-available',
+    };
+  };
 
   const getAvailabilityTitle = (availability: CalendarDayAvailability) => [
-    `Disponibles: ${getSalonNamesText(availability.available)}`,
-    `En consulta: ${getSalonNamesText(availability.pending)}`,
-    `Ocupados: ${getSalonNamesText(availability.occupied)}`,
+    currentSalon ? `Salon: ${currentSalon.nombre}` : 'Seleccione un salon',
+    `Estado: ${getSelectedSalonStatus(availability).label}`,
   ].join('\n');
 
   const openAvailabilityCalendar = (target: DatePickerTarget) => {
@@ -976,6 +1002,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               day,
             );
             const availability = getAvailabilityForIsoDate(isoDate);
+            const salonStatus = getSelectedSalonStatus(availability);
             const isSelected = selectedPickerIsoDate === isoDate;
             const isPreviewed = calendarPreviewIsoDate === isoDate;
 
@@ -990,14 +1017,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                 title={getAvailabilityTitle(availability)}
               >
                 <span className="bo-date-picker-day-number">{day}</span>
-                <span className="bo-date-picker-day-status is-available">
-                  {availability.available.length} disp
-                </span>
-                <span className="bo-date-picker-day-status is-pending">
-                  {availability.pending.length} cons
-                </span>
-                <span className="bo-date-picker-day-status is-occupied">
-                  {availability.occupied.length} ocup
+                <span className={`bo-date-picker-day-status ${salonStatus.className}`}>
+                  {salonStatus.label}
                 </span>
               </button>
             );
@@ -1015,9 +1036,14 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             <p className="bo-date-picker-summary-date">
               {formatLongAvailabilityDate(calendarPreviewIsoDate)}
             </p>
-            <p><strong>Disponibles:</strong> {getSalonNamesText(previewDayAvailability.available)}</p>
-            <p><strong>En consulta:</strong> {getSalonNamesText(previewDayAvailability.pending)}</p>
-            <p><strong>Ocupados:</strong> {getSalonNamesText(previewDayAvailability.occupied)}</p>
+            {currentSalon ? (
+              <>
+                <p><strong>Salon:</strong> {currentSalon.nombre}</p>
+                <p><strong>Estado:</strong> {getSelectedSalonStatus(previewDayAvailability).label}</p>
+              </>
+            ) : (
+              <p>Seleccione un salon para ver su disponibilidad.</p>
+            )}
           </div>
         ) : null}
       </div>

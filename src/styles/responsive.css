@@ -391,6 +391,11 @@ textarea {
   color: #991b1b;
 }
 
+.bo-date-picker-day-status.is-neutral {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
 .bo-date-picker-message,
 .bo-date-picker-summary {
   margin-top: 0.75rem;

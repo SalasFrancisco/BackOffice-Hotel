@@ -479,7 +479,9 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
     window.setTimeout(() => {
       const row = document.getElementById(`reserva-row-${targetId}`);
-      row?.scrollIntoView({ behavior: 'auto', block: 'center' });
+      const card = document.getElementById(`reserva-card-${targetId}`);
+      const target = row && row.offsetParent !== null ? row : card;
+      target?.scrollIntoView({ behavior: 'auto', block: 'center' });
     }, 0);
 
     if (highlightTimeoutRef.current) {
@@ -492,12 +494,12 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   }, [pendingHighlight, sortedReservas, loading]);
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="bo-page">
+      <div className="bo-page-header mb-6">
         <h2 className="text-gray-900">Gestión de Reservas</h2>
         <button
           onClick={handleCreateNew}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus className="w-5 h-5" />
           Nueva Reserva
@@ -531,8 +533,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       )}
 
       {showDialog && !editingReserva && (
-        <div className="sticky top-0 z-20 mb-6 bg-white rounded-lg shadow border border-gray-200">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="bo-inline-form-card sticky top-0 z-20 mb-6 bg-white rounded-lg shadow border border-gray-200">
+          <div className="bo-inline-form-header flex items-center justify-between px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold">Nueva Reserva</h3>
             <button
               onClick={() => handleDialogClose()}
@@ -543,7 +545,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             </button>
           </div>
 
-          <div className="p-6">
+          <div className="bo-inline-form-body p-6">
             <ReservaForm
               reserva={editingReserva}
               onClose={handleDialogClose}
@@ -554,8 +556,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       )}
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6">
-        <div className="flex-1 relative">
+      <div className="bo-filter-bar mb-6">
+        <div className="bo-filter-search flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -580,7 +582,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bo-reservas-table bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -836,6 +838,186 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="bo-reservas-mobile-list bo-stack">
+        {loading ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+            Cargando reservas...
+          </div>
+        ) : filteredReservas.length === 0 ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
+            No se encontraron reservas
+          </div>
+        ) : (
+          sortedReservas.map((reserva) => {
+            const reservaRowId = Number(reserva.id);
+            const capacityWarningText = getReservaCapacityWarningText(reserva);
+            const pendingConflictIds = getReservaPendingConflictIds(reserva, reservasPendientes);
+            const pendingConflictText = getReservaPendingConflictText(pendingConflictIds);
+            const expirationWarningText = getReservaExpirationWarningText(reserva);
+            const startWarningText = getReservaStartWarningText(reserva);
+            const warningMessages = [capacityWarningText, pendingConflictText, expirationWarningText, startWarningText].filter(
+              (message): message is string => Boolean(message),
+            );
+            const warningText = warningMessages.join(' ');
+            const hasWarning = warningMessages.length > 0;
+            const isEditingCurrentRow = showDialog && editingReserva?.id === reserva.id;
+            const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
+            const clienteEmail = reserva.cliente_email?.trim() || '';
+            const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
+            const totalServicios = getReservaServiciosTotal(reserva);
+            const totalReserva = getReservaMontoTotal(reserva);
+            const sendPresupuestoTitle = sendingPresupuestoId === reserva.id
+              ? 'Enviando presupuesto...'
+              : !reserva.presupuesto_url
+                ? 'La reserva no tiene presupuesto generado'
+                : !clienteEmail
+                  ? 'La reserva no tiene email asociado'
+                  : `Enviar presupuesto a ${clienteEmail}`;
+
+            return (
+              <div
+                key={`mobile-${reserva.id}`}
+                id={`reserva-card-${reservaRowId}`}
+                className={`bo-reserva-card rounded-lg border bg-white p-4 shadow-sm transition-colors duration-700 ${
+                  isHighlightedRow ? 'bo-reserva-card-highlight' : 'border-gray-200'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-500">Reserva #{reserva.id}</p>
+                    <h3 className="truncate text-gray-900">
+                      {reserva.cliente_nombre || 'Sin nombre'}
+                    </h3>
+                  </div>
+                  <span
+                    className="inline-block px-3 py-1 rounded-full text-xs text-white"
+                    style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
+                  >
+                    {reserva.estado}
+                  </span>
+                </div>
+
+                <div className="bo-mobile-card-grid text-sm">
+                  <div>
+                    <p className="text-gray-500">Salón</p>
+                    <p className="text-gray-900">{reserva.salon?.nombre || 'Sin salón'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Inicio</p>
+                    <p className="text-gray-900">{formatDate(reserva.fecha_inicio)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Fin</p>
+                    <p className="text-gray-900">{formatDate(reserva.fecha_fin)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Monto total</p>
+                    <p className="font-medium text-gray-900">
+                      ${totalReserva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </p>
+                    {totalServicios > 0 && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Incluye ${totalServicios.toLocaleString('es-AR', { minimumFractionDigits: 2 })} en servicios
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bo-reserva-actions mt-4 border-t border-gray-200 pt-3">
+                  {hasWarning && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenWarningDialog(reserva, warningMessages)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      title="Ver advertencias"
+                      aria-label={warningText}
+                      style={{
+                        color: CAPACITY_WARNING_STYLES.textColor,
+                        borderColor: CAPACITY_WARNING_STYLES.borderColor,
+                        backgroundColor: CAPACITY_WARNING_STYLES.backgroundColor,
+                      }}
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                    </button>
+                  )}
+                  {reserva.presupuesto_url && (
+                    <>
+                      <button
+                        onClick={() => handleOpenPresupuesto(reserva)}
+                        disabled={openingPresupuestoId === reserva.id}
+                        className={`${ACTION_BUTTON_BASE} text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-100 disabled:bg-indigo-50 disabled:text-indigo-700`}
+                        title={openingPresupuestoId === reserva.id ? 'Abriendo presupuesto...' : 'Ver presupuesto'}
+                      >
+                        {openingPresupuestoId === reserva.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FileText className={ACTION_ICON_BASE} />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleSendPresupuestoEmail(reserva)}
+                        disabled={!canSendPresupuestoEmail || sendingPresupuestoId === reserva.id}
+                        className={`${ACTION_BUTTON_BASE} text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 disabled:bg-gray-100 disabled:text-gray-400`}
+                        title={sendPresupuestoTitle}
+                      >
+                        {sendingPresupuestoId === reserva.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className={ACTION_ICON_BASE} />
+                        )}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => handleEdit(reserva)}
+                    className={`${ACTION_BUTTON_BASE} text-blue-600 hover:bg-blue-50 hover:text-blue-700 focus-visible:ring-blue-500`}
+                    title="Editar"
+                  >
+                    <Edit className={ACTION_ICON_BASE} />
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteReserva(reserva)}
+                      disabled={deletingReservaId === reserva.id}
+                      className={`${ACTION_BUTTON_BASE} text-red-600 hover:bg-red-50 hover:text-red-700 focus-visible:ring-red-500 disabled:opacity-70 disabled:cursor-wait`}
+                      title={deletingReservaId === reserva.id ? 'Eliminando reserva...' : 'Eliminar reserva'}
+                    >
+                      {deletingReservaId === reserva.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className={ACTION_ICON_BASE} />
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {isEditingCurrentRow && (
+                  <div className="bo-inline-form-card mt-4 rounded-lg border border-gray-200 bg-white">
+                    <div className="bo-inline-form-header flex items-center justify-between px-4 py-3">
+                      <h3 className="text-base font-semibold text-gray-900">Editar Reserva #{reserva.id}</h3>
+                      <button
+                        onClick={() => handleDialogClose()}
+                        className="text-gray-500 hover:text-gray-700 transition-colors"
+                        title="Cerrar"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="bo-inline-form-body p-4">
+                      <ReservaForm
+                        reserva={editingReserva}
+                        onClose={handleDialogClose}
+                        onDirtyChange={setIsReservaFormDirty}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
 
       <div className="mt-4 text-sm text-gray-600">

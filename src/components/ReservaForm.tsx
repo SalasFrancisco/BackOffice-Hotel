@@ -920,7 +920,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   }
 
   return (
-    <div className="p-2">
+    <div className="bo-public-form-embed p-2">
       {message && (
         <div
           className="flex items-start gap-2 p-3 rounded-lg mb-6 bg-green-50 border border-green-200"
@@ -931,9 +931,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bo-card-compact bg-gray-50 p-4 rounded-lg">
           <h4 className="text-gray-900 mb-4">Datos del cliente</h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bo-form-grid-3">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre <span className="text-red-500">*</span>
@@ -978,7 +978,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           </div>
         </div>
         {/* Salon, Distribucion y Capacidad */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bo-form-grid-3">
           <div>
             <label className="block text-sm text-gray-700 mb-2">
               Cantidad de personas <span className="text-red-500">*</span>
@@ -1091,12 +1091,12 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         )}
 
         {/* Fecha y Hora */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bo-form-grid-2">
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
             <label className="block text-sm text-gray-700 mb-2">
               Inicio <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bo-date-time-grid">
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Fecha</label>
                 <div className="flex items-center gap-2">
@@ -1153,7 +1153,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             <label className="block text-sm text-gray-700 mb-2">
               Fin <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bo-date-time-grid">
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Fecha</label>
                 <div className="flex items-center gap-2">
@@ -1209,7 +1209,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
         {/* Estado (solo editable cuando se está editando una reserva) */}
         {reserva && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bo-form-grid-2">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Estado
@@ -1248,7 +1248,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         )}
 
         {/* Servicios Adicionales */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bo-card-compact bg-gray-50 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-4">
             <Package className="w-5 h-5 text-green-600" />
             <h4 className="text-gray-900">Servicios Adicionales</h4>
@@ -1266,7 +1266,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
                 return (
                   <div key={categoria.id} className="border border-gray-200 rounded-lg p-3 bg-white">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="bo-service-category-header flex items-center justify-between mb-3">
                       <div>
                         <h5 className="text-gray-900 text-sm">{categoria.nombre}</h5>
                         {categoria.descripcion && (
@@ -1282,7 +1282,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="bo-form-grid-2 bo-service-options">
                       {serviciosCategoria.map(servicio => {
                         const isSelected = selectedServicios.has(servicio.id);
                         const cantidad = selectedServicios.get(servicio.id) || 1;
@@ -1304,7 +1304,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                                 className="mt-1"
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
+                                <div className="bo-service-option-title flex items-center justify-between gap-2">
                                   <p className="text-sm text-gray-900 truncate">{servicio.nombre}</p>
                                   <p className="text-sm text-green-600 flex-shrink-0">
                                     ${servicio.precio.toLocaleString('es-AR')}
@@ -1317,7 +1317,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                                   />
                                 )}
                                 {isSelected && (
-                                  <div className="flex items-center gap-2 mt-2">
+                                  <div className="bo-service-quantity flex items-center gap-2 mt-2">
                                     <label className="text-xs text-gray-700">Cantidad:</label>
                                     <input
                                       type="number"
@@ -1366,7 +1366,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+        <div className="bo-form-actions pt-4 border-t border-gray-200">
           <button
             type="button"
             onClick={() => onClose()}

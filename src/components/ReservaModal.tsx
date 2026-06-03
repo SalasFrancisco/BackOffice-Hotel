@@ -126,9 +126,9 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
       className="fixed inset-0 flex items-center justify-center p-4 z-[9999]"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(1px)' }}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bo-reserva-modal bg-white rounded-lg shadow-xl overflow-y-auto">
         {/* Header */}
-        <div className="flex justify-between items-start p-6 border-b border-gray-200">
+        <div className="bo-reserva-modal-header flex justify-between items-start p-6 border-b border-gray-200">
           <div>
             <h3 className="text-gray-900 mb-1">Detalle de Reserva</h3>
             <div
@@ -147,7 +147,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="bo-reserva-modal-content p-6 space-y-4">
           {message && (
             <div
               className={`flex items-start gap-2 p-3 rounded-lg ${
@@ -167,7 +167,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="bo-form-grid-2">
 
             <div>
               <p className="text-sm text-gray-600 mb-1">Cliente</p>
@@ -278,7 +278,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
                   key={estado}
                   onClick={() => handleChangeEstado(estado)}
                   disabled={loading || reserva.estado === estado}
-                  className="px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                  className="bo-reserva-state-button px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: ESTADO_COLORS[estado] }}
                 >
                   {estado}
@@ -289,7 +289,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
         </div>
 
         {/* Footer */}
-        <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50">
+        <div className="bo-reserva-modal-footer flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50">
           {canDelete ? (
             <button
               onClick={handleDelete}

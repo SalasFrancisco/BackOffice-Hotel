@@ -258,7 +258,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="bo-page">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
           <div className="h-64 bg-gray-200 rounded"></div>
@@ -269,7 +269,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
   if (!salon) {
     return (
-      <div className="p-8">
+      <div className="bo-page">
         <div className="flex items-start gap-2 p-4 bg-red-50 border border-red-200 rounded-lg">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
           <p className="text-sm text-red-800">Salón no encontrado</p>
@@ -279,7 +279,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
   }
 
   return (
-    <div className="p-8">
+    <div className="bo-page">
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
@@ -318,10 +318,10 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       )}
 
       {/* Datos del Salon */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div className="bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
         <h3 className="text-gray-900 mb-4">Datos del Salón</h3>
         <form onSubmit={handleSaveSalon} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="bo-form-grid-3">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre <span className="text-red-500">*</span>
@@ -382,7 +382,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="bo-form-actions">
             <button
               type="submit"
               disabled={savingSalon}
@@ -395,15 +395,15 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
       </div>
 
       {/* Distribuciones */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bo-section-header mb-4">
           <div>
             <h3 className="text-gray-900">Distribuciones del Salón</h3>
             <p className="text-sm text-gray-600">Configuraciones de distribución con diferentes capacidades</p>
           </div>
           <button
             onClick={handleCreateNewDist}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Nueva Distribución
@@ -415,9 +415,9 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
             No hay distribuciones creadas para este Salón
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bo-card-grid gap-4">
             {distribuciones.map(dist => (
-              <div key={dist.id} className="border border-gray-200 rounded-lg p-4">
+              <div key={dist.id} className="bo-admin-card border border-gray-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-2">
                   <h4 className="text-gray-900">{dist.nombre}</h4>
                   <div className="flex gap-2">
@@ -513,7 +513,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
               </p>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+            <div className="bo-form-actions pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => {

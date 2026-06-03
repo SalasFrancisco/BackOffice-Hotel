@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Menu,
   PackagePlus,
   UserCog,
   X,
@@ -122,7 +123,8 @@ export function Layout({
   const [loadingNotificaciones, setLoadingNotificaciones] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
-  const notificationsRef = useRef<HTMLDivElement | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const notificationRefs = useRef<Array<HTMLDivElement | null>>([]);
   const toastTimeoutRef = useRef<number | null>(null);
   const knownNotificationIdsRef = useRef<Set<number>>(new Set());
 
@@ -261,8 +263,10 @@ export function Layout({
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
-      if (!notificationsRef.current) return;
-      if (!notificationsRef.current.contains(event.target as Node)) {
+      const clickedInsideNotifications = notificationRefs.current.some(
+        (node) => node?.contains(event.target as Node),
+      );
+      if (!clickedInsideNotifications) {
         setNotificationsOpen(false);
       }
     };
@@ -270,6 +274,29 @@ export function Layout({
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [mobileMenuOpen]);
 
   const unreadCount = useMemo(() => notificaciones.length, [notificaciones]);
 
@@ -345,13 +372,162 @@ export function Layout({
     });
   };
 
+  const setNotificationRef =
+    (index: number) => (node: HTMLDivElement | null) => {
+      notificationRefs.current[index] = node;
+    };
+
+  const handleNavigateFromMenu = (page: string) => {
+    onNavigate(page);
+    setMobileMenuOpen(false);
+  };
+
+  const renderNotifications = (refIndex: number) => (
+    <div className="relative flex-shrink-0" ref={setNotificationRef(refIndex)}>
+      <button
+        onClick={() => setNotificationsOpen((prev) => !prev)}
+        className={`relative mt-0.5 inline-flex h-8 w-8 items-center justify-center text-gray-700 hover:text-blue-600 transition-colors ${
+          unreadCount > 0 ? "bell-ringing-wrapper" : ""
+        }`}
+        title={
+          unreadCount > 0
+            ? `${unreadCount} notificación(es) sin leer`
+            : "Notificaciones"
+        }
+      >
+        {unreadCount > 0 ? (
+          <BellRing className="h-5 w-5 bell-ringing" />
+        ) : (
+          <Bell className="h-5 w-5" />
+        )}
+        {unreadCount > 0 && (
+          <span
+            className="bo-notification-badge absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-4 text-white"
+            aria-hidden="true"
+          >
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {notificationsOpen && (
+        <div className="bo-notifications-panel absolute right-0 top-11 z-50 rounded-lg border border-gray-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+            <p className="text-sm text-gray-900">Notificaciones</p>
+            <button
+              onClick={markAllAsRead}
+              disabled={unreadCount === 0}
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              Marcar todas
+            </button>
+          </div>
+
+          {notificationsError && (
+            <div className="px-3 py-2 text-xs text-red-700 bg-red-50 border-b border-red-100">
+              {notificationsError}
+            </div>
+          )}
+
+          <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+            {loadingNotificaciones ? (
+              <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                Cargando notificaciones...
+              </div>
+            ) : notificaciones.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-gray-500 text-center">
+                No hay notificaciones
+              </div>
+            ) : (
+              notificaciones.map((item) => (
+                <div
+                  key={item.id}
+                  className="px-3 py-2 bg-blue-50/40 cursor-pointer hover:bg-blue-100 transition-colors"
+                  onClick={() => {
+                    void handleNotificationClick(item);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void handleNotificationClick(item);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-900">{item.titulo}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {item.mensaje}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {formatNotificationDate(item.creado_en)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void markAsRead(item.id);
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded text-blue-600 hover:bg-blue-100"
+                      title="Marcar como leída"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderNavigation = () => (
+    <nav className="bo-sidebar-nav px-3">
+      {menuItems.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            onClick={() => handleNavigateFromMenu(item.id)}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg mb-1 transition-colors ${
+              currentPage === item.id
+                ? "bg-blue-50 text-blue-600"
+                : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <Icon className="w-5 h-5" />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+
+  const renderUserFooter = () => (
+    <div className="bo-sidebar-footer">
+      <div className="mb-3">
+        <p className="text-sm text-gray-900">{perfil?.nombre}</p>
+        <p className="text-xs text-gray-500">{perfil?.rol}</p>
+      </div>
+      <button
+        onClick={onLogout}
+        className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        <span className="text-sm">Cerrar Sesión</span>
+      </button>
+    </div>
+  );
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="bo-shell bg-gray-50">
       {liveToast && (
-        <div
-          className="fixed top-4 right-4 z-[80] rounded-lg border border-blue-200 bg-white shadow-lg"
-          style={{ width: "22rem", maxWidth: "94vw" }}
-        >
+        <div className="bo-toast fixed top-4 right-4 z-[80] rounded-lg border border-blue-200 bg-white shadow-lg">
           <div className="flex items-start gap-3 p-3">
             <div className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
               <Bell className="w-4 h-4" />
@@ -373,161 +549,68 @@ export function Layout({
         </div>
       )}
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200">
+      <header className="bo-mobile-header">
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-700 hover:bg-gray-100"
+          aria-label="Abrir menú"
+          aria-expanded={mobileMenuOpen}
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="bo-mobile-title">
+          <h1 className="truncate text-gray-900">Hotel Back-Office</h1>
+          <p className="truncate text-xs text-gray-500">Sistema de Reservas</p>
+        </div>
+        {renderNotifications(0)}
+      </header>
+
+      <div
+        className={`bo-mobile-drawer-overlay ${mobileMenuOpen ? "is-open" : ""}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      <aside
+        className={`bo-mobile-drawer ${mobileMenuOpen ? "is-open" : ""}`}
+        aria-hidden={!mobileMenuOpen}
+      >
         <div className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-gray-900">Hotel Back-Office</h1>
               <p className="text-gray-500 text-sm mt-1">Sistema de Reservas</p>
             </div>
-
-            <div className="relative flex-shrink-0" ref={notificationsRef}>
-              <button
-                onClick={() => setNotificationsOpen((prev) => !prev)}
-                className={`relative mt-0.5 inline-flex h-8 w-8 items-center justify-center text-gray-700 hover:text-blue-600 transition-colors ${
-                  unreadCount > 0 ? "bell-ringing-wrapper" : ""
-                }`}
-                title={
-                  unreadCount > 0
-                    ? `${unreadCount} notificación(es) sin leer`
-                    : "Notificaciones"
-                }
-              >
-                {unreadCount > 0 ? (
-                  <BellRing className="h-5 w-5 bell-ringing" />
-                ) : (
-                  <Bell className="h-5 w-5" />
-                )}
-                {unreadCount > 0 && (
-                  <span
-                    className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] leading-4 text-white"
-                    aria-hidden="true"
-                  >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {notificationsOpen && (
-                <div
-                  className="absolute right-0 top-11 z-50 rounded-lg border border-gray-200 bg-white shadow-xl"
-                  style={{ width: "22rem", maxWidth: "94vw" }}
-                >
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-                    <p className="text-sm text-gray-900">Notificaciones</p>
-                    <button
-                      onClick={markAllAsRead}
-                      disabled={unreadCount === 0}
-                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <CheckCheck className="w-3.5 h-3.5" />
-                      Marcar todas
-                    </button>
-                  </div>
-
-                  {notificationsError && (
-                    <div className="px-3 py-2 text-xs text-red-700 bg-red-50 border-b border-red-100">
-                      {notificationsError}
-                    </div>
-                  )}
-
-                  <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
-                    {loadingNotificaciones ? (
-                      <div className="px-3 py-4 text-sm text-gray-500 text-center">
-                        Cargando notificaciones...
-                      </div>
-                    ) : notificaciones.length === 0 ? (
-                      <div className="px-3 py-4 text-sm text-gray-500 text-center">
-                        No hay notificaciones
-                      </div>
-                    ) : (
-                      notificaciones.map((item) => (
-                        <div
-                          key={item.id}
-                          className="px-3 py-2 bg-blue-50/40 cursor-pointer hover:bg-blue-100 transition-colors"
-                          onClick={() => {
-                            void handleNotificationClick(item);
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              void handleNotificationClick(item);
-                            }
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-xs text-gray-900">
-                                {item.titulo}
-                              </p>
-                              <p className="text-xs text-gray-600 mt-0.5">
-                                {item.mensaje}
-                              </p>
-                              <p className="text-[11px] text-gray-500 mt-1">
-                                {formatNotificationDate(item.creado_en)}
-                              </p>
-                            </div>
-                            <button
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void markAsRead(item.id);
-                              }}
-                              className="inline-flex h-6 w-6 items-center justify-center rounded text-blue-600 hover:bg-blue-100"
-                              title="Marcar como leída"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100"
+              aria-label="Cerrar menú"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
-
-        <nav className="px-3">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg mb-1 transition-colors ${
-                  currentPage === item.id
-                    ? "bg-blue-50 text-blue-600"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="absolute bottom-0 w-64 p-4 border-t border-gray-200">
-          <div className="mb-3">
-            <p className="text-sm text-gray-900">{perfil?.nombre}</p>
-            <p className="text-xs text-gray-500">{perfil?.rol}</p>
-          </div>
-          <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="text-sm">Cerrar Sesión</span>
-          </button>
-        </div>
+        {renderNavigation()}
+        {renderUserFooter()}
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <aside className="bo-sidebar-desktop bg-white border-r border-gray-200">
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-gray-900">Hotel Back-Office</h1>
+              <p className="text-gray-500 text-sm mt-1">Sistema de Reservas</p>
+            </div>
+            {renderNotifications(1)}
+          </div>
+        </div>
+        {renderNavigation()}
+        {renderUserFooter()}
+      </aside>
+
+      <main className="bo-main">{children}</main>
     </div>
   );
 }

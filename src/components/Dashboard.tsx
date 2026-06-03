@@ -268,13 +268,35 @@ export function Dashboard({ perfil }: DashboardProps) {
 
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const calendarDays = getDaysInMonth();
+  const agendaDays = calendarDays
+    .filter((day): day is number => day !== null)
+    .map((day) => ({
+      day,
+      reservas: getReservasForDay(day),
+    }))
+    .filter((item) => item.reservas.length > 0);
+
+  const formatAgendaDate = (day: number) =>
+    new Intl.DateTimeFormat('es-AR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'short',
+    }).format(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
+
+  const formatAgendaTime = (dateStr: string) =>
+    new Intl.DateTimeFormat('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Argentina/Cordoba',
+    }).format(new Date(dateStr));
 
   if (loading) {
     return (
-      <div className="p-8">
+      <div className="bo-page">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          <div className="bo-kpi-grid gap-6">
             {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
             ))}
@@ -285,12 +307,12 @@ export function Dashboard({ perfil }: DashboardProps) {
   }
 
   return (
-    <div className="p-8">
+    <div className="bo-page">
       <h2 className="text-gray-900 mb-6">Dashboard</h2>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bo-kpi-grid gap-6 mb-8">
+        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
               <CheckCircle2 className="w-6 h-6 text-blue-600" />
@@ -301,7 +323,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           <p className="text-sm text-blue-700 mt-1">{porcentajeConfirmacion.toFixed(1)}% de conversion</p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
               <Wallet className="w-6 h-6 text-purple-600" />
@@ -311,7 +333,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           <p className="text-3xl text-gray-900">{formatCurrency(capitalObtenido)}</p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
               <ReceiptText className="w-6 h-6 text-green-600" />
@@ -321,7 +343,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           <p className="text-3xl text-gray-900">{formatCurrency(ticketPromedioPagado)}</p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
               <Building2 className="w-6 h-6 text-amber-600" />
@@ -334,7 +356,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           </p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
               <BarChart3 className="w-6 h-6 text-cyan-600" />
@@ -349,8 +371,8 @@ export function Dashboard({ perfil }: DashboardProps) {
       </div>
 
       {/* Calendar Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex justify-between items-center mb-6">
+      <div className="bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bo-section-header mb-6">
           <h3 className="text-gray-900">Calendario de Reservas</h3>
           <div className="flex gap-2">
             <button onClick={previousMonth} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -366,7 +388,7 @@ export function Dashboard({ perfil }: DashboardProps) {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 mb-6">
+        <div className="bo-filter-bar mb-6">
           <select
             value={filterSalon || ''}
             onChange={(e) => setFilterSalon(e.target.value ? Number(e.target.value) : null)}
@@ -396,7 +418,7 @@ export function Dashboard({ perfil }: DashboardProps) {
                 setFilterSalon(null);
                 setFilterEstado(null);
               }}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-2"
+              className="bo-mobile-full px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-2"
             >
               <X className="w-4 h-4" />
               Limpiar filtros
@@ -412,7 +434,7 @@ export function Dashboard({ perfil }: DashboardProps) {
         )}
 
         {/* Calendar Grid */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bo-calendar-desktop border border-gray-200 rounded-lg overflow-hidden">
           <div className="grid grid-cols-7 border-b border-gray-200">
             {dayNames.map(day => (
               <div key={day} className="p-3 text-center text-gray-700 bg-gray-50">
@@ -422,7 +444,7 @@ export function Dashboard({ perfil }: DashboardProps) {
           </div>
 
           <div className="grid grid-cols-7 relative">
-            {getDaysInMonth().map((day, idx) => {
+            {calendarDays.map((day, idx) => {
               const dayReservas = day ? getReservasForDay(day) : [];
               return (
                 <div
@@ -459,6 +481,53 @@ export function Dashboard({ perfil }: DashboardProps) {
               );
             })}
           </div>
+        </div>
+
+        <div className="bo-calendar-mobile">
+          {agendaDays.length === 0 ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600">
+              No hay reservas para los filtros seleccionados.
+            </div>
+          ) : (
+            <div className="bo-stack">
+              {agendaDays.map(({ day, reservas: reservasDelDia }) => (
+                <div key={day} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h4 className="text-sm text-gray-900" style={{ textTransform: 'capitalize' }}>
+                      {formatAgendaDate(day)}
+                    </h4>
+                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
+                      {reservasDelDia.length} reserva(s)
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {reservasDelDia.map((reserva) => (
+                      <button
+                        key={`${reserva.id}-agenda-${day}`}
+                        onClick={() => handleReservaClick(reserva)}
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-gray-900">
+                              #{reserva.id} - {reserva.cliente_nombre || 'Sin nombre'}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-600">
+                              {reserva.salon?.nombre || 'Sin salón'} · {formatAgendaTime(reserva.fecha_inicio)} a {formatAgendaTime(reserva.fecha_fin)}
+                            </p>
+                          </div>
+                          <span
+                            className="mt-1 flex-shrink-0 rounded-full border border-white"
+                            style={{ backgroundColor: ESTADO_COLORS[reserva.estado], width: '0.75rem', height: '0.75rem' }}
+                          />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Legend */}

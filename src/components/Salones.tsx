@@ -201,13 +201,13 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div className="bo-page">
+      <div className="bo-page-header mb-6">
         <h2 className="text-gray-900">Gestión de Salones</h2>
         {canEdit && (
           <button
             onClick={handleCreateNew}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Nuevo Salón
@@ -250,18 +250,18 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       )}
 
       {/* List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="bo-card-grid gap-6">
         {loading ? (
-          <div className="col-span-3 text-center py-8 text-gray-500">
+          <div className="bo-grid-empty text-center py-8 text-gray-500">
             Cargando salones...
           </div>
         ) : salones.length === 0 ? (
-          <div className="col-span-3 text-center py-8 text-gray-500">
+          <div className="bo-grid-empty text-center py-8 text-gray-500">
             No hay salones registrados
           </div>
         ) : (
           salones.map(salon => (
-            <div key={salon.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div key={salon.id} className="bo-admin-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <Building2 className="w-6 h-6 text-blue-600" />
@@ -319,7 +319,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
             <DialogTitle>{editingSalon ? 'Editar Salón' : 'Nuevo Salón'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 p-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="bo-form-grid-2">
               <div>
                 <label className="block text-sm text-gray-700 mb-2">
                   Nombre <span className="text-red-500">*</span>
@@ -379,7 +379,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+            <div className="bo-form-actions pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={resetForm}

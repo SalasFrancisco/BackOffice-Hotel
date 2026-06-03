@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen, ListOrdered, GripVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen, ListOrdered, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
@@ -242,6 +242,22 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     });
   };
 
+  const moveCategoriaInDraft = (categoriaId: number, direction: -1 | 1) => {
+    setCategoriasOrdenDraft((prev) => {
+      const currentIndex = prev.findIndex((categoria) => categoria.id === categoriaId);
+      const targetIndex = currentIndex + direction;
+
+      if (currentIndex === -1 || targetIndex < 0 || targetIndex >= prev.length) {
+        return prev;
+      }
+
+      const next = [...prev];
+      const [movedCategoria] = next.splice(currentIndex, 1);
+      next.splice(targetIndex, 0, movedCategoria);
+      return next;
+    });
+  };
+
   const handleCategoriaDragStart = (categoriaId: number) => {
     setDraggingCategoriaId(categoriaId);
     setDragOverCategoriaId(categoriaId);
@@ -442,7 +458,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   const isAdmin = perfil.rol === 'ADMIN';
 
   return (
-    <div className="p-8">
+    <div className="bo-page">
       <div className="mb-6">
         <h2 className="text-gray-900 mb-2">Servicios Adicionales</h2>
         <p className="text-gray-600">Gestión de categorías y servicios adicionales para reservas</p>
@@ -469,24 +485,24 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Action buttons */}
       {isAdmin && (
-        <div className="flex gap-3 mb-6">
+        <div className="bo-page-actions flex gap-3 mb-6">
           <button
             onClick={handleCreateCategoria}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Nueva Categoría
           </button>
           <button
             onClick={handleCreateServicio}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Nuevo Servicio
           </button>
           <button
             onClick={handleOpenOrdenCategoriasDialog}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <ListOrdered className="w-5 h-5" />
             Ordenar categorias
@@ -497,7 +513,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
       {/* Categorías y Servicios */}
       <div className="space-y-6">
         {categorias.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <div className="bo-card-compact bg-white rounded-lg border border-gray-200 p-8 text-center">
             <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-600 mb-4">No hay categorías creadas</p>
             {isAdmin && (
@@ -514,9 +530,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
             const serviciosCategoria = getServiciosByCategoria(categoria.id);
             
             return (
-              <div key={categoria.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div key={categoria.id} className="bo-admin-card bg-white rounded-lg border border-gray-200 overflow-hidden">
                 {/* Categoria Header */}
-                <div className="bg-gray-50 p-4 border-b border-gray-200 flex items-center justify-between">
+                <div className="bo-section-header bg-gray-50 p-4 border-b border-gray-200">
                   <div className="flex items-center gap-3">
                     <FolderOpen className="w-5 h-5 text-blue-600" />
                     <div>
@@ -553,11 +569,11 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                       No hay servicios en esta categoría
                     </p>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="bo-card-grid gap-3">
                       {serviciosCategoria.map(servicio => (
                         <div
                           key={servicio.id}
-                          className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors"
+                          className="bo-service-card border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors"
                         >
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -641,7 +657,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                       onDragOver={(event) => handleCategoriaDragOver(event, categoria.id)}
                       onDrop={(event) => handleCategoriaDrop(event, categoria.id)}
                       onDragEnd={handleCategoriaDragEnd}
-                      className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
+                      className={`bo-order-row flex items-center justify-between rounded-lg border px-3 py-2 transition-colors ${
                         isDragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'
                       } ${isDragging ? 'opacity-60' : ''} ${savingOrdenCategorias ? 'cursor-not-allowed' : 'cursor-grab'}`}
                     >
@@ -653,7 +669,26 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                         </div>
                       </div>
 
-                      <p className="text-xs text-gray-500">Arrastrar</p>
+                      <div className="bo-order-actions flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveCategoriaInDraft(categoria.id, -1)}
+                          disabled={savingOrdenCategorias || index === 0}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="Subir"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveCategoriaInDraft(categoria.id, 1)}
+                          disabled={savingOrdenCategorias || index === categoriasOrdenDraft.length - 1}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          title="Bajar"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                     );
                   })}
@@ -661,7 +696,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               )}
             </div>
 
-            <div className="flex gap-3 border-t bg-white px-6 py-4">
+            <div className="bo-form-actions border-t bg-white px-6 py-4">
               <button
                 type="button"
                 onClick={() => {
@@ -724,7 +759,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="bo-form-actions pt-4">
               <button
                 type="button"
                 onClick={() => setShowCategoriaDialog(false)}
@@ -816,7 +851,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
             </div>
             </div>
 
-            <div className="flex gap-3 border-t bg-white px-6 py-4">
+            <div className="bo-form-actions border-t bg-white px-6 py-4">
               <button
                 type="button"
                 onClick={() => setShowServicioDialog(false)}

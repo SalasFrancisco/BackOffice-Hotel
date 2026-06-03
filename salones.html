@@ -2179,6 +2179,234 @@
         }
 
     </style>
+    <style>
+        html,
+        body {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .section-container,
+        .split-layout,
+        .intro-col,
+        .form-col,
+        .form-card,
+        .salon-info,
+        .salon-slider {
+            min-width: 0;
+        }
+
+        .form-card {
+            max-width: 100%;
+        }
+
+        .custom-select-trigger,
+        .custom-options,
+        .services-container,
+        .status-modal-card {
+            max-width: 100%;
+        }
+
+        @media (max-width: 1024px) {
+            .section-container {
+                margin: 44px auto;
+                padding: 0 18px;
+            }
+
+            .split-layout {
+                gap: 32px;
+            }
+
+            .intro-col,
+            .form-col,
+            .salon-info,
+            .salon-slider {
+                flex-basis: 100%;
+                width: 100%;
+            }
+
+            .form-card {
+                margin-top: 48px;
+                padding: 46px 28px 30px;
+            }
+
+            .services-container {
+                max-height: 320px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .hero-section {
+                height: min(420px, 70dvh);
+                min-height: 300px;
+            }
+
+            .hero-overlay-text h1 {
+                padding: 0 16px;
+                font-size: clamp(28px, 10vw, 42px);
+                line-height: 1.12;
+            }
+
+            .section-container {
+                margin: 32px auto;
+                padding: 0 14px;
+            }
+
+            .split-layout {
+                gap: 22px;
+            }
+
+            .section-title {
+                font-size: clamp(24px, 8vw, 34px);
+                line-height: 1.2;
+            }
+
+            .intro-text {
+                font-size: 15px;
+                line-height: 1.65;
+                text-align: left;
+            }
+
+            .blue-btn {
+                display: block;
+                width: 100%;
+                margin-right: 0;
+                padding: 12px 14px;
+                white-space: normal;
+            }
+
+            .form-card {
+                margin-top: 34px;
+                padding: 44px 16px 22px;
+            }
+
+            .circle-img {
+                width: 78px;
+                height: 78px;
+                top: -39px;
+            }
+
+            .form-title {
+                margin-bottom: 18px;
+                line-height: 1.45;
+            }
+
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+                margin-bottom: 0;
+            }
+
+            .form-group,
+            .form-group.half {
+                width: 100%;
+            }
+
+            .form-group input,
+            .form-group textarea,
+            .form-group select,
+            .custom-select-trigger {
+                min-height: 44px;
+                font-size: 16px;
+            }
+
+            .form-group input,
+            .form-group textarea,
+            .form-group select {
+                padding: 12px 0;
+            }
+
+            .form-group .datetime-field {
+                padding: 11px 12px;
+            }
+
+            .date-input-with-picker {
+                align-items: stretch;
+            }
+
+            .date-picker-btn {
+                width: 44px;
+                height: 44px;
+                flex-shrink: 0;
+            }
+
+            .custom-options {
+                max-height: 240px;
+            }
+
+            .services-container {
+                max-height: 360px;
+                padding: 8px;
+            }
+
+            .service-item {
+                padding: 10px 8px;
+            }
+
+            .service-select {
+                gap: 10px;
+            }
+
+            .service-name {
+                font-size: 13px;
+            }
+
+            .checkbox-label {
+                font-size: 12px;
+            }
+
+            .btn-submit {
+                min-height: 46px;
+                padding: 12px 18px;
+            }
+
+            .form-disclaimer {
+                font-size: 12px;
+            }
+
+            .status-modal-overlay {
+                align-items: flex-end;
+                padding: 12px;
+            }
+
+            .status-modal-card {
+                max-height: calc(100dvh - 24px);
+                overflow-y: auto;
+            }
+
+            .gallery-full-width {
+                height: 240px;
+            }
+
+            .gallery-heading {
+                font-size: clamp(28px, 9vw, 38px);
+                line-height: 1.12;
+            }
+
+            .gallery-subheading {
+                padding: 0 16px;
+                font-size: 15px;
+            }
+
+            .salon-row {
+                padding: 34px 0;
+                gap: 24px;
+            }
+
+            .salon-info,
+            .salon-slider {
+                min-width: 0;
+            }
+
+            .whatsapp-float {
+                right: 16px;
+                bottom: 16px;
+                width: 52px;
+                height: 52px;
+                font-size: 26px;
+            }
+        }
+    </style>
 
 </head>
 

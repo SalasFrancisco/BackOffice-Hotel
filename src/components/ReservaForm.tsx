@@ -375,6 +375,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   
   // Selected services: Map<servicioId, cantidad>
   const [selectedServicios, setSelectedServicios] = useState<Map<number, number>>(new Map());
+  const [expandedServicioCategorias, setExpandedServicioCategorias] = useState<Set<number>>(() => new Set());
 
   // Form fields
   const [nombreCliente, setNombreCliente] = useState(reserva?.cliente_nombre || '');
@@ -526,6 +527,17 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       suggested: recommended[0] || null,
     };
   }, [salones, totalPersonasNumber]);
+  const categoriasConServicios = useMemo(
+    () => categorias
+      .map((categoria) => ({
+        categoria,
+        servicios: servicios.filter((servicio) => (
+          servicio.id_categoria === categoria.id && servicio.activo !== false
+        )),
+      }))
+      .filter((item) => item.servicios.length > 0),
+    [categorias, servicios],
+  );
   const formatSalonOptionLabel = (salon: Salon) => (
     `${salon.nombre} - Cap: ${salon.capacidad} - ${
       Number(salon.precio_base || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
@@ -767,32 +779,16 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     }
   };
 
-  const selectTodosCategoria = (categoriaId: number) => {
-    const serviciosCategoria = servicios.filter(
-      (servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false,
-    );
-    setSelectedServicios((prev) => {
-      const newMap = new Map(prev);
-      const todosSeleccionados = serviciosCategoria.every((servicio) => newMap.has(servicio.id));
-
-      if (todosSeleccionados) {
-        serviciosCategoria.forEach((servicio) => {
-          newMap.delete(servicio.id);
-        });
+  const toggleServicioCategoria = (categoriaId: number) => {
+    setExpandedServicioCategorias((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoriaId)) {
+        next.delete(categoriaId);
       } else {
-        serviciosCategoria.forEach((servicio) => {
-          if (!newMap.has(servicio.id)) {
-            newMap.set(servicio.id, 1);
-          }
-        });
+        next.add(categoriaId);
       }
-
-      return newMap;
+      return next;
     });
-  };
-
-  const getServiciosByCategoria = (categoriaId: number) => {
-    return servicios.filter((servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false);
   };
 
   const getAvailabilityForIsoDate = (isoDate: string): CalendarDayAvailability => {
@@ -1594,70 +1590,81 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             <h4 className="text-gray-900">Servicios Adicionales</h4>
           </div>
 
-          {categorias.length === 0 ? (
+          {categoriasConServicios.length === 0 ? (
             <p className="text-sm text-gray-500">No hay servicios disponibles</p>
           ) : (
-            <div className="space-y-4">
-              {categorias.map(categoria => {
-                const serviciosCategoria = getServiciosByCategoria(categoria.id);
-                if (serviciosCategoria.length === 0) return null;
-
-                const todosSeleccionados = serviciosCategoria.every(s => selectedServicios.has(s.id));
+            <div className="bo-reserva-services-list">
+              {categoriasConServicios.map(({ categoria, servicios: serviciosCategoria }) => {
+                const isOpen = expandedServicioCategorias.has(categoria.id);
+                const selectedCount = serviciosCategoria.reduce(
+                  (count, servicio) => count + (selectedServicios.has(servicio.id) ? 1 : 0),
+                  0,
+                );
 
                 return (
-                  <div key={categoria.id} className="border border-gray-200 rounded-lg p-3 bg-white">
-                    <div className="bo-service-category-header flex items-center justify-between mb-3">
-                      <div>
-                        <h5 className="text-gray-900 text-sm">{categoria.nombre}</h5>
+                  <div
+                    key={categoria.id}
+                    className={`bo-reserva-service-category${isOpen ? ' is-open' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleServicioCategoria(categoria.id)}
+                      className="bo-reserva-service-category-toggle"
+                      aria-expanded={isOpen}
+                    >
+                      <div className="bo-reserva-service-category-text">
+                        <span className="bo-reserva-service-category-title">{categoria.nombre}</span>
                         {categoria.descripcion && (
-                          <p className="text-xs text-gray-600">{categoria.descripcion}</p>
+                          <span className="bo-reserva-service-category-description">
+                            {categoria.descripcion}
+                          </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => selectTodosCategoria(categoria.id)}
-                        className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                      >
-                        {todosSeleccionados ? 'Deseleccionar todos' : 'Seleccionar todos'}
-                      </button>
-                    </div>
+                      <span className="bo-reserva-service-category-meta">
+                        {selectedCount > 0 && (
+                          <span className="bo-reserva-service-category-selected">
+                            {selectedCount} sel.
+                          </span>
+                        )}
+                        <span className="bo-reserva-service-category-count">
+                          {serviciosCategoria.length}
+                        </span>
+                        <ChevronRight className="bo-reserva-service-category-icon" />
+                      </span>
+                    </button>
 
-                    <div className="bo-form-grid-2 bo-service-options">
-                      {serviciosCategoria.map(servicio => {
-                        const isSelected = selectedServicios.has(servicio.id);
-                        const cantidad = selectedServicios.get(servicio.id) || 1;
+                    {isOpen && (
+                      <div className="bo-reserva-service-category-content">
+                        {serviciosCategoria.map(servicio => {
+                          const isSelected = selectedServicios.has(servicio.id);
+                          const cantidad = selectedServicios.get(servicio.id) || 1;
 
-                        return (
-                          <div
-                            key={servicio.id}
-                            className={`border rounded p-2 transition-all ${
-                              isSelected
-                                ? 'border-green-400 bg-green-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-start gap-2">
+                          return (
+                            <div
+                              key={servicio.id}
+                              className={`bo-reserva-service-item${isSelected ? ' is-selected' : ''}`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => toggleServicio(servicio.id)}
-                                className="mt-1"
+                                className="bo-reserva-service-checkbox"
                               />
-                              <div className="flex-1 min-w-0">
-                                <div className="bo-service-option-title flex items-center justify-between gap-2">
-                                  <p className="text-sm text-gray-900 truncate">{servicio.nombre}</p>
-                                  <p className="text-sm text-green-600 flex-shrink-0">
-                                    ${servicio.precio.toLocaleString('es-AR')}
-                                  </p>
-                                </div>
+                              <div className="bo-reserva-service-text">
+                                <p className="bo-reserva-service-name">{servicio.nombre}</p>
                                 {servicio.descripcion && (
                                   <RichTextDescription
                                     value={servicio.descripcion}
-                                    className="text-xs text-gray-600 mt-1 leading-relaxed"
+                                    className="bo-reserva-service-description"
                                   />
                                 )}
+                              </div>
+                              <div className="bo-reserva-service-controls">
+                                <p className="bo-reserva-service-price">
+                                  ${servicio.precio.toLocaleString('es-AR')}
+                                </p>
                                 {isSelected && (
-                                  <div className="bo-service-quantity flex items-center gap-2 mt-2">
+                                  <div className="bo-reserva-service-quantity">
                                     <label className="text-xs text-gray-700">Cantidad:</label>
                                     <input
                                       type="number"
@@ -1666,16 +1673,16 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                                       onChange={(e) => updateCantidadServicio(servicio.id, parseInt(sanitizeIntegerInput(e.target.value), 10) || 1)}
                                       onKeyDown={preventInvalidNumberKeys}
                                       inputMode="numeric"
-                                      className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent"
+                                      className="bo-reserva-service-quantity-input"
                                     />
                                   </div>
                                 )}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

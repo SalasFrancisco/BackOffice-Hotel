@@ -694,7 +694,7 @@ export function Usuarios() {
         title="Eliminar Usuario"
         description={
           confirmDeletePerfil.perfil
-            ? `Esta accion dara de baja logicamente al usuario operador "${confirmDeletePerfil.perfil.nombre}". No se eliminara de Auth.`
+            ? `¿Estás seguro de que deseas eliminar al usuario "${confirmDeletePerfil.perfil.nombre}"?`
             : ''
         }
         confirmText={deletingUserId ? 'Eliminando...' : 'Eliminar'}

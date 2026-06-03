@@ -23,21 +23,41 @@ begin
       );
   end if;
 
-  if old.estado = 'Pendiente' and new.estado not in ('Confirmado', 'Cancelado') then
+  if old.estado = 'Cancelado' then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Una reserva pendiente solo puede pasar a Confirmado o Cancelado.',
+        'Transicion de estado no permitida: %s -> %s. Una reserva cancelada no puede volver a estados anteriores.',
         old.estado,
         new.estado
       );
   end if;
 
-  if new.estado = 'Pagado' and old.estado <> 'Confirmado' then
+  if old.estado = 'Pendiente' and new.estado not in ('Validado Pendiente Seña', 'Confirmado', 'Cancelado') then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Para pasar a Pagado, la reserva debe estar en Confirmado.',
+        'Transicion de estado no permitida: %s -> %s. Una reserva pendiente solo puede pasar a Validado Pendiente Seña, Confirmado o Cancelado.',
+        old.estado,
+        new.estado
+      );
+  end if;
+
+  if old.estado = 'Validado Pendiente Seña' and new.estado not in ('Confirmado', 'Cancelado') then
+    raise exception using
+      errcode = '23514',
+      message = format(
+        'Transicion de estado no permitida: %s -> %s. Una reserva validada pendiente de seña solo puede pasar a Confirmado o Cancelado.',
+        old.estado,
+        new.estado
+      );
+  end if;
+
+  if old.estado = 'Confirmado' and new.estado not in ('Pagado', 'Cancelado') then
+    raise exception using
+      errcode = '23514',
+      message = format(
+        'Transicion de estado no permitida: %s -> %s. Una reserva confirmada solo puede pasar a Pagado o Cancelado.',
         old.estado,
         new.estado
       );

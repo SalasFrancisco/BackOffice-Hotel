@@ -5,6 +5,7 @@ import { ReservaModal } from './ReservaModal';
 
 const ESTADO_COLORS = {
   Pendiente: '#F7C948',
+  'Validado Pendiente Seña': '#8B5CF6',
   Confirmado: '#4C7AF2',
   Pagado: '#35B679',
 };
@@ -261,6 +262,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         >
           <option value="">Todos los estados</option>
           <option value="Pendiente">Pendiente</option>
+          <option value="Validado Pendiente Seña">Validado Pendiente Seña</option>
           <option value="Confirmado">Confirmado</option>
           <option value="Pagado">Pagado</option>
         </select>

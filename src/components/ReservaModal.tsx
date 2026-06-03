@@ -17,10 +17,17 @@ type ReservaModalProps = {
 
 const ESTADO_COLORS = {
   Pendiente: '#F7C948',
+  'Validado Pendiente Seña': '#8B5CF6',
   Confirmado: '#4C7AF2',
   Pagado: '#35B679',
   Cancelado: '#B0B7C3',
 };
+
+const formatCurrency = (value: number) =>
+  `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const hasStoredMontoInicial = (value: Reserva['monto_inicial']) =>
+  value !== null && value !== undefined && Number.isFinite(Number(value));
 
 export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps) {
   const [loading, setLoading] = useState(false);
@@ -28,11 +35,56 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
   const [reservaServicios, setReservaServicios] = useState<ReservaServicio[]>([]);
   const [loadingServicios, setLoadingServicios] = useState(true);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [registradaPor, setRegistradaPor] = useState('Formulario WEB');
   const allowedEstados = getAllowedReservaEstadoTransitions(reserva.estado);
+  const totalServicios = reservaServicios.reduce(
+    (sum, rs) => sum + ((Number(rs.servicio?.precio) || 0) * (Number(rs.cantidad) || 0)),
+    0,
+  );
+  const montoActual = (Number(reserva.monto) || 0) + totalServicios;
+  const montoInicial = hasStoredMontoInicial(reserva.monto_inicial)
+    ? Number(reserva.monto_inicial)
+    : null;
 
   useEffect(() => {
     loadServicios();
   }, [reserva.id]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadCreador = async () => {
+      const creadorId = reserva.creado_por?.trim();
+      if (!creadorId) {
+        setRegistradaPor('Formulario WEB');
+        return;
+      }
+
+      setRegistradaPor('Usuario back office');
+
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('nombre')
+        .eq('user_id', creadorId)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (error) {
+        console.warn('Error loading reserva creator:', error);
+        setRegistradaPor('Usuario back office');
+        return;
+      }
+
+      setRegistradaPor(data?.nombre || 'Usuario back office');
+    };
+
+    void loadCreador();
+
+    return () => {
+      isActive = false;
+    };
+  }, [reserva.creado_por]);
 
   const loadServicios = async () => {
     try {
@@ -55,7 +107,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
     if (!isReservaEstadoTransitionAllowed(reserva.estado, nuevoEstado)) {
       setMessage({
         type: 'error',
-        text: 'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+        text: 'Transición de estado no permitida para la reserva.',
       });
       return;
     }
@@ -177,6 +229,11 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
             </div>
 
             <div>
+              <p className="text-sm text-gray-600 mb-1">Registrada por</p>
+              <p className="text-gray-900">{registradaPor}</p>
+            </div>
+
+            <div>
               <p className="text-sm text-gray-600 mb-1">Salón</p>
               <p className="text-gray-900">{reserva.salon?.nombre}</p>
               <p className="text-sm text-gray-600">
@@ -195,10 +252,22 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
             </div>
 
             <div>
-              <p className="text-sm text-gray-600 mb-1">Monto</p>
+              <p className="text-sm text-gray-600 mb-1">Monto inicial</p>
               <p className="text-gray-900">
-                ${Number(reserva.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {montoInicial === null ? 'Sin presupuesto' : formatCurrency(montoInicial)}
               </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Monto actual</p>
+              <p className="text-gray-900">
+                {formatCurrency(montoActual)}
+              </p>
+              {totalServicios > 0 && (
+                <p className="text-sm text-gray-600">
+                  Salón {formatCurrency(Number(reserva.monto) || 0)} + servicios {formatCurrency(totalServicios)}
+                </p>
+              )}
             </div>
 
             <div>

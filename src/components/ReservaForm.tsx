@@ -161,7 +161,8 @@ const calculateSalonBillableDayUnits = ({
 };
 
 const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
-const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(['Confirmado', 'Pagado']);
+const BACKOFFICE_INITIAL_ESTADO: Reserva['estado'] = 'Validado Pendiente Seña';
+const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(['Validado Pendiente Seña', 'Confirmado', 'Pagado']);
 
 type ReservaOverlapComparable = {
   id: number;
@@ -397,10 +398,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [fechaFinHora, setFechaFinHora] = useState(
     initialFechaFinParts?.time || '',
   );
-  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
+  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || BACKOFFICE_INITIAL_ESTADO);
 
   useEffect(() => {
-    setEstado(reserva?.estado || 'Pendiente');
+    setEstado(reserva?.estado || BACKOFFICE_INITIAL_ESTADO);
   }, [reserva]);
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
@@ -566,7 +567,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     : '';
   const allowedEstadoTransitions = reserva
     ? getAllowedReservaEstadoTransitions(reserva.estado)
-    : ['Pendiente'];
+    : [BACKOFFICE_INITIAL_ESTADO];
 
   useEffect(() => {
     loadInitialData();
@@ -1107,7 +1108,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
     if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
       showWarningDialog(
-        'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
+        'Transicion de estado no permitida para la reserva.',
       );
       return;
     }
@@ -1169,7 +1170,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         monto,
         cantidad_personas: totalPersonas,
         observaciones: hasNonWhitespaceValue(observacionesSanitizadas) ? observacionesSanitizadas : null,
-        creado_por: userData.user?.id,
       };
 
       let error;
@@ -1184,7 +1184,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       } else {
         const { data: newReserva, error: insertError } = await supabase
           .from('reservas')
-          .insert([reservaData])
+          .insert([{ ...reservaData, creado_por: userData.user?.id || null }])
           .select()
           .single();
         error = insertError;

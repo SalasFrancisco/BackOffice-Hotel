@@ -439,7 +439,7 @@ const resolveSalonDays = (
   return 1;
 };
 
-const RESERVA_BLOCKING_ESTADOS = new Set(["Confirmado", "Pagado"]);
+const RESERVA_BLOCKING_ESTADOS = new Set(["Validado Pendiente Seña", "Confirmado", "Pagado"]);
 
 type ReservaOverlapComparable = {
   id: number;
@@ -2361,6 +2361,23 @@ const loadReservaPresupuestoContext = async (
   };
 };
 
+const roundCurrencyAmount = (value: number) =>
+  Math.round(value * 100) / 100;
+
+const getPresupuestoTotal = ({
+  totalSalon,
+  servicios,
+}: {
+  totalSalon: number;
+  servicios: PresupuestoServicio[];
+}) => roundCurrencyAmount(
+  (Number(totalSalon) || 0)
+    + servicios.reduce((acc, { servicio, cantidad }) => {
+      const unit = Number(servicio?.precio) || 0;
+      return acc + unit * (Number(cantidad) || 0);
+    }, 0),
+);
+
 const upsertPresupuestoForReserva = async (
   supabaseAdmin: SupabaseClient,
   reservaId: number,
@@ -2426,6 +2443,16 @@ const upsertPresupuestoForReserva = async (
 
   if (updateError) {
     throw new Error(`No se pudo actualizar la reserva con el presupuesto (${updateError.message}).`);
+  }
+
+  const { error: montoInicialError } = await supabaseAdmin
+    .from("reservas")
+    .update({ monto_inicial: getPresupuestoTotal(context) })
+    .eq("id", reservaId)
+    .is("monto_inicial", null);
+
+  if (montoInicialError) {
+    throw new Error(`No se pudo registrar el monto inicial del presupuesto (${montoInicialError.message}).`);
   }
 
   return {
@@ -3849,6 +3876,7 @@ const publicReservaHandler = async (c: any) => {
       monto: salonTotal,
       cantidad_personas: totalPersonas,
       observaciones: observacionesText,
+      creado_por: null,
     };
 
     const { data: reservaData, error: reservaError } = await supabaseAdmin

@@ -52,8 +52,9 @@ create table if not exists public.reservas (
   id_distribucion bigint references public.distribuciones(id) on delete set null,
   fecha_inicio timestamptz not null,
   fecha_fin timestamptz not null,
-  estado text not null check (estado in ('Pendiente','Confirmado','Pagado','Cancelado')),
+  estado text not null check (estado in ('Pendiente','Validado Pendiente Seña','Confirmado','Pagado','Cancelado')),
   monto numeric(12,2) not null default 0,
+  monto_inicial numeric(12,2),
   observaciones text,
   cantidad_personas int not null default 0,
   presupuesto_url text,
@@ -65,10 +66,15 @@ create table if not exists public.reservas (
 -- Add range column for overlap detection
 alter table public.reservas add column if not exists rango tstzrange generated always as (tstzrange(fecha_inicio, fecha_fin, '[)')) stored;
 alter table public.reservas add column if not exists presupuesto_url text;
+alter table public.reservas add column if not exists monto_inicial numeric(12,2);
 alter table public.reservas add column if not exists cantidad_personas int default 0;
 alter table public.reservas add column if not exists cliente_nombre text;
 alter table public.reservas add column if not exists cliente_email text;
 alter table public.reservas add column if not exists cliente_telefono text;
+
+alter table public.reservas drop constraint if exists reservas_estado_check;
+alter table public.reservas add constraint reservas_estado_check
+  check (estado in ('Pendiente','Validado Pendiente Seña','Confirmado','Pagado','Cancelado'));
 
 -- ============================================
 -- AUDITORÍA DE RESERVAS
@@ -151,7 +157,7 @@ create policy "presupuestos_delete_owner"
 alter table public.reservas drop constraint if exists reservas_no_solape_excl;
 alter table public.reservas add constraint reservas_no_solape_excl
   exclude using gist (id_salon with =, rango with &&)
-  where (estado in ('Confirmado','Pagado'));
+  where (estado in ('Validado Pendiente Seña','Confirmado','Pagado'));
 
 drop trigger if exists reservas_block_locked_overlap on public.reservas;
 drop function if exists public.prevent_reserva_overlap_with_locked_reservas();
@@ -171,7 +177,7 @@ begin
     where r.id <> coalesce(new.id, -1)
       and r.id_salon = new.id_salon
       and tstzrange(r.fecha_inicio, r.fecha_fin, '[)') && tstzrange(new.fecha_inicio, new.fecha_fin, '[)')
-      and r.estado in ('Confirmado', 'Pagado')
+      and r.estado in ('Validado Pendiente Seña', 'Confirmado', 'Pagado')
   ) then
     raise exception using
       errcode = '23P01',
@@ -350,6 +356,19 @@ create table if not exists public.reserva_servicios (
   cantidad int not null default 1,
   creado_en timestamptz default now()
 );
+
+update public.reservas r
+set monto_inicial = round((
+  coalesce(r.monto, 0)
+  + coalesce((
+    select sum(coalesce(rs.cantidad, 0) * coalesce(s.precio, 0))
+    from public.reserva_servicios rs
+    join public.servicios s on s.id = rs.id_servicio
+    where rs.id_reserva = r.id
+  ), 0)
+)::numeric, 2)
+where r.monto_inicial is null
+  and nullif(trim(coalesce(r.presupuesto_url, '')), '') is not null;
 
 -- ============================================
 -- TRIGGERS

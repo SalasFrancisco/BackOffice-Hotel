@@ -544,10 +544,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       const { data: salonesData, error: salonesError } = await supabase
         .from('salones')
         .select('*')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (salonesError) throw salonesError;
-      setSalones(salonesData || []);
+      setSalones((salonesData || []).filter((salon) => salon.activo !== false));
 
       // Load servicios y categorías
       const { data: categoriasData, error: categoriasError } = await supabase
@@ -561,10 +562,13 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       const { data: serviciosData, error: serviciosError } = await supabase
         .from('servicios')
         .select('*, categoria:categorias_servicios(*)')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (serviciosError) throw serviciosError;
-      setServicios(serviciosData || []);
+      const serviciosActivos = (serviciosData || []).filter((servicio) => servicio.activo !== false);
+      const serviciosActivosIds = new Set(serviciosActivos.map((servicio) => servicio.id));
+      setServicios(serviciosActivos);
 
       // Si estamos editando, cargar distribuciones y servicios
       if (reserva) {
@@ -586,7 +590,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         if (!rsError && reservaServiciosData) {
           const map = new Map<number, number>();
           reservaServiciosData.forEach(rs => {
-            map.set(rs.id_servicio, rs.cantidad);
+            if (serviciosActivosIds.has(rs.id_servicio)) {
+              map.set(rs.id_servicio, rs.cantidad);
+            }
           });
           setSelectedServicios(map);
         }
@@ -637,7 +643,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   };
 
   const selectTodosCategoria = (categoriaId: number) => {
-    const serviciosCategoria = servicios.filter(s => s.id_categoria === categoriaId);
+    const serviciosCategoria = servicios.filter(
+      (servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false,
+    );
     setSelectedServicios((prev) => {
       const newMap = new Map(prev);
       const todosSeleccionados = serviciosCategoria.every((servicio) => newMap.has(servicio.id));
@@ -659,7 +667,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   };
 
   const getServiciosByCategoria = (categoriaId: number) => {
-    return servicios.filter(s => s.id_categoria === categoriaId);
+    return servicios.filter((servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false);
   };
 
   const openNativeDatePicker = (pickerRef: { current: HTMLInputElement | null }) => {

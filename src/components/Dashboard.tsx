@@ -63,10 +63,12 @@ export function Dashboard({ perfil }: DashboardProps) {
       const { data: salonesData, error: salonesError } = await supabase
         .from('salones')
         .select('*')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (salonesError) throw salonesError;
-      setSalones(salonesData || []);
+      const salonesActivos = (salonesData || []).filter((salon) => salon.activo !== false);
+      setSalones(salonesActivos);
 
       // Load reservas for current month (for calendar)
       let query = supabase
@@ -104,7 +106,7 @@ export function Dashboard({ perfil }: DashboardProps) {
         (reservaMensual) => reservaMensual.estado === 'Confirmado' || reservaMensual.estado === 'Pagado',
       );
 
-      const totalSalonesCalc = (salonesData || []).length;
+      const totalSalonesCalc = salonesActivos.length;
       const monthStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const monthEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       const daysInCurrentMonth = monthEndDate.getDate();
@@ -116,7 +118,7 @@ export function Dashboard({ perfil }: DashboardProps) {
       };
 
       const ocupacionPorSalon = new Map<number, Set<string>>();
-      (salonesData || []).forEach((salon) => {
+      salonesActivos.forEach((salon) => {
         ocupacionPorSalon.set(Number(salon.id), new Set<string>());
       });
 
@@ -164,7 +166,7 @@ export function Dashboard({ perfil }: DashboardProps) {
         (acc, reservaMensual) => acc + Number(reservaMensual.monto || 0),
         0,
       );
-      const precioDiarioTotalSalonesCalc = (salonesData || []).reduce(
+      const precioDiarioTotalSalonesCalc = salonesActivos.reduce(
         (acc, salon) => acc + Number(salon.precio_base || 0),
         0,
       );

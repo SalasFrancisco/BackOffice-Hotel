@@ -49,10 +49,11 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       const { data, error: queryError } = await supabase
         .from('salones')
         .select('*')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (queryError) throw queryError;
-      setSalones(data || []);
+      setSalones((data || []).filter((salon) => salon.activo !== false));
     } catch (err: any) {
       console.error('Error loading salones:', err);
       setError(err.message);
@@ -138,7 +139,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       } else {
         const { error: insertError } = await supabase
           .from('salones')
-          .insert([salonData]);
+          .insert([{ ...salonData, activo: true }]);
 
         if (insertError) throw insertError;
         setMessage({ type: 'success', text: 'Salón creado correctamente' });
@@ -162,12 +163,13 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
 
   const confirmDeleteSalon = async () => {
     if (!confirmDelete.salonId) return;
+    const salonId = confirmDelete.salonId;
 
     try {
       const { data: reservasAsociadas, error: reservasError } = await supabase
         .from('reservas')
         .select('id, presupuesto_url')
-        .eq('id_salon', confirmDelete.salonId);
+        .eq('id_salon', salonId);
 
       if (reservasError) throw reservasError;
 
@@ -182,7 +184,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       const { error: deleteError } = await supabase
         .from('salones')
         .update({ activo: false })
-        .eq('id', confirmDelete.salonId);
+        .eq('id', salonId);
 
       if (deleteError) throw deleteError;
 
@@ -190,8 +192,9 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
         ? ` y ${reservasDelSalon.length} reserva(s) asociada(s)`
         : '';
       setMessage({ type: 'success', text: `Salón deshabilitado correctamente${reservasEliminadasText}` });
+      setSalones((prev) => prev.filter((salon) => salon.id !== salonId));
       setConfirmDelete({ open: false, salonId: null });
-      loadSalones();
+      void loadSalones();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error('Error deleting salon:', err);

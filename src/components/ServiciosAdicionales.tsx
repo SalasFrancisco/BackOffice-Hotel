@@ -99,10 +99,11 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
       const { data: serviciosData, error: serviciosError } = await supabase
         .from('servicios')
         .select('*, categoria:categorias_servicios(*)')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (serviciosError) throw serviciosError;
-      setServicios(serviciosData || []);
+      setServicios((serviciosData || []).filter((servicio) => servicio.activo !== false));
 
     } catch (err: any) {
       console.error('Error loading data:', err);
@@ -399,6 +400,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
             descripcion: descripcionTieneContenido ? servicioDescripcionSanitizada : null,
             precio: precio,
             id_categoria: parseInt(servicioCategoriaSanitizada, 10),
+            activo: true,
           });
 
         if (error) throw error;
@@ -420,18 +422,20 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
   const confirmDeleteServicioAction = async () => {
     if (!confirmDeleteServicio.servicioId) return;
+    const servicioId = confirmDeleteServicio.servicioId;
 
     try {
       const { error } = await supabase
         .from('servicios')
         .update({ activo: false })
-        .eq('id', confirmDeleteServicio.servicioId);
+        .eq('id', servicioId);
 
       if (error) throw error;
       
       setMessage({ type: 'success', text: 'Servicio deshabilitado correctamente' });
+      setServicios((prev) => prev.filter((servicio) => servicio.id !== servicioId));
       setConfirmDeleteServicio({ open: false, servicioId: null });
-      loadData();
+      void loadData();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error('Error deleting servicio:', err);
@@ -441,7 +445,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   };
 
   const getServiciosByCategoria = (categoriaId: number) => {
-    return servicios.filter(s => s.id_categoria === categoriaId);
+    return servicios.filter((servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false);
   };
 
   if (loading) {

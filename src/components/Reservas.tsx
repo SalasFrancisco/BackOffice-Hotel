@@ -3,6 +3,7 @@ import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
 import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
+import { ReservaCalendar } from './ReservaCalendar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
@@ -76,6 +77,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const highlightTimeoutRef = useRef<number | null>(null);
   const isAdmin = perfil.rol === 'ADMIN';
 
@@ -176,7 +178,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     setEditingReserva(null);
     setIsReservaFormDirty(false);
     if (success) {
-      loadReservas();
+      void loadReservas();
+      setCalendarRefreshKey((key) => key + 1);
     }
   };
 
@@ -337,6 +340,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
       await deleteReservaWithPresupuesto(reserva);
       setReservas((prev) => prev.filter((item) => item.id !== reserva.id));
+      setCalendarRefreshKey((key) => key + 1);
       setMessage({ type: 'success', text: 'Reserva eliminada correctamente' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -554,6 +558,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           </div>
         </div>
       )}
+
+      <ReservaCalendar perfil={perfil} refreshKey={calendarRefreshKey} />
 
       {/* Filters */}
       <div className="bo-filter-bar mb-6">

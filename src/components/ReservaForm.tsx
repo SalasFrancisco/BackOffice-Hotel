@@ -178,6 +178,12 @@ type ReservaOverlapComparable = {
   fecha_fin: string;
 };
 
+type AvailabilityReserva = ReservaOverlapComparable & {
+  cliente_nombre?: string | null;
+};
+
+type AvailabilityStatus = 'disponible' | 'pendiente' | 'ocupado';
+
 const toReservaTimeTimestamp = (value: string): number | null => {
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
@@ -259,6 +265,15 @@ const getDateTimePartsInHotelTimeZone = (value?: string | null) => {
   };
 };
 
+const formatAvailabilityDateTime = (value: string) =>
+  new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: HOTEL_TIME_ZONE,
+  }).format(new Date(value));
+
 const buildProtectedFunctionEndpoints = (path: string) => [
   `https://${projectId}.supabase.co/functions/v1/server/${path}`,
   `https://${projectId}.supabase.co/functions/v1/${path}`,
@@ -327,6 +342,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
+  const [availabilityReservas, setAvailabilityReservas] = useState<AvailabilityReserva[]>([]);
   const [message, setMessage] = useState<{ text: string } | null>(null);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
   
@@ -411,6 +429,30 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
   const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
   const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
+  const hasCompleteDateTimeSelection = Boolean(
+    fechaInicioIsoFromInput && fechaFinIsoFromInput && fechaInicioHora && fechaFinHora,
+  );
+  const selectedDateTimeRange = useMemo(() => {
+    if (!fechaInicioIsoFromInput || !fechaFinIsoFromInput || !fechaInicioHora || !fechaFinHora) {
+      return null;
+    }
+
+    const start = new Date(`${fechaInicioIsoFromInput}T${fechaInicioHora}`);
+    const end = new Date(`${fechaFinIsoFromInput}T${fechaFinHora}`);
+
+    if (
+      Number.isNaN(start.getTime())
+      || Number.isNaN(end.getTime())
+      || end <= start
+    ) {
+      return null;
+    }
+
+    return {
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+    };
+  }, [fechaInicioIsoFromInput, fechaFinIsoFromInput, fechaInicioHora, fechaFinHora]);
   const eventCalendarDaysCount = getEventDaysCount(fechaInicioIsoFromInput, fechaFinIsoFromInput);
   const eventBillableDayUnits = calculateSalonBillableDayUnits({
     startIsoDate: fechaInicioIsoFromInput,
@@ -468,6 +510,46 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       suggested: recommended[0] || null,
     };
   }, [salones, totalPersonasNumber]);
+  const salonAvailability = useMemo(() => {
+    if (!selectedDateTimeRange) {
+      return [];
+    }
+
+    const currentReservaId = reserva?.id || 0;
+
+    return salones
+      .map((salon) => {
+        const overlaps = availabilityReservas
+          .filter((item) => item.id !== currentReservaId)
+          .filter((item) => Number(item.id_salon) === Number(salon.id))
+          .filter((item) => hasReservaTimeOverlap(
+            selectedDateTimeRange.startIso,
+            selectedDateTimeRange.endIso,
+            item.fecha_inicio,
+            item.fecha_fin,
+          ));
+        const blockingReservas = overlaps.filter((item) => ESTADOS_BLOQUEANTES.has(item.estado));
+        const pendingReservas = overlaps.filter((item) => item.estado === 'Pendiente');
+        const status: AvailabilityStatus = blockingReservas.length > 0
+          ? 'ocupado'
+          : pendingReservas.length > 0
+            ? 'pendiente'
+            : 'disponible';
+
+        return {
+          salon,
+          status,
+          blockingReservas,
+          pendingReservas,
+        };
+      })
+      .sort((a, b) => {
+        const statusOrder: Record<AvailabilityStatus, number> = { disponible: 0, pendiente: 1, ocupado: 2 };
+        const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+        if (statusDiff !== 0) return statusDiff;
+        return String(a.salon.nombre || '').localeCompare(String(b.salon.nombre || ''), 'es');
+      });
+  }, [availabilityReservas, reserva?.id, salones, selectedDateTimeRange]);
   const formatSalonOptionLabel = (salon: Salon) => (
     `${salon.nombre} - Cap: ${salon.capacidad} - ${
       Number(salon.precio_base || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
@@ -501,6 +583,52 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (!selectedDateTimeRange) {
+      setAvailabilityReservas([]);
+      setAvailabilityError('');
+      setLoadingAvailability(false);
+      return;
+    }
+
+    let isActive = true;
+
+    const loadAvailability = async () => {
+      try {
+        setLoadingAvailability(true);
+        setAvailabilityError('');
+
+        const { data, error } = await supabase
+          .from('reservas')
+          .select('id, id_salon, estado, fecha_inicio, fecha_fin, cliente_nombre')
+          .lt('fecha_inicio', selectedDateTimeRange.endIso)
+          .gt('fecha_fin', selectedDateTimeRange.startIso)
+          .neq('estado', 'Cancelado');
+
+        if (error) throw error;
+        if (isActive) {
+          setAvailabilityReservas((data || []) as AvailabilityReserva[]);
+        }
+      } catch (err: any) {
+        console.error('Error loading availability:', err);
+        if (isActive) {
+          setAvailabilityError(err?.message || 'No se pudo consultar la disponibilidad.');
+          setAvailabilityReservas([]);
+        }
+      } finally {
+        if (isActive) {
+          setLoadingAvailability(false);
+        }
+      }
+    };
+
+    void loadAvailability();
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedDateTimeRange?.startIso, selectedDateTimeRange?.endIso]);
 
   useEffect(() => {
     if (idSalon) {
@@ -1213,6 +1341,100 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="bo-card-compact rounded-lg border border-gray-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h4 className="text-gray-900">Disponibilidad de salones</h4>
+              <p className="text-xs text-gray-600 mt-1">
+                Se actualiza con el rango de fecha y horario seleccionado.
+              </p>
+            </div>
+            {selectedDateTimeRange && (
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
+                {formatAvailabilityDateTime(selectedDateTimeRange.startIso)} - {formatAvailabilityDateTime(selectedDateTimeRange.endIso)}
+              </span>
+            )}
+          </div>
+
+          {!hasCompleteDateTimeSelection ? (
+            <p className="text-sm text-gray-500">
+              Complete fecha y horario de inicio y fin para ver disponibilidad.
+            </p>
+          ) : !selectedDateTimeRange ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              La fecha de fin debe ser posterior a la fecha de inicio.
+            </div>
+          ) : availabilityError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {availabilityError}
+            </div>
+          ) : loadingAvailability ? (
+            <p className="text-sm text-gray-500">Consultando disponibilidad...</p>
+          ) : (
+            <>
+              <div className="bo-availability-grid gap-3">
+                {salonAvailability.map(({ salon, status, blockingReservas, pendingReservas }) => {
+                  const isSelectedSalon = Number(idSalon) === Number(salon.id);
+                  const isBlocked = status === 'ocupado';
+                  const statusLabel = status === 'disponible'
+                    ? 'Disponible'
+                    : status === 'pendiente'
+                      ? 'En consulta'
+                      : 'Ocupado';
+                  const statusClass = status === 'disponible'
+                    ? 'border-green-200 bg-green-50 text-green-800'
+                    : status === 'pendiente'
+                      ? 'border-amber-200 bg-amber-50 text-amber-800'
+                      : 'border-red-200 bg-red-50 text-red-800';
+                  const relatedReservas = blockingReservas.length > 0 ? blockingReservas : pendingReservas;
+
+                  return (
+                    <button
+                      key={salon.id}
+                      type="button"
+                      onClick={() => {
+                        if (!isBlocked) {
+                          setIdSalon(salon.id);
+                        }
+                      }}
+                      disabled={isBlocked}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        isSelectedSalon ? 'border-blue-400 ring-2 ring-blue-100' : 'border-gray-200'
+                      } ${isBlocked ? 'cursor-not-allowed opacity-80' : 'hover:border-blue-300 hover:bg-blue-50'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-gray-900">{salon.nombre}</p>
+                          <p className="text-xs text-gray-600">Capacidad: {salon.capacidad}</p>
+                        </div>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusClass}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      {relatedReservas.length > 0 && (
+                        <p className="mt-2 text-xs text-gray-600">
+                          {relatedReservas.map((item) => `#${item.id} ${item.estado}`).join(', ')}
+                        </p>
+                      )}
+                      {!isBlocked && (
+                        <p className="mt-2 text-xs text-blue-700">
+                          {isSelectedSalon ? 'Salon seleccionado' : 'Seleccionar salon'}
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-600">
+                <span><strong className="text-green-700">Disponible:</strong> sin reservas bloqueantes.</span>
+                <span><strong className="text-amber-700">En consulta:</strong> hay reserva pendiente.</span>
+                <span><strong className="text-red-700">Ocupado:</strong> confirmado o pagado.</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Estado (solo editable cuando se está editando una reserva) */}

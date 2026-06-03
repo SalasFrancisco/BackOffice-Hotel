@@ -199,6 +199,11 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
+.bo-availability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
 .bo-filter-bar {
   display: flex;
   gap: 0.75rem;

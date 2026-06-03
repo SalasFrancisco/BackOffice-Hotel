@@ -187,7 +187,8 @@ export function Usuarios() {
       setMessage({
         type: 'success',
         text: payload.reactivated
-          `Usuario ${newEmailSanitizado} creado correctamente`,
+          ? `Usuario ${newEmailSanitizado} creado correctamente`
+          : `Usuario ${newEmailSanitizado} creado correctamente`,
       });
       setShowCreateDialog(false);
       setNewEmail('');

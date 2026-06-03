@@ -569,7 +569,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                       No hay servicios en esta categoría
                     </p>
                   ) : (
-                    <div className="bo-card-grid gap-3">
+                    <div className="bo-service-grid gap-3">
                       {serviciosCategoria.map(servicio => (
                         <div
                           key={servicio.id}
@@ -605,7 +605,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                               className="text-xs text-gray-600 mb-2 leading-relaxed"
                             />
                           )}
-                          <p className="text-blue-600">${servicio.precio.toLocaleString('es-AR')}</p>
+                          <p className="bo-service-price text-blue-600">${servicio.precio.toLocaleString('es-AR')}</p>
                         </div>
                       ))}
                     </div>

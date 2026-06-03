@@ -151,6 +151,12 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
 }
 
+.bo-service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 18rem);
+  justify-content: start;
+}
+
 .bo-grid-empty {
   grid-column: 1 / -1;
 }
@@ -165,6 +171,18 @@ textarea {
 .bo-kpi-card {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.bo-service-card {
+  display: flex;
+  min-height: 11rem;
+  flex-direction: column;
+}
+
+.bo-service-price {
+  margin-top: auto;
+  align-self: flex-start;
+  padding-top: 0.75rem;
 }
 
 .bo-kpi-grid {
@@ -402,6 +420,10 @@ textarea {
   .bo-reservas-mobile-list,
   .bo-mobile-only {
     display: block;
+  }
+
+  .bo-service-grid {
+    grid-template-columns: 1fr;
   }
 
   .bo-form-grid-2,

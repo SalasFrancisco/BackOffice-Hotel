@@ -282,7 +282,7 @@ const invokeProtectedFunction = async (path: string, body: Record<string, unknow
   const accessToken = session?.access_token;
 
   if (!accessToken) {
-    throw new Error('No se pudo obtener la sesion actual.');
+    throw new Error('No se pudo obtener la sesión actual.');
   }
 
   let lastError: Error | null = null;
@@ -432,8 +432,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     (parseTimeToMinutes(fechaFinHora) ?? PARTIAL_SALON_DAY_THRESHOLD_MINUTES) < PARTIAL_SALON_DAY_THRESHOLD_MINUTES
   );
   const billingAdjustments = [
-    startDayIsPartial ? 'dia inicial al 65%' : null,
-    endDayIsPartial ? 'dia final al 65%' : null,
+    startDayIsPartial ? 'día inicial al 65%' : null,
+    endDayIsPartial ? 'día final al 65%' : null,
   ].filter((value): value is string => Boolean(value));
   const totalPersonasNumber = parseInt(cantidadPersonas, 10) || 0;
   const salonesRecomendadosData = useMemo(() => {
@@ -712,7 +712,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
     const totalPersonas = parseInt(cantidadPersonasSanitizada, 10);
     if (!totalPersonas || totalPersonas <= 0) {
-      showWarningDialog('Ingrese una cantidad de personas valida');
+      showWarningDialog('Ingrese una cantidad de personas válida');
       return;
     }
 
@@ -962,7 +962,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             </div>
             <div>
               <label className="block text-sm text-gray-700 mb-2">
-                Telefono <span className="text-red-500">*</span>
+                Teléfono <span className="text-red-500">*</span>
               </label>
               <input
                 type="tel"
@@ -1235,12 +1235,12 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             <p className="text-sm text-blue-800">
               <strong>Monto de la reserva:</strong> ${currentReservaTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               <span className="text-xs block mt-1">
-                ({currentSalonDailyPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por dia x {formatBillableDayUnits(eventBillableDayUnits)} dias facturables)
+                ({currentSalonDailyPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por día x {formatBillableDayUnits(eventBillableDayUnits)} días facturables)
               </span>
               {billingAdjustments.length > 0 && (
                 <span className="text-xs block mt-1">
                   Aplicando {billingAdjustments.join(' y ')}
-                  {eventCalendarDaysCount > 2 ? '. Los dias entre el inicial y el final se cobran al 100%.' : '.'}
+                  {eventCalendarDaysCount > 2 ? '. Los días entre el inicial y el final se cobran al 100%.' : '.'}
                 </span>
               )}
             </p>

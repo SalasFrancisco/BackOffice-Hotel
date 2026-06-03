@@ -622,7 +622,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           <div className="flex max-h-[calc(85vh-5rem)] flex-col">
             <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
               <p className="text-sm text-gray-600">
-                Agarra y arrastra cada categoria para reordenarla. Al final, guarda los cambios.
+                Agarrá y arrastrá cada categoría para reordenarla. Al final, guardá los cambios.
               </p>
 
               {categoriasOrdenDraft.length === 0 ? (
@@ -811,7 +811,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               <ServiceDescriptionEditor
                 value={servicioDescripcion}
                 onChange={setServicioDescripcion}
-                placeholder="Descripcion opcional"
+                placeholder="Descripción opcional"
               />
             </div>
             </div>

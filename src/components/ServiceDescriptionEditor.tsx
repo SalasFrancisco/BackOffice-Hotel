@@ -25,7 +25,7 @@ const insertPlainTextAtCursor = (text: string) => {
 export function ServiceDescriptionEditor({
   value,
   onChange,
-  placeholder = 'Descripcion opcional',
+  placeholder = 'Descripción opcional',
 }: ServiceDescriptionEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const isFocusedRef = useRef(false);

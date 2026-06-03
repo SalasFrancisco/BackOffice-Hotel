@@ -293,7 +293,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
           <Building2 className="w-6 h-6 text-blue-600" />
         </div>
         <div>
-          <h2 className="text-gray-900">Editar Salon</h2>
+          <h2 className="text-gray-900">Editar Salón</h2>
           <p className="text-sm text-gray-600">ID: {salon.id}</p>
         </div>
       </div>
@@ -319,7 +319,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
 
       {/* Datos del Salon */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <h3 className="text-gray-900 mb-4">Datos del Salon</h3>
+        <h3 className="text-gray-900 mb-4">Datos del Salón</h3>
         <form onSubmit={handleSaveSalon} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
@@ -377,7 +377,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 onChange={(e) => setDescripcion(e.target.value)}
                 rows={8}
                 className="w-full min-h-48 max-h-80 resize-y overflow-y-auto rounded-lg border border-gray-300 px-4 py-3 leading-relaxed focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Descripcion del salon"
+                placeholder="Descripción del salón"
               />
             </div>
           </div>

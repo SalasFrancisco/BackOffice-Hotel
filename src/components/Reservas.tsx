@@ -494,7 +494,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-gray-900">Gestion de Reservas</h2>
+        <h2 className="text-gray-900">Gestión de Reservas</h2>
         <button
           onClick={handleCreateNew}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -611,7 +611,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                     onClick={() => handleSort('salon')}
                     className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
                   >
-                    Salon
+                    Salón
                     {renderSortIcon('salon')}
                   </button>
                 </th>
@@ -728,7 +728,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                             </div>
                             {totalServicios > 0 && (
                               <div className="mt-1 text-xs text-gray-500">
-                                Salon: ${(Number(reserva.monto) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                Salón: ${(Number(reserva.monto) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                                 {' '}+ Servicios: ${totalServicios.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                               </div>
                             )}

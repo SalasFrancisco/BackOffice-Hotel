@@ -357,7 +357,7 @@ export function Usuarios() {
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('No hay sesiÃ³n activa');
+        throw new Error('No hay sesión activa');
       }
 
       const { response, payload } = await callServerEndpoint(

@@ -442,7 +442,7 @@ BEGIN
     END IF;
 
     IF NEW.creado_en IS DISTINCT FROM OLD.creado_en THEN
-      RAISE EXCEPTION 'No puede modificar la fecha de creacion del perfil';
+      RAISE EXCEPTION 'No puede modificar la fecha de creación del perfil';
     END IF;
 
     IF NEW.activo IS DISTINCT FROM OLD.activo THEN

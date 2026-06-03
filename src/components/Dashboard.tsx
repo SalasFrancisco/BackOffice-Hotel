@@ -327,10 +327,10 @@ export function Dashboard({ perfil }: DashboardProps) {
               <Building2 className="w-6 h-6 text-amber-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Ocupacion Mensual de Salones</p>
+          <p className="text-gray-600 text-sm mb-1">Ocupación Mensual de Salones</p>
           <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
           <p className="text-sm text-amber-700 mt-1">
-            {salonesOcupadosMensual} / {totalSalonesMensual} {filterSalon ? 'dias del salon' : 'dias de todos los salones'} ocupados
+            {salonesOcupadosMensual} / {totalSalonesMensual} {filterSalon ? 'días del salón' : 'días de todos los salones'} ocupados
           </p>
         </div>
 

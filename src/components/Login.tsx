@@ -122,6 +122,11 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
         throw new Error('Usuario sin perfil asignado. Contacte al administrador.');
       }
 
+      if (perfil.activo === false) {
+        await supabase.auth.signOut();
+        throw new Error('Usuario dado de baja. Contacte al administrador.');
+      }
+
       onLoginSuccess();
     } catch (err: any) {
       console.error('Login error:', err);

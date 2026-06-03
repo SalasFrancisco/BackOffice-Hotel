@@ -1,8 +1,9 @@
 import { useMemo, useState, useEffect } from 'react';
 import { supabase, Perfil } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { AlertCircle, CheckCircle, Shield, User, Plus, Edit, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Shield, User, Plus, Edit, Loader2, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { ConfirmDialog } from './ConfirmDialog';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
 
 const hasUppercase = (value: string) => /[A-Z]/.test(value);
@@ -22,6 +23,11 @@ export function Usuarios() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [loadingEditUserId, setLoadingEditUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [confirmDeletePerfil, setConfirmDeletePerfil] = useState<{ open: boolean; perfil: Perfil | null }>({
+    open: false,
+    perfil: null,
+  });
   const [editingPerfil, setEditingPerfil] = useState<Perfil | null>(null);
   
   // Campos del formulario de alta
@@ -312,6 +318,68 @@ export function Usuarios() {
     }
   };
 
+  const handleDeleteClick = (perfil: Perfil) => {
+    setMessage(null);
+
+    if (perfil.rol !== 'OPERADOR') {
+      setMessage({ type: 'error', text: 'Solo se pueden eliminar usuarios con rol OPERADOR.' });
+      return;
+    }
+
+    setConfirmDeletePerfil({ open: true, perfil });
+  };
+
+  const handleDeleteDialogOpenChange = (open: boolean) => {
+    setConfirmDeletePerfil((current) => ({
+      open,
+      perfil: open ? current.perfil : null,
+    }));
+  };
+
+  const confirmDeleteUser = async () => {
+    const perfil = confirmDeletePerfil.perfil;
+    if (!perfil) return;
+
+    if (perfil.rol !== 'OPERADOR') {
+      setMessage({ type: 'error', text: 'No se pueden eliminar usuarios con rol ADMIN.' });
+      setConfirmDeletePerfil({ open: false, perfil: null });
+      return;
+    }
+
+    try {
+      setDeletingUserId(perfil.user_id);
+      setMessage(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No hay sesiÃ³n activa');
+      }
+
+      const { response, payload } = await callServerEndpoint(
+        'delete-user',
+        session.access_token,
+        { userId: perfil.user_id }
+      );
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'No se pudo eliminar el usuario');
+      }
+
+      setMessage({ type: 'success', text: `Usuario ${perfil.nombre} dado de baja correctamente` });
+      setConfirmDeletePerfil({ open: false, perfil: null });
+      setPerfiles((current) => current.filter((item) => item.user_id !== perfil.user_id));
+      loadPerfiles();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error deleting user:', err);
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const perfilesActivos = perfiles.filter((perfil) => perfil.activo !== false);
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
@@ -356,12 +424,12 @@ export function Usuarios() {
           <div className="col-span-3 text-center py-8 text-gray-500">
             Cargando usuarios...
           </div>
-        ) : perfiles.length === 0 ? (
+        ) : perfilesActivos.length === 0 ? (
           <div className="col-span-3 text-center py-8 text-gray-500">
             No hay usuarios registrados
           </div>
         ) : (
-          perfiles.map(perfil => (
+          perfilesActivos.map(perfil => (
             <div key={perfil.user_id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
@@ -383,7 +451,7 @@ export function Usuarios() {
                   </span>
                   <button
                     onClick={() => handleEditClick(perfil)}
-                    disabled={loadingEditUserId !== null}
+                    disabled={loadingEditUserId !== null || deletingUserId !== null}
                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:cursor-wait disabled:opacity-70"
                     title="Editar usuario"
                   >
@@ -393,6 +461,20 @@ export function Usuarios() {
                       <Edit className="w-4 h-4" />
                     )}
                   </button>
+                  {perfil.rol === 'OPERADOR' && (
+                    <button
+                      onClick={() => handleDeleteClick(perfil)}
+                      disabled={loadingEditUserId !== null || deletingUserId !== null}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:cursor-wait disabled:opacity-70"
+                      title={deletingUserId === perfil.user_id ? 'Eliminando usuario...' : 'Eliminar usuario'}
+                    >
+                      {deletingUserId === perfil.user_id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -604,6 +686,21 @@ export function Usuarios() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDeletePerfil.open}
+        onOpenChange={handleDeleteDialogOpenChange}
+        onConfirm={confirmDeleteUser}
+        title="Eliminar Usuario"
+        description={
+          confirmDeletePerfil.perfil
+            ? `Esta accion dara de baja logicamente al usuario operador "${confirmDeletePerfil.perfil.nombre}". No se eliminara de Auth.`
+            : ''
+        }
+        confirmText={deletingUserId ? 'Eliminando...' : 'Eliminar'}
+        cancelText="Cancelar"
+        variant="destructive"
+      />
     </div>
   );
 }

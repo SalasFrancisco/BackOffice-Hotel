@@ -9,6 +9,7 @@ export type Perfil = {
   user_id: string;
   nombre: string;
   rol: 'ADMIN' | 'OPERADOR';
+  activo?: boolean | null;
   creado_en: string;
 };
 

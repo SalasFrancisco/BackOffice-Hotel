@@ -1647,7 +1647,7 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
 async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient) {
   const { data: perfilesData, error: perfilesError } = await supabaseAdmin
     .from("perfiles")
-    .select("user_id, nombre, rol");
+    .select("user_id, nombre, rol, activo");
 
   if (perfilesError) {
     throw new Error(`No se pudo cargar perfiles para notificaciones: ${perfilesError.message}`);
@@ -1655,7 +1655,7 @@ async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient
 
   const perfiles = (perfilesData || []).filter((perfil) => {
     const normalizedRol = normalizeRole(perfil?.rol);
-    return normalizedRol === "ADMIN" || normalizedRol === "OPERADOR";
+    return perfil?.activo !== false && (normalizedRol === "ADMIN" || normalizedRol === "OPERADOR");
   });
 
   if (perfiles.length === 0) {
@@ -1773,16 +1773,12 @@ async function requireAdmin(
       user.user_metadata?.role,
   );
 
-  if (normalizedMetadataRole === "ADMIN") {
-    return { userId } as const;
-  }
-
   const {
     data: perfil,
     error: perfilError,
   } = await supabaseAdmin
     .from("perfiles")
-    .select("rol")
+    .select("rol, activo")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -1803,6 +1799,16 @@ async function requireAdmin(
 
   const normalizedPerfilRole = normalizeRole(perfil.rol);
 
+  if (perfil.activo === false) {
+    console.warn(
+      `Inactive user ${user.email ?? userId} attempted to ${actionDescription}.`,
+    );
+    return {
+      status: 403,
+      body: { error: "User profile is inactive" },
+    } as const;
+  }
+
   if (normalizedPerfilRole !== "ADMIN") {
     console.warn(
       `User ${user.email ?? userId} attempted to ${actionDescription} with role "${perfil.rol}".`,
@@ -1813,12 +1819,13 @@ async function requireAdmin(
     } as const;
   }
 
-  if (normalizedMetadataRole !== "ADMIN") {
+  if (normalizedMetadataRole !== "ADMIN" || user.app_metadata?.active !== true) {
     try {
       await supabaseAdmin.auth.admin.updateUserById(userId, {
         app_metadata: {
           ...user.app_metadata,
           role: "ADMIN",
+          active: true,
         },
       });
     } catch (syncError) {
@@ -1854,7 +1861,7 @@ async function requireBackofficeUser(
 
   const { data: perfil, error: perfilError } = await supabaseAdmin
     .from("perfiles")
-    .select("rol")
+    .select("rol, activo")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -1874,6 +1881,16 @@ async function requireBackofficeUser(
   }
 
   const normalizedPerfilRole = normalizeRole(perfil.rol);
+  if (perfil.activo === false) {
+    console.warn(
+      `Inactive user ${user.email ?? userId} attempted to ${actionDescription}.`,
+    );
+    return {
+      status: 403,
+      body: { error: `Back-office profile is inactive for user ${user.email ?? userId}` },
+    } as const;
+  }
+
   if (normalizedPerfilRole !== "ADMIN" && normalizedPerfilRole !== "OPERADOR") {
     console.warn(
       `User ${user.email ?? userId} attempted to ${actionDescription} with role "${perfil.rol}".`,
@@ -2470,7 +2487,7 @@ app.post("/make-server-484a241a/request-password-reset", async (c) => {
 
     const { data: perfil, error: perfilError } = await supabaseAdmin
       .from("perfiles")
-      .select("user_id")
+      .select("user_id, activo")
       .eq("user_id", recoveryUser.id)
       .maybeSingle();
 
@@ -2479,7 +2496,7 @@ app.post("/make-server-484a241a/request-password-reset", async (c) => {
       return c.json({ error: "No se pudo validar el usuario de recuperación" }, 500);
     }
 
-    if (!perfil) {
+    if (!perfil || perfil.activo === false) {
       return c.json({ success: true });
     }
 
@@ -2528,7 +2545,7 @@ app.post("/make-server-484a241a/create-user", async (c) => {
       password,
       email_confirm: true,
       user_metadata: { nombre },
-      app_metadata: { role: rol },
+      app_metadata: { role: rol, active: true },
     });
 
     if (createError || !newUser?.user) {
@@ -2543,6 +2560,7 @@ app.post("/make-server-484a241a/create-user", async (c) => {
           user_id: newUser.user.id,
           nombre,
           rol,
+          activo: true,
         },
       ]);
 
@@ -2670,24 +2688,63 @@ app.post("/make-server-484a241a/delete-user", async (c) => {
       return c.json({ error: "Missing required field: userId" }, 400);
     }
 
-    const { error: deletePerfilError } = await supabaseAdmin
+    const { data: targetPerfil, error: targetPerfilError } = await supabaseAdmin
       .from("perfiles")
-      .delete()
-      .eq("user_id", userId);
+      .select("user_id, nombre, rol, activo")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-    if (deletePerfilError) {
-      console.error("Error deleting perfil:", deletePerfilError);
-      return c.json({ error: deletePerfilError.message }, 400);
+    if (targetPerfilError) {
+      console.error("Error loading perfil to delete:", targetPerfilError);
+      return c.json({ error: targetPerfilError.message }, 400);
     }
 
-    const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-
-    if (deleteUserError) {
-      console.error("Error deleting user:", deleteUserError);
-      return c.json({ error: deleteUserError.message }, 400);
+    if (!targetPerfil) {
+      return c.json({ error: "User profile not found" }, 404);
     }
 
-    return c.json({ success: true });
+    const targetRole = normalizeRole(targetPerfil.rol);
+
+    if (targetRole === "ADMIN") {
+      return c.json({ error: "No se pueden eliminar usuarios administradores" }, 403);
+    }
+
+    if (targetRole !== "OPERADOR") {
+      return c.json({ error: "Solo se pueden eliminar usuarios operadores" }, 403);
+    }
+
+    if (targetPerfil.activo !== false) {
+      const { error: updatePerfilError } = await supabaseAdmin
+        .from("perfiles")
+        .update({ activo: false })
+        .eq("user_id", userId)
+        .eq("rol", "OPERADOR");
+
+      if (updatePerfilError) {
+        console.error("Error soft deleting perfil:", updatePerfilError);
+        return c.json({ error: updatePerfilError.message }, 400);
+      }
+    }
+
+    const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+    if (getUserError) {
+      console.warn("Perfil was soft deleted, but auth user metadata could not be loaded:", getUserError);
+    } else if (authUserData?.user) {
+      const { error: updateUserError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        app_metadata: {
+          ...authUserData.user.app_metadata,
+          role: targetRole,
+          active: false,
+        },
+      });
+
+      if (updateUserError) {
+        console.warn("Perfil was soft deleted, but auth user metadata could not be updated:", updateUserError);
+      }
+    }
+
+    return c.json({ success: true, userId, activo: false });
   } catch (error) {
     console.error("Error in delete-user endpoint:", error);
     return c.json({ error: error?.message ?? "Internal server error" }, 500);

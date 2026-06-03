@@ -4,6 +4,8 @@
 -- ============================================
 
 -- 1) Perfiles: evitar lectura global y autoescalado de rol
+alter table public.perfiles add column if not exists activo boolean not null default true;
+
 create or replace function public.get_user_role()
 returns text
 language sql
@@ -11,7 +13,10 @@ security definer
 set search_path = public
 stable
 as $$
-  select rol from public.perfiles where user_id = auth.uid();
+  select rol
+  from public.perfiles
+  where user_id = auth.uid()
+    and coalesce(activo, true) = true;
 $$;
 
 create or replace function public.prevent_unsafe_self_perfil_update()
@@ -32,6 +37,10 @@ begin
 
     if NEW.creado_en is distinct from OLD.creado_en then
       raise exception 'No puede modificar la fecha de creacion del perfil';
+    end if;
+
+    if NEW.activo is distinct from OLD.activo then
+      raise exception 'No puede modificar el estado del perfil';
     end if;
   end if;
 
@@ -67,8 +76,8 @@ create policy users_read_own_perfil on public.perfiles
 create policy users_update_own_perfil on public.perfiles
   for update
   to authenticated
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using (auth.uid() = user_id and coalesce(activo, true) = true)
+  with check (auth.uid() = user_id and coalesce(activo, true) = true);
 
 create policy service_role_all_perfiles on public.perfiles
   for all

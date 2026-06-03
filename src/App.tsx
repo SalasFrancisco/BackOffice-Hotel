@@ -40,6 +40,9 @@ const clearPasswordRecoveryUrl = () => {
 };
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+const INACTIVE_USER_MESSAGE = 'Usuario dado de baja. Contacte al administrador.';
+
+const isPerfilActivo = (perfil?: Perfil | null) => perfil?.activo !== false;
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -142,6 +145,14 @@ export default function App() {
             
             throw error;
           }
+          if (!isPerfilActivo(data)) {
+            await supabase.auth.signOut();
+            setSession(null);
+            setPerfil(null);
+            setAuthFeedbackMessage({ type: 'error', text: INACTIVE_USER_MESSAGE });
+            return;
+          }
+
           setPerfil(data);
         } catch (err: any) {
           console.error('Error in checkSession:', err);
@@ -175,6 +186,14 @@ export default function App() {
         
         throw error;
       }
+      if (!isPerfilActivo(data)) {
+        await supabase.auth.signOut();
+        setSession(null);
+        setPerfil(null);
+        setAuthFeedbackMessage({ type: 'error', text: INACTIVE_USER_MESSAGE });
+        return;
+      }
+
       setPerfil(data);
     } catch (err: any) {
       console.error('Error loading perfil:', err);
@@ -391,6 +410,8 @@ export default function App() {
               </div>
               <pre id="fix-sql" className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto text-xs">
 {`-- Fix infinite recursion in RLS policies
+ALTER TABLE public.perfiles ADD COLUMN IF NOT EXISTS activo boolean NOT NULL DEFAULT true;
+
 CREATE OR REPLACE FUNCTION public.get_user_role()
 RETURNS text
 LANGUAGE sql
@@ -398,7 +419,10 @@ SECURITY DEFINER
 SET search_path = public
 STABLE
 AS $$
-  SELECT rol FROM public.perfiles WHERE user_id = auth.uid();
+  SELECT rol
+  FROM public.perfiles
+  WHERE user_id = auth.uid()
+    AND COALESCE(activo, true) = true;
 $$;
 
 CREATE OR REPLACE FUNCTION public.prevent_unsafe_self_perfil_update()
@@ -419,6 +443,10 @@ BEGIN
 
     IF NEW.creado_en IS DISTINCT FROM OLD.creado_en THEN
       RAISE EXCEPTION 'No puede modificar la fecha de creacion del perfil';
+    END IF;
+
+    IF NEW.activo IS DISTINCT FROM OLD.activo THEN
+      RAISE EXCEPTION 'No puede modificar el estado del perfil';
     END IF;
   END IF;
 
@@ -450,8 +478,8 @@ CREATE POLICY "users_read_own_perfil" ON public.perfiles
 
 CREATE POLICY "users_update_own_perfil" ON public.perfiles
   FOR UPDATE TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid() = user_id AND COALESCE(activo, true) = true)
+  WITH CHECK (auth.uid() = user_id AND COALESCE(activo, true) = true);
 
 CREATE POLICY "service_role_all_perfiles" ON public.perfiles
   FOR ALL TO service_role

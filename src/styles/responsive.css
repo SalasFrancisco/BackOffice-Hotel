@@ -8,6 +8,26 @@ body {
   overflow-x: hidden;
 }
 
+@keyframes bo-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bo-modal-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 button,
 input,
 select,
@@ -419,6 +439,59 @@ textarea {
 .bo-calendar-desktop,
 .bo-reservas-table {
   display: block;
+}
+
+.bo-calendar-month-grid {
+  grid-auto-rows: 9.5rem;
+}
+
+.bo-calendar-month-day {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.bo-calendar-month-day-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.bo-calendar-reservas-overlay,
+.bo-reserva-detail-overlay {
+  animation: bo-modal-backdrop-in 0.18s ease-out both;
+}
+
+.bo-calendar-reservas-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.68);
+  padding: 1rem;
+  backdrop-filter: blur(2px);
+}
+
+.bo-calendar-reservas-overlay.is-backgrounded {
+  pointer-events: none;
+}
+
+.bo-calendar-reservas-modal,
+.bo-reserva-detail-modal {
+  animation: bo-modal-content-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: center;
+}
+
+.bo-calendar-reservas-overlay.is-backgrounded .bo-calendar-reservas-modal {
+  filter: blur(1px);
+  transform: scale(0.985);
+}
+
+.bo-reserva-detail-overlay {
+  z-index: 100010;
 }
 
 .bo-form-grid-2 {

@@ -188,7 +188,6 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   };
 
   const handleReservaClick = (reserva: Reserva) => {
-    setSelectedSalonDay(null);
     setSelectedReserva(reserva);
     setShowModal(true);
   };
@@ -203,6 +202,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   const handleModalClose = () => {
     setShowModal(false);
     setSelectedReserva(null);
+    setSelectedSalonDay(null);
     void loadCalendarData();
   };
 
@@ -296,20 +296,20 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
           ))}
         </div>
 
-        <div className="grid grid-cols-7 relative">
+        <div className="bo-calendar-month-grid grid grid-cols-7 relative">
           {calendarDays.map((day, index) => {
             const salonGroups = day ? getSalonGroupsForDay(day) : [];
             return (
               <div
                 key={`${day || 'empty'}-${index}`}
-                className={`min-h-[140px] p-2 border-b border-r border-gray-200 ${
+                className={`bo-calendar-month-day p-2 border-b border-r border-gray-200 ${
                   !day ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
                 }`}
               >
                 {day && (
                   <>
                     <div className="text-sm text-gray-900 mb-2">{day}</div>
-                    <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                    <div className="bo-calendar-month-day-content space-y-1 pr-1">
                       {salonGroups.map((group) => (
                         <button
                           key={`${group.salonId}-${day}`}
@@ -396,12 +396,11 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         ))}
       </div>
 
-      {selectedSalonDay && !showModal && (
+      {selectedSalonDay && (
         <div
-          className="fixed inset-0 z-[9998] flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(1px)' }}
+          className={`bo-calendar-reservas-overlay${showModal ? ' is-backgrounded' : ''}`}
         >
-          <div className="bo-dialog-content w-full max-w-2xl rounded-lg bg-white shadow-xl">
+          <div className="bo-calendar-reservas-modal bo-dialog-content w-full max-w-2xl rounded-lg bg-white shadow-xl">
             <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-5">
               <div className="min-w-0">
                 <h3 className="text-gray-900">{selectedSalonDay.salonName}</h3>

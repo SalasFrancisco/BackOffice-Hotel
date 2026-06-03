@@ -123,10 +123,10 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-[9999]"
+      className="bo-reserva-detail-overlay fixed inset-0 flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(1px)' }}
     >
-      <div className="bo-reserva-modal bg-white rounded-lg shadow-xl overflow-y-auto">
+      <div className="bo-reserva-detail-modal bo-reserva-modal bg-white rounded-lg shadow-xl overflow-y-auto">
         {/* Header */}
         <div className="bo-reserva-modal-header flex justify-between items-start p-6 border-b border-gray-200">
           <div>

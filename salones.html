@@ -4395,6 +4395,8 @@
             },
         };
 
+        const PUBLIC_RESERVA_SUCCESS_MESSAGE = 'Muchas gracias por realizar la consulta. El personal del hotel validará este presupuesto y se pondrá en contacto con usted en las próximas horas.';
+
         const clearStatusModalTimer = () => {
             if (!statusModalAutoCloseTimer) return;
             window.clearTimeout(statusModalAutoCloseTimer);
@@ -4699,15 +4701,15 @@
                 const downloadStarted = await downloadGeneratedPresupuesto(data);
 
                 if (downloadStarted) {
-                    setStatus('Solicitud enviada. El presupuesto se esta descargando.', 'success', {
-                        title: 'Solicitud enviada',
-                        autoCloseMs: 5000,
+                    setStatus(`${PUBLIC_RESERVA_SUCCESS_MESSAGE} El presupuesto se esta descargando.`, 'success', {
+                        title: 'Consulta enviada',
+                        autoCloseMs: 0,
                     });
                 } else {
                     const detalleBackend = data?.pdfError || data?.uploadError || data?.signedError || '';
                     const detalle = detalleBackend ? ` Detalle: ${detalleBackend}` : '';
-                    setStatus(`Solicitud enviada, pero no se pudo descargar el presupuesto automaticamente.${detalle}`, 'error', {
-                        title: 'Solicitud enviada con incidencia',
+                    setStatus(`${PUBLIC_RESERVA_SUCCESS_MESSAGE} No se pudo descargar el presupuesto automaticamente.${detalle}`, 'error', {
+                        title: 'Consulta enviada con incidencia',
                     });
                     console.warn('Respuesta de public-reserva sin archivo descargable:', data);
                 }

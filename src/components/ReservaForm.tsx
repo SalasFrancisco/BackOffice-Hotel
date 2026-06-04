@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { AlertCircle, CalendarDays, CheckCircle, Package } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle, ChevronLeft, ChevronRight, Package, X } from 'lucide-react';
 import { projectId } from '../utils/supabase/info';
 import {
   hasNonWhitespaceValue,
@@ -11,9 +11,6 @@ import {
 import { InfoDialog } from './InfoDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
-  RESERVA_ESTADO_BACKOFFICE_INICIAL,
-  RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
-  RESERVA_ESTADOS_BLOQUEANTES,
   getAllowedReservaEstadoTransitions,
   isReservaEstadoTransitionAllowed,
 } from '../utils/reservaEstadoTransitions';
@@ -29,13 +26,6 @@ const HORARIO_OPCIONES = Array.from({ length: 48 }, (_, index) => {
   const minutos = index % 2 === 0 ? '00' : '30';
   return `${hora}:${minutos}`;
 });
-
-const formatShortDateInput = (value: string): string => {
-  const digits = value.replace(/\D/g, '').slice(0, 6);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 6)}`;
-};
 
 const isoDateToShortDate = (isoDate: string): string => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
@@ -171,7 +161,8 @@ const calculateSalonBillableDayUnits = ({
 };
 
 const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
-const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(RESERVA_ESTADOS_BLOQUEANTES);
+const BACKOFFICE_INITIAL_ESTADO: Reserva['estado'] = 'Validado Pendiente Seña';
+const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(['Validado Pendiente Seña', 'Confirmado', 'Pagado']);
 
 type ReservaOverlapComparable = {
   id: number;
@@ -179,6 +170,18 @@ type ReservaOverlapComparable = {
   estado: Reserva['estado'];
   fecha_inicio: string;
   fecha_fin: string;
+};
+
+type AvailabilityReserva = ReservaOverlapComparable & {
+  cliente_nombre?: string | null;
+};
+
+type DatePickerTarget = 'inicio' | 'fin';
+
+type CalendarDayAvailability = {
+  available: Salon[];
+  pending: Salon[];
+  occupied: Salon[];
 };
 
 const toReservaTimeTimestamp = (value: string): number | null => {
@@ -262,6 +265,38 @@ const getDateTimePartsInHotelTimeZone = (value?: string | null) => {
   };
 };
 
+const AVAILABILITY_WEEK_DAYS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+
+const padDatePart = (value: number) => String(value).padStart(2, '0');
+
+const buildIsoDateFromParts = (year: number, monthIndex: number, day: number) =>
+  `${year}-${padDatePart(monthIndex + 1)}-${padDatePart(day)}`;
+
+const buildLocalDateFromIsoDate = (isoDate: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText] = match;
+  return new Date(Number(yearText), Number(monthText) - 1, Number(dayText));
+};
+
+const formatAvailabilityMonthLabel = (date: Date) =>
+  new Intl.DateTimeFormat('es-AR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+
+const formatLongAvailabilityDate = (isoDate: string) => {
+  const date = buildLocalDateFromIsoDate(isoDate);
+  if (!date) return '';
+
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  }).format(date);
+};
+
 const buildProtectedFunctionEndpoints = (path: string) => [
   `https://${projectId}.supabase.co/functions/v1/server/${path}`,
   `https://${projectId}.supabase.co/functions/v1/${path}`,
@@ -330,11 +365,18 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+  const [activeDatePicker, setActiveDatePicker] = useState<DatePickerTarget | null>(null);
+  const [availabilityCalendarDate, setAvailabilityCalendarDate] = useState(() => new Date());
+  const [calendarPreviewIsoDate, setCalendarPreviewIsoDate] = useState('');
+  const [loadingCalendarAvailability, setLoadingCalendarAvailability] = useState(false);
+  const [calendarAvailabilityError, setCalendarAvailabilityError] = useState('');
+  const [calendarMonthReservas, setCalendarMonthReservas] = useState<AvailabilityReserva[]>([]);
   const [message, setMessage] = useState<{ text: string } | null>(null);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
   
   // Selected services: Map<servicioId, cantidad>
   const [selectedServicios, setSelectedServicios] = useState<Map<number, number>>(new Map());
+  const [expandedServicioCategorias, setExpandedServicioCategorias] = useState<Set<number>>(() => new Set());
 
   // Form fields
   const [nombreCliente, setNombreCliente] = useState(reserva?.cliente_nombre || '');
@@ -356,12 +398,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [fechaFinHora, setFechaFinHora] = useState(
     initialFechaFinParts?.time || '',
   );
-  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
-  const fechaInicioPickerRef = useRef<HTMLInputElement | null>(null);
-  const fechaFinPickerRef = useRef<HTMLInputElement | null>(null);
+  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || BACKOFFICE_INITIAL_ESTADO);
 
   useEffect(() => {
-    setEstado(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
+    setEstado(reserva?.estado || BACKOFFICE_INITIAL_ESTADO);
   }, [reserva]);
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
@@ -414,6 +454,23 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
 
   const fechaInicioIsoFromInput = parseShortDateToIso(fechaInicioDate);
   const fechaFinIsoFromInput = parseShortDateToIso(fechaFinDate);
+  const availabilityCalendarCells = useMemo(() => {
+    const year = availabilityCalendarDate.getFullYear();
+    const monthIndex = availabilityCalendarDate.getMonth();
+    const firstDayOfMonth = new Date(year, monthIndex, 1);
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const leadingEmptyDays = firstDayOfMonth.getDay();
+
+    return [
+      ...Array.from({ length: leadingEmptyDays }, () => null as number | null),
+      ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+    ];
+  }, [availabilityCalendarDate]);
+  const selectedPickerIsoDate = activeDatePicker === 'inicio'
+    ? fechaInicioIsoFromInput
+    : activeDatePicker === 'fin'
+      ? fechaFinIsoFromInput
+      : null;
   const eventCalendarDaysCount = getEventDaysCount(fechaInicioIsoFromInput, fechaFinIsoFromInput);
   const eventBillableDayUnits = calculateSalonBillableDayUnits({
     startIsoDate: fechaInicioIsoFromInput,
@@ -471,6 +528,17 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       suggested: recommended[0] || null,
     };
   }, [salones, totalPersonasNumber]);
+  const categoriasConServicios = useMemo(
+    () => categorias
+      .map((categoria) => ({
+        categoria,
+        servicios: servicios.filter((servicio) => (
+          servicio.id_categoria === categoria.id && servicio.activo !== false
+        )),
+      }))
+      .filter((item) => item.servicios.length > 0),
+    [categorias, servicios],
+  );
   const formatSalonOptionLabel = (salon: Salon) => (
     `${salon.nombre} - Cap: ${salon.capacidad} - ${
       Number(salon.precio_base || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
@@ -499,11 +567,78 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     : '';
   const allowedEstadoTransitions = reserva
     ? getAllowedReservaEstadoTransitions(reserva.estado)
-    : [RESERVA_ESTADO_BACKOFFICE_INICIAL];
+    : [BACKOFFICE_INITIAL_ESTADO];
 
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  useEffect(() => {
+    if (!activeDatePicker || !idSalon) {
+      setCalendarMonthReservas([]);
+      setCalendarAvailabilityError('');
+      setLoadingCalendarAvailability(false);
+      return;
+    }
+
+    let isActive = true;
+    const monthStart = new Date(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth(),
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
+    const monthEnd = new Date(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0,
+    );
+
+    const loadCalendarAvailability = async () => {
+      try {
+        setLoadingCalendarAvailability(true);
+        setCalendarAvailabilityError('');
+
+        const { data, error } = await supabase
+          .from('reservas')
+          .select('id, id_salon, estado, fecha_inicio, fecha_fin, cliente_nombre')
+          .lt('fecha_inicio', monthEnd.toISOString())
+          .gt('fecha_fin', monthStart.toISOString())
+          .neq('estado', 'Cancelado')
+          .eq('id_salon', idSalon);
+
+        if (error) throw error;
+        if (isActive) {
+          setCalendarMonthReservas(
+            ((data || []) as AvailabilityReserva[]).filter((item) => item.estado !== 'Cancelado'),
+          );
+        }
+      } catch (err: any) {
+        console.error('Error loading calendar availability:', err);
+        if (isActive) {
+          setCalendarAvailabilityError(err?.message || 'No se pudo consultar la disponibilidad.');
+          setCalendarMonthReservas([]);
+        }
+      } finally {
+        if (isActive) {
+          setLoadingCalendarAvailability(false);
+        }
+      }
+    };
+
+    void loadCalendarAvailability();
+
+    return () => {
+      isActive = false;
+    };
+  }, [activeDatePicker, availabilityCalendarDate, idSalon]);
 
   useEffect(() => {
     if (idSalon) {
@@ -547,10 +682,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       const { data: salonesData, error: salonesError } = await supabase
         .from('salones')
         .select('*')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (salonesError) throw salonesError;
-      setSalones(salonesData || []);
+      setSalones((salonesData || []).filter((salon) => salon.activo !== false));
 
       // Load servicios y categorías
       const { data: categoriasData, error: categoriasError } = await supabase
@@ -564,10 +700,13 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       const { data: serviciosData, error: serviciosError } = await supabase
         .from('servicios')
         .select('*, categoria:categorias_servicios(*)')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (serviciosError) throw serviciosError;
-      setServicios(serviciosData || []);
+      const serviciosActivos = (serviciosData || []).filter((servicio) => servicio.activo !== false);
+      const serviciosActivosIds = new Set(serviciosActivos.map((servicio) => servicio.id));
+      setServicios(serviciosActivos);
 
       // Si estamos editando, cargar distribuciones y servicios
       if (reserva) {
@@ -589,7 +728,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         if (!rsError && reservaServiciosData) {
           const map = new Map<number, number>();
           reservaServiciosData.forEach(rs => {
-            map.set(rs.id_servicio, rs.cantidad);
+            if (serviciosActivosIds.has(rs.id_servicio)) {
+              map.set(rs.id_servicio, rs.cantidad);
+            }
           });
           setSelectedServicios(map);
         }
@@ -639,42 +780,271 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     }
   };
 
-  const selectTodosCategoria = (categoriaId: number) => {
-    const serviciosCategoria = servicios.filter(s => s.id_categoria === categoriaId);
-    setSelectedServicios((prev) => {
-      const newMap = new Map(prev);
-      const todosSeleccionados = serviciosCategoria.every((servicio) => newMap.has(servicio.id));
-
-      if (todosSeleccionados) {
-        serviciosCategoria.forEach((servicio) => {
-          newMap.delete(servicio.id);
-        });
+  const toggleServicioCategoria = (categoriaId: number) => {
+    setExpandedServicioCategorias((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoriaId)) {
+        next.delete(categoriaId);
       } else {
-        serviciosCategoria.forEach((servicio) => {
-          if (!newMap.has(servicio.id)) {
-            newMap.set(servicio.id, 1);
-          }
-        });
+        next.add(categoriaId);
       }
-
-      return newMap;
+      return next;
     });
   };
 
-  const getServiciosByCategoria = (categoriaId: number) => {
-    return servicios.filter(s => s.id_categoria === categoriaId);
-  };
-
-  const openNativeDatePicker = (pickerRef: { current: HTMLInputElement | null }) => {
-    const picker = pickerRef.current;
-    if (!picker) return;
-
-    if (typeof picker.showPicker === 'function') {
-      picker.showPicker();
-      return;
+  const getAvailabilityForIsoDate = (isoDate: string): CalendarDayAvailability => {
+    const availabilitySalones = currentSalon ? [currentSalon] : [];
+    const date = buildLocalDateFromIsoDate(isoDate);
+    if (!date) {
+      return {
+        available: availabilitySalones,
+        pending: [],
+        occupied: [],
+      };
     }
 
-    picker.click();
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+    const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0);
+    const dayStartIso = dayStart.toISOString();
+    const dayEndIso = dayEnd.toISOString();
+    const currentReservaId = reserva?.id || 0;
+
+    return availabilitySalones.reduce<CalendarDayAvailability>(
+      (summary, salon) => {
+        const overlappingReservas = calendarMonthReservas
+          .filter((item) => item.id !== currentReservaId)
+          .filter((item) => Number(item.id_salon) === Number(salon.id))
+          .filter((item) => hasReservaTimeOverlap(
+            dayStartIso,
+            dayEndIso,
+            item.fecha_inicio,
+            item.fecha_fin,
+          ));
+        const hasBlockingReserva = overlappingReservas.some((item) => ESTADOS_BLOQUEANTES.has(item.estado));
+        const hasPendingReserva = overlappingReservas.some((item) => item.estado === 'Pendiente');
+
+        if (hasBlockingReserva) {
+          summary.occupied.push(salon);
+        } else if (hasPendingReserva) {
+          summary.pending.push(salon);
+        } else {
+          summary.available.push(salon);
+        }
+
+        return summary;
+      },
+      {
+        available: [],
+        pending: [],
+        occupied: [],
+      },
+    );
+  };
+
+  const getSelectedSalonStatus = (availability: CalendarDayAvailability) => {
+    if (!currentSalon) {
+      return {
+        label: 'Sin salon',
+        className: 'is-neutral',
+      };
+    }
+
+    if (availability.occupied.length > 0) {
+      return {
+        label: 'Ocupado',
+        className: 'is-occupied',
+      };
+    }
+
+    if (availability.pending.length > 0) {
+      return {
+        label: 'En consulta',
+        className: 'is-pending',
+      };
+    }
+
+    return {
+      label: 'Disponible',
+      className: 'is-available',
+    };
+  };
+
+  const getAvailabilityTitle = (availability: CalendarDayAvailability) => [
+    currentSalon ? `Salon: ${currentSalon.nombre}` : 'Seleccione un salon',
+    `Estado: ${getSelectedSalonStatus(availability).label}`,
+  ].join('\n');
+
+  const openAvailabilityCalendar = (target: DatePickerTarget) => {
+    const isoDate = target === 'inicio' ? fechaInicioIsoFromInput : fechaFinIsoFromInput;
+    const relatedIsoDate = target === 'inicio' ? fechaFinIsoFromInput : fechaInicioIsoFromInput;
+    const now = new Date();
+    const fallbackIsoDate = buildIsoDateFromParts(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const nextIsoDate = isoDate || relatedIsoDate || fallbackIsoDate;
+    const nextDate = buildLocalDateFromIsoDate(nextIsoDate) || new Date();
+
+    setActiveDatePicker(target);
+    setAvailabilityCalendarDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    setCalendarPreviewIsoDate(nextIsoDate);
+  };
+
+  const closeAvailabilityCalendar = () => {
+    setActiveDatePicker(null);
+  };
+
+  const moveAvailabilityCalendarMonth = (offset: number) => {
+    const nextDate = new Date(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth() + offset,
+      1,
+    );
+    setAvailabilityCalendarDate(nextDate);
+    setCalendarPreviewIsoDate(buildIsoDateFromParts(
+      nextDate.getFullYear(),
+      nextDate.getMonth(),
+      1,
+    ));
+  };
+
+  const selectAvailabilityCalendarDate = (day: number) => {
+    if (!activeDatePicker) return;
+
+    const isoDate = buildIsoDateFromParts(
+      availabilityCalendarDate.getFullYear(),
+      availabilityCalendarDate.getMonth(),
+      day,
+    );
+    const shortDate = isoDateToShortDate(isoDate);
+
+    if (activeDatePicker === 'inicio') {
+      setFechaInicioDate(shortDate);
+      if (!fechaFinIsoFromInput || fechaFinIsoFromInput < isoDate) {
+        setFechaFinDate(shortDate);
+      }
+    } else {
+      setFechaFinDate(shortDate);
+      if (!fechaInicioIsoFromInput) {
+        setFechaInicioDate(shortDate);
+      }
+    }
+
+    setCalendarPreviewIsoDate(isoDate);
+    setActiveDatePicker(null);
+  };
+
+  const previewDayAvailability = calendarPreviewIsoDate
+    ? getAvailabilityForIsoDate(calendarPreviewIsoDate)
+    : null;
+
+  const renderAvailabilityCalendar = (target: DatePickerTarget) => {
+    if (activeDatePicker !== target) return null;
+
+    return (
+      <div className="bo-date-picker-popover" role="dialog" aria-label="Calendario de disponibilidad">
+        <div className="bo-date-picker-header">
+          <button
+            type="button"
+            onClick={() => moveAvailabilityCalendarMonth(-1)}
+            className="bo-date-picker-nav-button"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <p className="bo-date-picker-title">
+              {target === 'inicio' ? 'Fecha de inicio' : 'Fecha de fin'}
+            </p>
+            <p className="bo-date-picker-month">
+              {formatAvailabilityMonthLabel(availabilityCalendarDate)}
+            </p>
+          </div>
+          <div className="bo-date-picker-header-actions">
+            <button
+              type="button"
+              onClick={() => moveAvailabilityCalendarMonth(1)}
+              className="bo-date-picker-nav-button"
+              aria-label="Mes siguiente"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={closeAvailabilityCalendar}
+              className="bo-date-picker-nav-button"
+              aria-label="Cerrar calendario"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="bo-date-picker-weekdays" aria-hidden="true">
+          {AVAILABILITY_WEEK_DAYS.map((dayName) => (
+            <span key={dayName}>{dayName}</span>
+          ))}
+        </div>
+
+        <div className="bo-date-picker-calendar-grid">
+          {availabilityCalendarCells.map((day, index) => {
+            if (day === null) {
+              return <span key={`empty-${index}`} className="bo-date-picker-empty-day" />;
+            }
+
+            const isoDate = buildIsoDateFromParts(
+              availabilityCalendarDate.getFullYear(),
+              availabilityCalendarDate.getMonth(),
+              day,
+            );
+            const availability = getAvailabilityForIsoDate(isoDate);
+            const salonStatus = getSelectedSalonStatus(availability);
+            const isSelected = selectedPickerIsoDate === isoDate;
+            const isPreviewed = calendarPreviewIsoDate === isoDate;
+
+            return (
+              <button
+                key={isoDate}
+                type="button"
+                onClick={() => selectAvailabilityCalendarDate(day)}
+                onMouseEnter={() => setCalendarPreviewIsoDate(isoDate)}
+                onFocus={() => setCalendarPreviewIsoDate(isoDate)}
+                className={`bo-date-picker-day${isSelected ? ' is-selected' : ''}${isPreviewed ? ' is-previewed' : ''}`}
+                title={getAvailabilityTitle(availability)}
+              >
+                <span className="bo-date-picker-day-number">{day}</span>
+                <span className={`bo-date-picker-day-status ${salonStatus.className}`}>
+                  {salonStatus.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {calendarAvailabilityError ? (
+          <div className="bo-date-picker-message is-error">
+            {calendarAvailabilityError}
+          </div>
+        ) : loadingCalendarAvailability ? (
+          <div className="bo-date-picker-message">Consultando disponibilidad...</div>
+        ) : previewDayAvailability && calendarPreviewIsoDate ? (
+          <div className="bo-date-picker-summary">
+            <p className="bo-date-picker-summary-date">
+              {formatLongAvailabilityDate(calendarPreviewIsoDate)}
+            </p>
+            {currentSalon ? (
+              <>
+                <p><strong>Salon:</strong> {currentSalon.nombre}</p>
+                <p><strong>Estado:</strong> {getSelectedSalonStatus(previewDayAvailability).label}</p>
+              </>
+            ) : (
+              <p>Seleccione un salon para ver su disponibilidad.</p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -737,7 +1107,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     }
 
     if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
-      showWarningDialog(RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE);
+      showWarningDialog(
+        'Transicion de estado no permitida para la reserva.',
+      );
       return;
     }
 
@@ -798,7 +1170,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         monto,
         cantidad_personas: totalPersonas,
         observaciones: hasNonWhitespaceValue(observacionesSanitizadas) ? observacionesSanitizadas : null,
-        creado_por: userData.user?.id,
       };
 
       let error;
@@ -813,7 +1184,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       } else {
         const { data: newReserva, error: insertError } = await supabase
           .from('reservas')
-          .insert([reservaData])
+          .insert([{ ...reservaData, creado_por: userData.user?.id || null }])
           .select()
           .single();
         error = insertError;
@@ -1098,38 +1469,19 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               Inicio <span className="text-red-500">*</span>
             </label>
             <div className="bo-date-time-grid">
-              <div>
+              <div className="bo-date-picker-field">
                 <label className="block text-xs text-gray-600 mb-1">Fecha</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={fechaInicioDate}
-                    onChange={(e) => setFechaInicioDate(formatShortDateInput(e.target.value))}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="dd/mm/aa"
-                    required
-                    className={`${DATE_TIME_FIELD_CLASS} flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => openNativeDatePicker(fechaInicioPickerRef)}
-                    className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    title="Seleccionar fecha"
-                    aria-label="Seleccionar fecha de inicio"
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                  </button>
-                  <input
-                    ref={fechaInicioPickerRef}
-                    type="date"
-                    value={fechaInicioIsoFromInput || ''}
-                    onChange={(e) => setFechaInicioDate(isoDateToShortDate(e.target.value))}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openAvailabilityCalendar('inicio')}
+                  className={`${DATE_TIME_FIELD_CLASS} bo-date-picker-trigger`}
+                  aria-expanded={activeDatePicker === 'inicio'}
+                >
+                  <span className={fechaInicioDate ? 'text-gray-900' : 'text-gray-500'}>
+                    {fechaInicioDate || 'Seleccionar fecha'}
+                  </span>
+                  <CalendarDays className="h-4 w-4 text-gray-500" />
+                </button>
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Horario</label>
@@ -1155,38 +1507,19 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
               Fin <span className="text-red-500">*</span>
             </label>
             <div className="bo-date-time-grid">
-              <div>
+              <div className="bo-date-picker-field">
                 <label className="block text-xs text-gray-600 mb-1">Fecha</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={fechaFinDate}
-                    onChange={(e) => setFechaFinDate(formatShortDateInput(e.target.value))}
-                    inputMode="numeric"
-                    maxLength={8}
-                    placeholder="dd/mm/aa"
-                    required
-                    className={`${DATE_TIME_FIELD_CLASS} flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => openNativeDatePicker(fechaFinPickerRef)}
-                    className="inline-flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    title="Seleccionar fecha"
-                    aria-label="Seleccionar fecha de fin"
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                  </button>
-                  <input
-                    ref={fechaFinPickerRef}
-                    type="date"
-                    value={fechaFinIsoFromInput || ''}
-                    onChange={(e) => setFechaFinDate(isoDateToShortDate(e.target.value))}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden="true"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openAvailabilityCalendar('fin')}
+                  className={`${DATE_TIME_FIELD_CLASS} bo-date-picker-trigger`}
+                  aria-expanded={activeDatePicker === 'fin'}
+                >
+                  <span className={fechaFinDate ? 'text-gray-900' : 'text-gray-500'}>
+                    {fechaFinDate || 'Seleccionar fecha'}
+                  </span>
+                  <CalendarDays className="h-4 w-4 text-gray-500" />
+                </button>
               </div>
               <div>
                 <label className="block text-xs text-gray-600 mb-1">Horario</label>
@@ -1207,6 +1540,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             </div>
           </div>
         </div>
+
+        {activeDatePicker && renderAvailabilityCalendar(activeDatePicker)}
 
         {/* Estado (solo editable cuando se está editando una reserva) */}
         {reserva && (
@@ -1255,70 +1590,81 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             <h4 className="text-gray-900">Servicios Adicionales</h4>
           </div>
 
-          {categorias.length === 0 ? (
+          {categoriasConServicios.length === 0 ? (
             <p className="text-sm text-gray-500">No hay servicios disponibles</p>
           ) : (
-            <div className="space-y-4">
-              {categorias.map(categoria => {
-                const serviciosCategoria = getServiciosByCategoria(categoria.id);
-                if (serviciosCategoria.length === 0) return null;
-
-                const todosSeleccionados = serviciosCategoria.every(s => selectedServicios.has(s.id));
+            <div className="bo-reserva-services-list">
+              {categoriasConServicios.map(({ categoria, servicios: serviciosCategoria }) => {
+                const isOpen = expandedServicioCategorias.has(categoria.id);
+                const selectedCount = serviciosCategoria.reduce(
+                  (count, servicio) => count + (selectedServicios.has(servicio.id) ? 1 : 0),
+                  0,
+                );
 
                 return (
-                  <div key={categoria.id} className="border border-gray-200 rounded-lg p-3 bg-white">
-                    <div className="bo-service-category-header flex items-center justify-between mb-3">
-                      <div>
-                        <h5 className="text-gray-900 text-sm">{categoria.nombre}</h5>
+                  <div
+                    key={categoria.id}
+                    className={`bo-reserva-service-category${isOpen ? ' is-open' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleServicioCategoria(categoria.id)}
+                      className="bo-reserva-service-category-toggle"
+                      aria-expanded={isOpen}
+                    >
+                      <div className="bo-reserva-service-category-text">
+                        <span className="bo-reserva-service-category-title">{categoria.nombre}</span>
                         {categoria.descripcion && (
-                          <p className="text-xs text-gray-600">{categoria.descripcion}</p>
+                          <span className="bo-reserva-service-category-description">
+                            {categoria.descripcion}
+                          </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => selectTodosCategoria(categoria.id)}
-                        className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                      >
-                        {todosSeleccionados ? 'Deseleccionar todos' : 'Seleccionar todos'}
-                      </button>
-                    </div>
+                      <span className="bo-reserva-service-category-meta">
+                        {selectedCount > 0 && (
+                          <span className="bo-reserva-service-category-selected">
+                            {selectedCount} sel.
+                          </span>
+                        )}
+                        <span className="bo-reserva-service-category-count">
+                          {serviciosCategoria.length}
+                        </span>
+                        <ChevronRight className="bo-reserva-service-category-icon" />
+                      </span>
+                    </button>
 
-                    <div className="bo-form-grid-2 bo-service-options">
-                      {serviciosCategoria.map(servicio => {
-                        const isSelected = selectedServicios.has(servicio.id);
-                        const cantidad = selectedServicios.get(servicio.id) || 1;
+                    {isOpen && (
+                      <div className="bo-reserva-service-category-content">
+                        {serviciosCategoria.map(servicio => {
+                          const isSelected = selectedServicios.has(servicio.id);
+                          const cantidad = selectedServicios.get(servicio.id) || 1;
 
-                        return (
-                          <div
-                            key={servicio.id}
-                            className={`border rounded p-2 transition-all ${
-                              isSelected
-                                ? 'border-green-400 bg-green-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-start gap-2">
+                          return (
+                            <div
+                              key={servicio.id}
+                              className={`bo-reserva-service-item${isSelected ? ' is-selected' : ''}`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => toggleServicio(servicio.id)}
-                                className="mt-1"
+                                className="bo-reserva-service-checkbox"
                               />
-                              <div className="flex-1 min-w-0">
-                                <div className="bo-service-option-title flex items-center justify-between gap-2">
-                                  <p className="text-sm text-gray-900 truncate">{servicio.nombre}</p>
-                                  <p className="text-sm text-green-600 flex-shrink-0">
-                                    ${servicio.precio.toLocaleString('es-AR')}
-                                  </p>
-                                </div>
+                              <div className="bo-reserva-service-text">
+                                <p className="bo-reserva-service-name">{servicio.nombre}</p>
                                 {servicio.descripcion && (
                                   <RichTextDescription
                                     value={servicio.descripcion}
-                                    className="text-xs text-gray-600 mt-1 leading-relaxed"
+                                    className="bo-reserva-service-description"
                                   />
                                 )}
+                              </div>
+                              <div className="bo-reserva-service-controls">
+                                <p className="bo-reserva-service-price">
+                                  ${servicio.precio.toLocaleString('es-AR')}
+                                </p>
                                 {isSelected && (
-                                  <div className="bo-service-quantity flex items-center gap-2 mt-2">
+                                  <div className="bo-reserva-service-quantity">
                                     <label className="text-xs text-gray-700">Cantidad:</label>
                                     <input
                                       type="number"
@@ -1327,16 +1673,16 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                                       onChange={(e) => updateCantidadServicio(servicio.id, parseInt(sanitizeIntegerInput(e.target.value), 10) || 1)}
                                       onKeyDown={preventInvalidNumberKeys}
                                       inputMode="numeric"
-                                      className="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-transparent"
+                                      className="bo-reserva-service-quantity-input"
                                     />
                                   </div>
                                 )}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}

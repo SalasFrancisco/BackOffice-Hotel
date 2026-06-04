@@ -3,6 +3,7 @@ import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
 import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
+import { ReservaCalendar } from './ReservaCalendar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
@@ -16,11 +17,6 @@ import {
   getReservaExpirationWarningText,
   getReservaStartWarningText,
 } from '../utils/reservaExpiration';
-import {
-  getReservaEstados,
-  RESERVA_ESTADO_COLORS,
-  RESERVA_ESTADOS_PENDIENTES_GESTION,
-} from '../utils/reservaEstadoTransitions';
 
 type ReservasProps = {
   perfil: Perfil;
@@ -31,8 +27,16 @@ type ReservasProps = {
   } | null;
 };
 
-type SortKey = 'id' | 'cliente' | 'salon' | 'fechaInicio' | 'fechaFin' | 'estado' | 'monto';
+type SortKey = 'id' | 'cliente' | 'registradaPor' | 'salon' | 'fechaInicio' | 'fechaFin' | 'estado' | 'montoInicial' | 'monto';
 type SortDirection = 'asc' | 'desc';
+
+const ESTADO_COLORS = {
+  Pendiente: '#F7C948',
+  'Validado Pendiente Seña': '#8B5CF6',
+  Confirmado: '#4C7AF2',
+  Pagado: '#35B679',
+  Cancelado: '#B0B7C3',
+};
 
 const getReservaServiciosTotal = (reserva: Reserva) =>
   (reserva.reserva_servicios || []).reduce((acc, item) => {
@@ -43,6 +47,15 @@ const getReservaServiciosTotal = (reserva: Reserva) =>
 
 const getReservaMontoTotal = (reserva: Reserva) =>
   (Number(reserva.monto) || 0) + getReservaServiciosTotal(reserva);
+
+const getReservaMontoInicial = (reserva: Reserva) => {
+  if (reserva.monto_inicial === null || reserva.monto_inicial === undefined) {
+    return null;
+  }
+
+  const value = Number(reserva.monto_inicial);
+  return Number.isFinite(value) ? value : null;
+};
 
 export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: ReservasProps) {
   const CAPACITY_WARNING_STYLES = {
@@ -57,6 +70,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [creadorNamesById, setCreadorNamesById] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -74,6 +88,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const highlightTimeoutRef = useRef<number | null>(null);
   const isAdmin = perfil.rol === 'ADMIN';
 
@@ -137,13 +152,45 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         supabase
           .from('reservas')
           .select('id, id_salon, estado, fecha_inicio, fecha_fin')
-          .in('estado', RESERVA_ESTADOS_PENDIENTES_GESTION),
+          .eq('estado', 'Pendiente'),
       ]);
 
       if (queryError) throw queryError;
       if (pendientesError) throw pendientesError;
-      setReservas(data || []);
+      const reservasData = data || [];
+      setReservas(reservasData);
       setReservasPendientes((pendientesData || []) as ReservaPendingConflictComparable[]);
+
+      const creadorIds = Array.from(
+        new Set(
+          reservasData
+            .map((reserva) => reserva.creado_por)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      );
+
+      if (creadorIds.length === 0) {
+        setCreadorNamesById({});
+      } else {
+        const { data: perfilesData, error: perfilesError } = await supabase
+          .from('perfiles')
+          .select('user_id, nombre')
+          .in('user_id', creadorIds);
+
+        if (perfilesError) {
+          console.warn('Error loading reserva creators:', perfilesError);
+          setCreadorNamesById({});
+        } else {
+          setCreadorNamesById(
+            (perfilesData || []).reduce<Record<string, string>>((acc, perfil) => {
+              if (perfil.user_id) {
+                acc[perfil.user_id] = perfil.nombre || 'Usuario back office';
+              }
+              return acc;
+            }, {}),
+          );
+        }
+      }
     } catch (err: any) {
       console.error('Error loading reservas:', err);
       setError(err.message);
@@ -174,13 +221,20 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     setEditingReserva(null);
     setIsReservaFormDirty(false);
     if (success) {
-      loadReservas();
+      void loadReservas();
+      setCalendarRefreshKey((key) => key + 1);
     }
   };
 
   const showTemporaryMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     window.setTimeout(() => setMessage(null), 3000);
+  };
+
+  const getReservaRegistradaPor = (reserva: Reserva) => {
+    const creadoPor = reserva.creado_por?.trim();
+    if (!creadoPor) return 'Formulario WEB';
+    return creadorNamesById[creadoPor] || 'Usuario back office';
   };
 
   const buildProtectedFunctionEndpoints = (path: string) => [
@@ -335,6 +389,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
       await deleteReservaWithPresupuesto(reserva);
       setReservas((prev) => prev.filter((item) => item.id !== reserva.id));
+      setCalendarRefreshKey((key) => key + 1);
       setMessage({ type: 'success', text: 'Reserva eliminada correctamente' });
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
@@ -373,6 +428,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     const term = searchTerm.toLowerCase();
     return (
       (r.cliente_nombre || '').toLowerCase().includes(term) ||
+      getReservaRegistradaPor(r).toLowerCase().includes(term) ||
       r.salon?.nombre.toLowerCase().includes(term) ||
       r.estado.toLowerCase().includes(term) ||
       r.id.toString().includes(term)
@@ -385,6 +441,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         return reserva.id || 0;
       case 'cliente':
         return reserva.cliente_nombre || '';
+      case 'registradaPor':
+        return getReservaRegistradaPor(reserva);
       case 'salon':
         return reserva.salon?.nombre || '';
       case 'fechaInicio':
@@ -393,6 +451,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         return new Date(reserva.fecha_fin).getTime() || 0;
       case 'estado':
         return reserva.estado || '';
+      case 'montoInicial':
+        return getReservaMontoInicial(reserva) ?? 0;
       case 'monto':
         return getReservaMontoTotal(reserva);
       default:
@@ -424,9 +484,10 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
   const defaultDirectionByColumn = (column: SortKey): SortDirection => (
     column === 'id'
-      || column === 'fechaInicio'
-      || column === 'fechaFin'
-      || column === 'monto'
+    || column === 'fechaInicio'
+    || column === 'fechaFin'
+    || column === 'montoInicial'
+    || column === 'monto'
       ? 'desc'
       : 'asc'
   );
@@ -553,13 +614,15 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         </div>
       )}
 
+      <ReservaCalendar perfil={perfil} refreshKey={calendarRefreshKey} />
+
       {/* Filters */}
       <div className="bo-filter-bar mb-6">
         <div className="bo-filter-search flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Buscar por cliente, salón, estado o ID..."
+            placeholder="Buscar por cliente, salón, registrada por, estado o ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -572,9 +635,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
         >
           <option value="">Todos los estados</option>
-          {getReservaEstados().map((estado) => (
-            <option key={estado} value={estado}>{estado}</option>
-          ))}
+          <option value="Pendiente">Pendiente</option>
+          <option value="Validado Pendiente Seña">Validado Pendiente Seña</option>
+          <option value="Confirmado">Confirmado</option>
+          <option value="Pagado">Pagado</option>
+          <option value="Cancelado">Cancelado</option>
         </select>
       </div>
 
@@ -602,6 +667,16 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   >
                     Cliente
                     {renderSortIcon('cliente')}
+                  </button>
+                </th>
+                <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
+                  <button
+                    type="button"
+                    onClick={() => handleSort('registradaPor')}
+                    className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  >
+                    Registrada por
+                    {renderSortIcon('registradaPor')}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
@@ -647,6 +722,16 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
                   <button
                     type="button"
+                    onClick={() => handleSort('montoInicial')}
+                    className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  >
+                    Monto inicial
+                    {renderSortIcon('montoInicial')}
+                  </button>
+                </th>
+                <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
+                  <button
+                    type="button"
                     onClick={() => handleSort('monto')}
                     className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
                   >
@@ -660,13 +745,13 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
                     Cargando reservas...
                   </td>
                 </tr>
               ) : filteredReservas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
                     No se encontraron reservas
                   </td>
                 </tr>
@@ -689,6 +774,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
                   const totalServicios = getReservaServiciosTotal(reserva);
                   const totalReserva = getReservaMontoTotal(reserva);
+                  const montoInicial = getReservaMontoInicial(reserva);
+                  const registradaPor = getReservaRegistradaPor(reserva);
                   const sendPresupuestoTitle = sendingPresupuestoId === reserva.id
                     ? 'Enviando presupuesto...'
                     : !reserva.presupuesto_url
@@ -709,16 +796,22 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {reserva.cliente_nombre || 'Sin nombre'}
                         </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{registradaPor}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{reserva.salon?.nombre}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{formatDate(reserva.fecha_inicio)}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{formatDate(reserva.fecha_fin)}</td>
                         <td className="px-6 py-4">
                           <span
                             className="inline-block px-3 py-1 rounded-full text-xs text-white"
-                            style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+                            style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
                           >
                             {reserva.estado}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {montoInicial === null
+                            ? 'Sin presupuesto'
+                            : `$${montoInicial.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <div>
@@ -805,7 +898,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                       </tr>
                       {isEditingCurrentRow && (
                         <tr className="bg-gray-50/70">
-                          <td colSpan={8} className="px-6 py-5">
+                          <td colSpan={10} className="px-6 py-5">
                             <div className="rounded-lg bg-white">
                               <div className="flex items-center justify-between px-5 py-3">
                                 <h3 className="text-base font-semibold text-gray-900">Editar Reserva #{reserva.id}</h3>
@@ -865,6 +958,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
             const totalServicios = getReservaServiciosTotal(reserva);
             const totalReserva = getReservaMontoTotal(reserva);
+            const montoInicial = getReservaMontoInicial(reserva);
+            const registradaPor = getReservaRegistradaPor(reserva);
             const sendPresupuestoTitle = sendingPresupuestoId === reserva.id
               ? 'Enviando presupuesto...'
               : !reserva.presupuesto_url
@@ -890,13 +985,17 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   </div>
                   <span
                     className="inline-block px-3 py-1 rounded-full text-xs text-white"
-                    style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+                    style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
                   >
                     {reserva.estado}
                   </span>
                 </div>
 
                 <div className="bo-mobile-card-grid text-sm">
+                  <div>
+                    <p className="text-gray-500">Registrada por</p>
+                    <p className="text-gray-900">{registradaPor}</p>
+                  </div>
                   <div>
                     <p className="text-gray-500">Salón</p>
                     <p className="text-gray-900">{reserva.salon?.nombre || 'Sin salón'}</p>
@@ -908,6 +1007,14 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   <div>
                     <p className="text-gray-500">Fin</p>
                     <p className="text-gray-900">{formatDate(reserva.fecha_fin)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Monto inicial</p>
+                    <p className="font-medium text-gray-900">
+                      {montoInicial === null
+                        ? 'Sin presupuesto'
+                        : `$${montoInicial.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`}
+                    </p>
                   </div>
                   <div>
                     <p className="text-gray-500">Monto total</p>

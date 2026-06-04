@@ -5,8 +5,6 @@ import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
-  RESERVA_ESTADO_COLORS,
-  RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
   getAllowedReservaEstadoTransitions,
   isReservaEstadoTransitionAllowed,
 } from '../utils/reservaEstadoTransitions';
@@ -17,18 +15,76 @@ type ReservaModalProps = {
   onClose: () => void;
 };
 
+const ESTADO_COLORS = {
+  Pendiente: '#F7C948',
+  'Validado Pendiente Seña': '#8B5CF6',
+  Confirmado: '#4C7AF2',
+  Pagado: '#35B679',
+  Cancelado: '#B0B7C3',
+};
+
+const formatCurrency = (value: number) =>
+  `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const hasStoredMontoInicial = (value: Reserva['monto_inicial']) =>
+  value !== null && value !== undefined && Number.isFinite(Number(value));
+
 export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [reservaServicios, setReservaServicios] = useState<ReservaServicio[]>([]);
   const [loadingServicios, setLoadingServicios] = useState(true);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [registradaPor, setRegistradaPor] = useState('Formulario WEB');
   const allowedEstados = getAllowedReservaEstadoTransitions(reserva.estado);
-  const changeableEstados = allowedEstados.filter((estado) => estado !== reserva.estado);
+  const totalServicios = reservaServicios.reduce(
+    (sum, rs) => sum + ((Number(rs.servicio?.precio) || 0) * (Number(rs.cantidad) || 0)),
+    0,
+  );
+  const montoActual = (Number(reserva.monto) || 0) + totalServicios;
+  const montoInicial = hasStoredMontoInicial(reserva.monto_inicial)
+    ? Number(reserva.monto_inicial)
+    : null;
 
   useEffect(() => {
     loadServicios();
   }, [reserva.id]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadCreador = async () => {
+      const creadorId = reserva.creado_por?.trim();
+      if (!creadorId) {
+        setRegistradaPor('Formulario WEB');
+        return;
+      }
+
+      setRegistradaPor('Usuario back office');
+
+      const { data, error } = await supabase
+        .from('perfiles')
+        .select('nombre')
+        .eq('user_id', creadorId)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (error) {
+        console.warn('Error loading reserva creator:', error);
+        setRegistradaPor('Usuario back office');
+        return;
+      }
+
+      setRegistradaPor(data?.nombre || 'Usuario back office');
+    };
+
+    void loadCreador();
+
+    return () => {
+      isActive = false;
+    };
+  }, [reserva.creado_por]);
 
   const loadServicios = async () => {
     try {
@@ -51,7 +107,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
     if (!isReservaEstadoTransitionAllowed(reserva.estado, nuevoEstado)) {
       setMessage({
         type: 'error',
-        text: RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
+        text: 'Transición de estado no permitida para la reserva.',
       });
       return;
     }
@@ -119,17 +175,17 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-[9999]"
+      className="bo-reserva-detail-overlay fixed inset-0 flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(1px)' }}
     >
-      <div className="bo-reserva-modal bg-white rounded-lg shadow-xl overflow-y-auto">
+      <div className="bo-reserva-detail-modal bo-reserva-modal bg-white rounded-lg shadow-xl overflow-y-auto">
         {/* Header */}
         <div className="bo-reserva-modal-header flex justify-between items-start p-6 border-b border-gray-200">
           <div>
             <h3 className="text-gray-900 mb-1">Detalle de Reserva</h3>
             <div
               className="inline-block px-3 py-1 rounded-full text-sm text-white"
-              style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+              style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
             >
               {reserva.estado}
             </div>
@@ -173,6 +229,11 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
             </div>
 
             <div>
+              <p className="text-sm text-gray-600 mb-1">Registrada por</p>
+              <p className="text-gray-900">{registradaPor}</p>
+            </div>
+
+            <div>
               <p className="text-sm text-gray-600 mb-1">Salón</p>
               <p className="text-gray-900">{reserva.salon?.nombre}</p>
               <p className="text-sm text-gray-600">
@@ -191,10 +252,22 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
             </div>
 
             <div>
-              <p className="text-sm text-gray-600 mb-1">Monto</p>
+              <p className="text-sm text-gray-600 mb-1">Monto inicial</p>
               <p className="text-gray-900">
-                ${Number(reserva.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {montoInicial === null ? 'Sin presupuesto' : formatCurrency(montoInicial)}
               </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Monto actual</p>
+              <p className="text-gray-900">
+                {formatCurrency(montoActual)}
+              </p>
+              {totalServicios > 0 && (
+                <p className="text-sm text-gray-600">
+                  Salón {formatCurrency(Number(reserva.monto) || 0)} + servicios {formatCurrency(totalServicios)}
+                </p>
+              )}
             </div>
 
             <div>
@@ -269,21 +342,17 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
           <div>
             <p className="text-sm text-gray-600 mb-2">Cambiar Estado</p>
             <div className="flex gap-2 flex-wrap">
-              {changeableEstados.length > 0 ? (
-                changeableEstados.map(estado => (
-                  <button
-                    key={estado}
-                    onClick={() => handleChangeEstado(estado)}
-                    disabled={loading}
-                    className="bo-reserva-state-button px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: RESERVA_ESTADO_COLORS[estado] }}
-                  >
-                    {estado}
-                  </button>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500">Estado final</p>
-              )}
+              {allowedEstados.map(estado => (
+                <button
+                  key={estado}
+                  onClick={() => handleChangeEstado(estado)}
+                  disabled={loading || reserva.estado === estado}
+                  className="bo-reserva-state-button px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                  style={{ backgroundColor: ESTADO_COLORS[estado] }}
+                >
+                  {estado}
+                </button>
+              ))}
             </div>
           </div>
         </div>

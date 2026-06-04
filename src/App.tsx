@@ -17,6 +17,9 @@ type NavigationRequest = {
   reservaId?: number | null;
 };
 
+const isAdminRole = (rol?: string | null) => String(rol || '').toUpperCase() === 'ADMIN';
+const isAdminOnlyPage = (page: string) => page === 'dashboard' || page === 'usuarios';
+
 const isPasswordRecoveryUrl = () => {
   const searchParams = new URLSearchParams(window.location.search);
   if (searchParams.get('recovery') === '1') {
@@ -251,12 +254,13 @@ export default function App() {
   }, [session]);
 
   const executeNavigation = ({ page, reservaId }: NavigationRequest) => {
-    setCurrentPage(page);
+    const authorizedPage = !isAdminRole(perfil?.rol) && isAdminOnlyPage(page) ? 'reservas' : page;
+    setCurrentPage(authorizedPage);
     setEditingSalonId(null);
 
-    if (page === 'reservas' && reservaId) {
+    if (authorizedPage === 'reservas' && reservaId) {
       setReservaHighlightRequest({ reservaId, nonce: Date.now() });
-    } else if (page !== 'reservas') {
+    } else if (authorizedPage !== 'reservas') {
       setReservaHighlightRequest(null);
     }
   };
@@ -299,6 +303,16 @@ export default function App() {
   const handleBackFromSalonEdit = () => {
     setEditingSalonId(null);
   };
+
+  useEffect(() => {
+    if (!perfil || isAdminRole(perfil.rol) || !isAdminOnlyPage(currentPage)) {
+      return;
+    }
+
+    setCurrentPage('reservas');
+    setEditingSalonId(null);
+    setReservaHighlightRequest(null);
+  }, [perfil?.rol, currentPage]);
 
   const handleBackToLoginFromRecovery = async () => {
     recoveryFlowActiveRef.current = false;
@@ -514,38 +528,42 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
     return <Login onLoginSuccess={checkSession} authMessage={authFeedbackMessage} />;
   }
 
+  const isAdmin = isAdminRole(perfil.rol);
+  const effectiveCurrentPage = !isAdmin && isAdminOnlyPage(currentPage) ? 'reservas' : currentPage;
+  const renderReservasPage = () => (
+    <Reservas
+      perfil={perfil}
+      onUnsavedChangesChange={setHasUnsavedFormChanges}
+      highlightRequest={reservaHighlightRequest}
+    />
+  );
+
   const renderPage = () => {
     // Si estamos editando un salón, mostrar la página de edición
-    if (editingSalonId !== null && currentPage === 'salones') {
+    if (editingSalonId !== null && effectiveCurrentPage === 'salones') {
       return <SalonEdit salonId={editingSalonId} onBack={handleBackFromSalonEdit} />;
     }
 
-    switch (currentPage) {
+    switch (effectiveCurrentPage) {
       case 'dashboard':
-        return <Dashboard perfil={perfil} />;
+        return isAdmin ? <Dashboard perfil={perfil} /> : renderReservasPage();
       case 'reservas':
-        return (
-          <Reservas
-            perfil={perfil}
-            onUnsavedChangesChange={setHasUnsavedFormChanges}
-            highlightRequest={reservaHighlightRequest}
-          />
-        );
+        return renderReservasPage();
       case 'salones':
         return <Salones perfil={perfil} onEditSalon={handleEditSalon} />;
       case 'servicios':
         return <ServiciosAdicionales perfil={perfil} />;
       case 'usuarios':
-        return perfil.rol === 'ADMIN' ? <Usuarios /> : <Dashboard perfil={perfil} />;
+        return isAdmin ? <Usuarios /> : renderReservasPage();
       default:
-        return <Dashboard perfil={perfil} />;
+        return isAdmin ? <Dashboard perfil={perfil} /> : renderReservasPage();
     }
   };
 
   return (
     <>
       <Layout
-        currentPage={currentPage}
+        currentPage={effectiveCurrentPage}
         onNavigate={handleNavigate}
         perfil={perfil}
         onLogout={handleLogout}

@@ -128,14 +128,17 @@ export function Layout({
   const toastTimeoutRef = useRef<number | null>(null);
   const knownNotificationIdsRef = useRef<Set<number>>(new Set());
 
+  const isAdmin = String(perfil?.rol || "").toUpperCase() === "ADMIN";
   const menuItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ...(isAdmin
+      ? [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }]
+      : []),
     { id: "reservas", label: "Reservas", icon: ListChecks },
     { id: "salones", label: "Salones", icon: Building2 },
     { id: "servicios", label: "Servicios Adicionales", icon: PackagePlus },
   ];
 
-  if (perfil?.rol === "ADMIN") {
+  if (isAdmin) {
     menuItems.push({ id: "usuarios", label: "Usuarios", icon: UserCog });
   }
 

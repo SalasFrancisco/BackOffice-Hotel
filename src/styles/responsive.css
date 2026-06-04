@@ -8,6 +8,26 @@ body {
   overflow-x: hidden;
 }
 
+@keyframes bo-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bo-modal-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 button,
 input,
 select,
@@ -94,12 +114,14 @@ textarea {
 }
 
 .bo-sidebar-desktop {
-  position: relative;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 30;
   display: flex;
   width: 16rem;
   flex-shrink: 0;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
 }
 
 .bo-sidebar-nav {
@@ -117,7 +139,8 @@ textarea {
 .bo-main {
   min-width: 0;
   flex: 1;
-  overflow: auto;
+  margin-left: 16rem;
+  overflow: visible;
 }
 
 .bo-mobile-header,
@@ -148,6 +171,12 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
 }
 
+.bo-service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 18rem);
+  justify-content: start;
+}
+
 .bo-grid-empty {
   grid-column: 1 / -1;
 }
@@ -164,9 +193,227 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.bo-service-card {
+  display: flex;
+  min-height: 11rem;
+  flex-direction: column;
+}
+
+.bo-service-price {
+  margin-top: auto;
+  align-self: flex-start;
+  padding-top: 0.75rem;
+}
+
+.bo-reserva-services-list {
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #f9fafb;
+  padding: 0.625rem;
+}
+
+.bo-reserva-service-category {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.bo-reserva-service-category + .bo-reserva-service-category {
+  margin-top: 0.625rem;
+}
+
+.bo-reserva-service-category-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #f3f4f6;
+  padding: 0.75rem;
+  text-align: left;
+  transition: background-color 0.15s ease;
+}
+
+.bo-reserva-service-category-toggle:hover {
+  background: #e5e7eb;
+}
+
+.bo-reserva-service-category-toggle:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.28);
+}
+
+.bo-reserva-service-category-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.bo-reserva-service-category-title {
+  display: block;
+  color: #111827;
+  font-size: 0.8125rem;
+  line-height: 1.1rem;
+  font-weight: 600;
+}
+
+.bo-reserva-service-category-description {
+  display: block;
+  margin-top: 0.125rem;
+  color: #6b7280;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.bo-reserva-service-category-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.bo-reserva-service-category-count,
+.bo-reserva-service-category-selected {
+  display: inline-flex;
+  min-width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0.125rem 0.45rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+
+.bo-reserva-service-category-count {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.bo-reserva-service-category-selected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.bo-reserva-service-category-icon {
+  width: 1rem;
+  height: 1rem;
+  color: #6b7280;
+  transition: transform 0.15s ease;
+}
+
+.bo-reserva-service-category.is-open .bo-reserva-service-category-icon {
+  transform: rotate(90deg);
+}
+
+.bo-reserva-service-category-content {
+  border-top: 1px solid #e5e7eb;
+  background: #fcfcfd;
+  padding: 0.625rem;
+}
+
+.bo-reserva-service-item {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.75rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.bo-reserva-service-item + .bo-reserva-service-item {
+  margin-top: 0.5rem;
+}
+
+.bo-reserva-service-item:hover {
+  border-color: #d1d5db;
+}
+
+.bo-reserva-service-item.is-selected {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.bo-reserva-service-checkbox {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.bo-reserva-service-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.bo-reserva-service-name {
+  color: #111827;
+  font-size: 0.875rem;
+  line-height: 1.2rem;
+}
+
+.bo-reserva-service-description {
+  margin-top: 0.25rem;
+  color: #4b5563;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+}
+
+.bo-reserva-service-controls {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-left: 1px solid #e5e7eb;
+  padding-left: 0.75rem;
+}
+
+.bo-reserva-service-price {
+  color: #16a34a;
+  font-size: 0.8125rem;
+  line-height: 1rem;
+}
+
+.bo-reserva-service-quantity {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bo-reserva-service-quantity-input {
+  width: 4rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.bo-reserva-service-quantity-input:focus {
+  border-color: transparent;
+  outline: none;
+  box-shadow: 0 0 0 1px #22c55e;
+}
+
+.bo-salon-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.bo-salon-edit-button {
+  margin-top: auto;
+}
+
 .bo-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+.bo-availability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 }
 
 .bo-filter-bar {
@@ -194,6 +441,59 @@ textarea {
   display: block;
 }
 
+.bo-calendar-month-grid {
+  grid-auto-rows: 9.5rem;
+}
+
+.bo-calendar-month-day {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.bo-calendar-month-day-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.bo-calendar-reservas-overlay,
+.bo-reserva-detail-overlay {
+  animation: bo-modal-backdrop-in 0.18s ease-out both;
+}
+
+.bo-calendar-reservas-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.68);
+  padding: 1rem;
+  backdrop-filter: blur(2px);
+}
+
+.bo-calendar-reservas-overlay.is-backgrounded {
+  pointer-events: none;
+}
+
+.bo-calendar-reservas-modal,
+.bo-reserva-detail-modal {
+  animation: bo-modal-content-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: center;
+}
+
+.bo-calendar-reservas-overlay.is-backgrounded .bo-calendar-reservas-modal {
+  filter: blur(1px);
+  transform: scale(0.985);
+}
+
+.bo-reserva-detail-overlay {
+  z-index: 100010;
+}
+
 .bo-form-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -210,6 +510,181 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.bo-date-picker-field {
+  position: relative;
+}
+
+.bo-date-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.bo-date-picker-popover {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.75rem;
+  background: #fff;
+  padding: 1rem;
+  box-shadow: 0 20px 45px rgba(17, 24, 39, 0.18);
+}
+
+.bo-date-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.bo-date-picker-title {
+  color: #111827;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.bo-date-picker-month {
+  color: #4b5563;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-transform: capitalize;
+}
+
+.bo-date-picker-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.bo-date-picker-nav-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #4b5563;
+}
+
+.bo-date-picker-nav-button:hover {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.bo-date-picker-weekdays,
+.bo-date-picker-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.bo-date-picker-weekdays {
+  margin-bottom: 0.25rem;
+  color: #6b7280;
+  font-size: 0.6875rem;
+  text-align: center;
+}
+
+.bo-date-picker-day,
+.bo-date-picker-empty-day {
+  min-height: 4.6rem;
+}
+
+.bo-date-picker-day {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.18rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.35rem;
+  text-align: left;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.bo-date-picker-day:hover,
+.bo-date-picker-day.is-previewed {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.bo-date-picker-day.is-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.bo-date-picker-day-number {
+  color: #111827;
+  font-size: 0.8125rem;
+  line-height: 1rem;
+}
+
+.bo-date-picker-day-status {
+  display: block;
+  overflow: hidden;
+  border-radius: 9999px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.625rem;
+  line-height: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bo-date-picker-day-status.is-available {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.bo-date-picker-day-status.is-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.bo-date-picker-day-status.is-occupied {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.bo-date-picker-day-status.is-neutral {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.bo-date-picker-message,
+.bo-date-picker-summary {
+  margin-top: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  padding: 0.75rem;
+  color: #4b5563;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+}
+
+.bo-date-picker-message.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.bo-date-picker-summary-date {
+  margin-bottom: 0.35rem;
+  color: #111827;
+  font-size: 0.8125rem;
+  line-height: 1rem;
+  text-transform: capitalize;
 }
 
 .bo-mobile-card-grid {
@@ -359,6 +834,7 @@ textarea {
   }
 
   .bo-main {
+    margin-left: 0;
     min-height: calc(100dvh - 4rem);
     overflow: visible;
   }
@@ -400,11 +876,20 @@ textarea {
     display: block;
   }
 
+  .bo-service-grid {
+    grid-template-columns: 1fr;
+  }
+
   .bo-form-grid-2,
   .bo-form-grid-3,
   .bo-date-time-grid,
   .bo-mobile-card-grid {
     grid-template-columns: 1fr;
+  }
+
+  .bo-date-picker-day,
+  .bo-date-picker-empty-day {
+    min-height: 4.25rem;
   }
 
   .bo-form-actions {
@@ -438,6 +923,22 @@ textarea {
   .bo-order-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .bo-reserva-service-category-toggle {
+    align-items: flex-start;
+  }
+
+  .bo-reserva-service-item {
+    flex-wrap: wrap;
+  }
+
+  .bo-reserva-service-controls {
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 0.625rem;
+    padding-left: 0;
   }
 
   .bo-service-category-header button,

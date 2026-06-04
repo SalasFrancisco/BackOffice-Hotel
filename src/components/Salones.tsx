@@ -49,10 +49,11 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       const { data, error: queryError } = await supabase
         .from('salones')
         .select('*')
+        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (queryError) throw queryError;
-      setSalones(data || []);
+      setSalones((data || []).filter((salon) => salon.activo !== false));
     } catch (err: any) {
       console.error('Error loading salones:', err);
       setError(err.message);
@@ -138,7 +139,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       } else {
         const { error: insertError } = await supabase
           .from('salones')
-          .insert([salonData]);
+          .insert([{ ...salonData, activo: true }]);
 
         if (insertError) throw insertError;
         setMessage({ type: 'success', text: 'Salón creado correctamente' });
@@ -162,12 +163,13 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
 
   const confirmDeleteSalon = async () => {
     if (!confirmDelete.salonId) return;
+    const salonId = confirmDelete.salonId;
 
     try {
       const { data: reservasAsociadas, error: reservasError } = await supabase
         .from('reservas')
         .select('id, presupuesto_url')
-        .eq('id_salon', confirmDelete.salonId);
+        .eq('id_salon', salonId);
 
       if (reservasError) throw reservasError;
 
@@ -182,7 +184,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       const { error: deleteError } = await supabase
         .from('salones')
         .update({ activo: false })
-        .eq('id', confirmDelete.salonId);
+        .eq('id', salonId);
 
       if (deleteError) throw deleteError;
 
@@ -190,8 +192,9 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
         ? ` y ${reservasDelSalon.length} reserva(s) asociada(s)`
         : '';
       setMessage({ type: 'success', text: `Salón deshabilitado correctamente${reservasEliminadasText}` });
+      setSalones((prev) => prev.filter((salon) => salon.id !== salonId));
       setConfirmDelete({ open: false, salonId: null });
-      loadSalones();
+      void loadSalones();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error('Error deleting salon:', err);
@@ -261,7 +264,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
           </div>
         ) : (
           salones.map(salon => (
-            <div key={salon.id} className="bo-admin-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div key={salon.id} className="bo-admin-card bo-card-compact bo-salon-card bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <Building2 className="w-6 h-6 text-blue-600" />
@@ -301,7 +304,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
               {canEdit && (
                 <button
                   onClick={() => handleEdit(salon)}
-                  className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  className="bo-salon-edit-button w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Edit className="w-4 h-4" />
                   Editar Salón y Distribuciones

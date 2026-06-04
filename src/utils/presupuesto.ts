@@ -39,6 +39,9 @@ const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
 const SALONES_HEADER_LOGO_URL = 'https://files-p.pxsol.com/5019/company/library/user/134083827848ff026d70b27373fe71d73b64459f1e7.png';
 const LOCAL_LOGO_PATH = `${import.meta.env.BASE_URL}QuintoCente.png`;
 const LOGO_PATH_CANDIDATES = [SALONES_HEADER_LOGO_URL, LOCAL_LOGO_PATH];
+
+const roundCurrencyAmount = (value: number) =>
+  Math.round(value * 100) / 100;
 const TERMINOS_CONDICIONES_TEXT = `
 <b>Valores expresados en dólares, convertibles a pesos según tipo de cambio del día en que se realice el
 depósito según cotización del Banco de la Nación Argentina a tipo vendedor.</b>
@@ -825,6 +828,16 @@ export async function generatePresupuestoDocumento({
 
   if (updateError) {
     console.warn('Presupuesto generado pero no se pudo actualizar la reserva:', updateError);
+  }
+
+  const { error: montoInicialError } = await supabase
+    .from('reservas')
+    .update({ monto_inicial: roundCurrencyAmount((Number(totalSalon) || 0) + totalServicios) })
+    .eq('id', reservaId)
+    .is('monto_inicial', null);
+
+  if (montoInicialError) {
+    console.warn('Presupuesto generado pero no se pudo registrar el monto inicial:', montoInicialError);
   }
 
   return storagePath;

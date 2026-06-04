@@ -53,6 +53,7 @@
       "devDependencies": {
             "@types/node": "^20.10.0",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "supabase": "^2.105.0",
             "vite": "^6.4.1"
       },
       "scripts": {

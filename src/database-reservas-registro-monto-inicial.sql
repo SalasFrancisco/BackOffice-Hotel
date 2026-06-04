@@ -22,11 +22,11 @@ set estado = 'Pendiente validación'
 where estado = 'Pendiente';
 
 update public.reservas
-set estado = 'Validado Pendiente de Seña'
-where estado = 'Validado Pendiente Seña';
+set estado = 'Validado'
+where estado in ('Validado Pendiente Seña', 'Validado Pendiente de Seña');
 
 alter table public.reservas add constraint reservas_estado_check
-  check (estado in ('Pendiente validación','Validado Pendiente de Seña','Confirmado','Pagado','Cancelado'));
+  check (estado in ('Pendiente validación','Validado','Confirmado','Pagado','Cancelado'));
 
 alter table public.reservas drop constraint if exists reservas_no_solape_excl;
 alter table public.reservas add constraint reservas_no_solape_excl
@@ -89,22 +89,22 @@ begin
   end if;
 
   if old.estado = 'Pendiente validación'
-    and new.estado not in ('Validado Pendiente de Seña', 'Confirmado', 'Pagado', 'Cancelado') then
+    and new.estado not in ('Validado', 'Confirmado', 'Pagado', 'Cancelado') then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Pendiente validacion puede pasar a Validado Pendiente de Sena, Confirmado, Pagado o Cancelado.',
+        'Transicion de estado no permitida: %s -> %s. Pendiente validacion puede pasar a Validado, Confirmado, Pagado o Cancelado.',
         old.estado,
         new.estado
       );
   end if;
 
-  if old.estado = 'Validado Pendiente de Seña'
+  if old.estado = 'Validado'
     and new.estado not in ('Confirmado', 'Pagado', 'Cancelado') then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Validado Pendiente de Sena puede pasar a Confirmado, Pagado o Cancelado.',
+        'Transicion de estado no permitida: %s -> %s. Validado puede pasar a Confirmado, Pagado o Cancelado.',
         old.estado,
         new.estado
       );

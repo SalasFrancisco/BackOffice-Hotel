@@ -93,7 +93,7 @@ export type Reserva = {
   fecha_fin: string;
   estado:
     | 'Pendiente validación'
-    | 'Validado Pendiente de Seña'
+    | 'Validado'
     | 'Confirmado'
     | 'Pagado'
     | 'Cancelado';

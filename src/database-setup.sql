@@ -52,7 +52,7 @@ create table if not exists public.reservas (
   id_distribucion bigint references public.distribuciones(id) on delete set null,
   fecha_inicio timestamptz not null,
   fecha_fin timestamptz not null,
-  estado text not null check (estado in ('Pendiente validación','Validado Pendiente de Seña','Confirmado','Pagado','Cancelado')),
+  estado text not null check (estado in ('Pendiente validación','Validado','Confirmado','Pagado','Cancelado')),
   monto numeric(12,2) not null default 0,
   monto_inicial numeric(12,2),
   observaciones text,
@@ -74,7 +74,7 @@ alter table public.reservas add column if not exists cliente_telefono text;
 
 alter table public.reservas drop constraint if exists reservas_estado_check;
 alter table public.reservas add constraint reservas_estado_check
-  check (estado in ('Pendiente validación','Validado Pendiente de Seña','Confirmado','Pagado','Cancelado'));
+  check (estado in ('Pendiente validación','Validado','Confirmado','Pagado','Cancelado'));
 
 -- ============================================
 -- AUDITORÍA DE RESERVAS

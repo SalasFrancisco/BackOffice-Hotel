@@ -5,6 +5,7 @@ node_modules/
 !.env.example
 
 .vercel/
+supabase/.temp/
 build/
 dist/
 docs/

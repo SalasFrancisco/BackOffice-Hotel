@@ -91,7 +91,12 @@ export type Reserva = {
   id_distribucion?: number;
   fecha_inicio: string;
   fecha_fin: string;
-  estado: 'Pendiente' | 'Confirmado' | 'Pagado' | 'Cancelado';
+  estado:
+    | 'Pendiente validación'
+    | 'Validado Pendiente de Seña'
+    | 'Confirmado'
+    | 'Pagado'
+    | 'Cancelado';
   monto: number;
   cantidad_personas: number;
   observaciones?: string;

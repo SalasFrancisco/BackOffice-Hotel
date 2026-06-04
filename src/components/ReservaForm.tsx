@@ -11,6 +11,9 @@ import {
 import { InfoDialog } from './InfoDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
+  RESERVA_ESTADO_BACKOFFICE_INICIAL,
+  RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
+  RESERVA_ESTADOS_BLOQUEANTES,
   getAllowedReservaEstadoTransitions,
   isReservaEstadoTransitionAllowed,
 } from '../utils/reservaEstadoTransitions';
@@ -168,7 +171,7 @@ const calculateSalonBillableDayUnits = ({
 };
 
 const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
-const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(['Confirmado', 'Pagado']);
+const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(RESERVA_ESTADOS_BLOQUEANTES);
 
 type ReservaOverlapComparable = {
   id: number;
@@ -353,12 +356,12 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [fechaFinHora, setFechaFinHora] = useState(
     initialFechaFinParts?.time || '',
   );
-  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || 'Pendiente');
+  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
   const fechaInicioPickerRef = useRef<HTMLInputElement | null>(null);
   const fechaFinPickerRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setEstado(reserva?.estado || 'Pendiente');
+    setEstado(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
   }, [reserva]);
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
@@ -496,7 +499,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     : '';
   const allowedEstadoTransitions = reserva
     ? getAllowedReservaEstadoTransitions(reserva.estado)
-    : ['Pendiente'];
+    : [RESERVA_ESTADO_BACKOFFICE_INICIAL];
 
   useEffect(() => {
     loadInitialData();
@@ -734,9 +737,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     }
 
     if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
-      showWarningDialog(
-        'Transición no permitida. Pendiente solo puede pasar a Confirmado o Cancelado; para pasar a Pagado debe estar Confirmado y Pagado no puede volver a estados anteriores.',
-      );
+      showWarningDialog(RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE);
       return;
     }
 

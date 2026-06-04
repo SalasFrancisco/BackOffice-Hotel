@@ -2,13 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase, Perfil, Reserva, Salon } from '../utils/supabase/client';
 import { AlertCircle, ChevronLeft, ChevronRight, X, CheckCircle2, Wallet, ReceiptText, Building2, BarChart3 } from 'lucide-react';
 import { ReservaModal } from './ReservaModal';
-
-const ESTADO_COLORS = {
-  Pendiente: '#F7C948',
-  Confirmado: '#4C7AF2',
-  Pagado: '#35B679',
-  Cancelado: '#B0B7C3',
-};
+import {
+  getReservaEstados,
+  RESERVA_ESTADO_COLORS,
+  RESERVA_ESTADOS_BLOQUEANTES,
+} from '../utils/reservaEstadoTransitions';
 
 type DashboardProps = {
   perfil: Perfil;
@@ -100,8 +98,9 @@ export function Dashboard({ perfil }: DashboardProps) {
       if (reservasMensualesError) throw reservasMensualesError;
 
       const reservasMensuales = reservasMensualesData || [];
+      const estadosBloqueantes = new Set(RESERVA_ESTADOS_BLOQUEANTES);
       const reservasMensualesCerradas = reservasMensuales.filter(
-        (reservaMensual) => reservaMensual.estado === 'Confirmado' || reservaMensual.estado === 'Pagado',
+        (reservaMensual) => estadosBloqueantes.has(reservaMensual.estado),
       );
 
       const totalSalonesCalc = (salonesData || []).length;
@@ -176,15 +175,14 @@ export function Dashboard({ perfil }: DashboardProps) {
       // KPIs de negocio mensuales (segun mes seleccionado)
       const totalSolicitudesCalc = reservasMensuales.length;
       const totalConfirmadasCalc = reservasMensuales.filter(
-        (reservaMetrica) => reservaMetrica.estado === 'Confirmado' || reservaMetrica.estado === 'Pagado',
+        (reservaMetrica) => estadosBloqueantes.has(reservaMetrica.estado),
       ).length;
       const porcentajeConfirmacionCalc = totalSolicitudesCalc > 0
         ? (totalConfirmadasCalc / totalSolicitudesCalc) * 100
         : 0;
 
-      const estadosConCapital = new Set(['Confirmado', 'Pagado']);
       const reservasConCapital = reservasMensuales.filter((reservaMetrica) =>
-        estadosConCapital.has(reservaMetrica.estado),
+        estadosBloqueantes.has(reservaMetrica.estado),
       );
       const capitalObtenidoCalc = reservasConCapital.reduce(
         (acc, reservaMetrica) => acc + Number(reservaMetrica.monto || 0),
@@ -406,10 +404,9 @@ export function Dashboard({ perfil }: DashboardProps) {
             className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
           >
             <option value="">Todos los estados</option>
-            <option value="Pendiente">Pendiente</option>
-            <option value="Confirmado">Confirmado</option>
-            <option value="Pagado">Pagado</option>
-            <option value="Cancelado">Cancelado</option>
+            {getReservaEstados().map((estado) => (
+              <option key={estado} value={estado}>{estado}</option>
+            ))}
           </select>
 
           {(filterSalon || filterEstado) && (
@@ -469,7 +466,7 @@ export function Dashboard({ perfil }: DashboardProps) {
                               </span>
                               <span
                                 className="flex-shrink-0 rounded-full border border-white"
-                                style={{ backgroundColor: ESTADO_COLORS[reserva.estado], width: '0.65rem', height: '0.65rem' }}
+                                style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado], width: '0.65rem', height: '0.65rem' }}
                               />
                             </div>
                           </button>
@@ -518,7 +515,7 @@ export function Dashboard({ perfil }: DashboardProps) {
                           </div>
                           <span
                             className="mt-1 flex-shrink-0 rounded-full border border-white"
-                            style={{ backgroundColor: ESTADO_COLORS[reserva.estado], width: '0.75rem', height: '0.75rem' }}
+                            style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado], width: '0.75rem', height: '0.75rem' }}
                           />
                         </div>
                       </button>
@@ -532,7 +529,7 @@ export function Dashboard({ perfil }: DashboardProps) {
 
         {/* Legend */}
         <div className="mt-6 flex gap-4 flex-wrap">
-          {Object.entries(ESTADO_COLORS).map(([estado, color]) => (
+          {Object.entries(RESERVA_ESTADO_COLORS).map(([estado, color]) => (
             <div key={estado} className="flex items-center gap-2">
               <div className="w-4 h-4 rounded" style={{ backgroundColor: color }}></div>
               <span className="text-sm text-gray-700">{estado}</span>

@@ -1,4 +1,5 @@
 import { Reserva } from './supabase/client';
+import { isReservaEstadoPendienteGestion } from './reservaEstadoTransitions';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -40,7 +41,7 @@ export const getReservaExpirationWarningInfo = (
   reserva: Pick<Reserva, 'estado' | 'creado_en' | 'actualizado_en'>,
   now: Date = new Date(),
 ): ReservaExpirationWarningInfo | null => {
-  if (reserva.estado !== 'Pendiente') return null;
+  if (!isReservaEstadoPendienteGestion(reserva.estado)) return null;
 
   const baseDate = getReservaExpirationBaseDate(reserva);
   if (!baseDate) return null;
@@ -70,7 +71,7 @@ export const getReservaStartWarningInfo = (
   reserva: Pick<Reserva, 'estado' | 'fecha_inicio'>,
   now: Date = new Date(),
 ): ReservaStartWarningInfo | null => {
-  if (reserva.estado !== 'Pendiente') return null;
+  if (!isReservaEstadoPendienteGestion(reserva.estado)) return null;
 
   const startAt = toValidDate(reserva.fecha_inicio);
   if (!startAt) return null;
@@ -102,14 +103,14 @@ export const getReservaExpirationWarningText = (
   if (!warningInfo) return '';
 
   if (warningInfo.daysRemaining <= 0) {
-    return 'La reserva ya supero el plazo de 7 dias en estado Pendiente y se cancelara automaticamente.';
+    return 'La reserva ya superó el plazo de 7 días en estado pendiente de gestión y se cancelará automáticamente.';
   }
 
   if (warningInfo.daysRemaining === 1) {
-    return `Ultimo dia para confirmar o modificar la reserva antes de su cancelacion automatica por inactividad (${formatDateTime(warningInfo.expiresAt)}).`;
+    return `Último día para confirmar o modificar la reserva antes de su cancelación automática por inactividad (${formatDateTime(warningInfo.expiresAt)}).`;
   }
 
-  return `Quedan ${warningInfo.daysRemaining} dias para confirmar o modificar la reserva antes de su cancelacion automatica por inactividad (${formatDateTime(warningInfo.expiresAt)}).`;
+  return `Quedan ${warningInfo.daysRemaining} días para confirmar o modificar la reserva antes de su cancelación automática por inactividad (${formatDateTime(warningInfo.expiresAt)}).`;
 };
 
 export const getReservaStartWarningText = (
@@ -119,12 +120,12 @@ export const getReservaStartWarningText = (
   if (!warningInfo) return '';
 
   if (warningInfo.daysRemaining <= 0) {
-    return `La fecha de inicio (${formatDateTime(warningInfo.startAt)}) ya fue alcanzada y la reserva se cancelara automaticamente si sigue en estado Pendiente.`;
+    return `La fecha de inicio (${formatDateTime(warningInfo.startAt)}) ya fue alcanzada y la reserva se cancelará automáticamente si sigue en estado pendiente de gestión.`;
   }
 
   if (warningInfo.daysRemaining === 1) {
-    return `Ultimo dia antes de la fecha de inicio (${formatDateTime(warningInfo.startAt)}). Si no se confirma la reserva, se cancelara automaticamente.`;
+    return `Último día antes de la fecha de inicio (${formatDateTime(warningInfo.startAt)}). Si no se confirma la reserva, se cancelará automáticamente.`;
   }
 
-  return `Quedan ${warningInfo.daysRemaining} dias para la fecha de inicio (${formatDateTime(warningInfo.startAt)}). Si llega la fecha y la reserva sigue pendiente, se cancelara automaticamente.`;
+  return `Quedan ${warningInfo.daysRemaining} días para la fecha de inicio (${formatDateTime(warningInfo.startAt)}). Si llega la fecha y la reserva sigue pendiente de gestión, se cancelará automáticamente.`;
 };

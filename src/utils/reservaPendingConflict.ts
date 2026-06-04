@@ -1,3 +1,5 @@
+import { isReservaEstadoPendienteGestion } from './reservaEstadoTransitions';
+
 export type ReservaPendingConflictComparable = {
   id: number;
   id_salon: number;
@@ -11,7 +13,6 @@ type DayRange = {
   endKey: string;
 };
 
-const PENDIENTE_ESTADO = 'Pendiente';
 const CANCELADO_ESTADO = 'Cancelado';
 
 const parseDate = (value: string): Date | null => {
@@ -64,7 +65,7 @@ export const getReservaPendingConflictIds = (
   const conflictIds = reservas
     .filter((item) => item.id !== reserva.id)
     .filter((item) => Number(item.id_salon) === targetSalonId)
-    .filter((item) => item.estado === PENDIENTE_ESTADO)
+    .filter((item) => isReservaEstadoPendienteGestion(item.estado))
     .filter((item) => {
       const itemRange = getDayRange(item.fecha_inicio, item.fecha_fin);
       if (!itemRange) return false;
@@ -78,5 +79,5 @@ export const getReservaPendingConflictIds = (
 export const getReservaPendingConflictText = (conflictIds: number[]): string => {
   if (!conflictIds.length) return '';
   const idsText = conflictIds.map((id) => `#${id}`).join(', ');
-  return `Coincide con reserva(s) pendiente(s) del mismo salon y fecha: ${idsText}.`;
+  return `Coincide con reserva(s) pendiente(s) del mismo salón y fecha: ${idsText}.`;
 };

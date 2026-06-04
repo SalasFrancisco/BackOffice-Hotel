@@ -439,7 +439,13 @@ const resolveSalonDays = (
   return 1;
 };
 
-const RESERVA_BLOCKING_ESTADOS = new Set(["Validado Pendiente Seña", "Confirmado", "Pagado"]);
+const RESERVA_ESTADO_PENDIENTE_VALIDACION = "Pendiente validación";
+const RESERVA_ESTADO_VALIDADO_PENDIENTE_SENA = "Validado Pendiente de Seña";
+const RESERVA_ESTADOS_PENDIENTES_GESTION = [
+  RESERVA_ESTADO_PENDIENTE_VALIDACION,
+  RESERVA_ESTADO_VALIDADO_PENDIENTE_SENA,
+];
+const RESERVA_BLOCKING_ESTADOS = new Set(["Confirmado", "Pagado"]);
 
 type ReservaOverlapComparable = {
   id: number;
@@ -1644,11 +1650,11 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
   const fechaFinLabel = `${formatDate(input.fechaFin)} ${formatTime(input.fechaFin)}`;
 
   return {
-    subject: `Nueva reserva ${reservaLabel} desde Salones - Pendiente`,
+    subject: `Nueva reserva ${reservaLabel} desde Salones - ${RESERVA_ESTADO_PENDIENTE_VALIDACION}`,
     text:
-      "Se registro una nueva solicitud de reserva desde el formulario de Salones.\n\n"
+      "Se registró una nueva solicitud de reserva desde el formulario de Salones.\n\n"
       + `Reserva: ${reservaLabel}\n`
-      + "Estado: Pendiente\n"
+      + `Estado: ${RESERVA_ESTADO_PENDIENTE_VALIDACION}\n`
       + `Cliente: ${clienteNombre}\n`
       + `Email cliente: ${clienteEmail}\n`
       + `Telefono cliente: ${clienteTelefono}\n`
@@ -1658,13 +1664,13 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
       + `Cantidad de personas: ${cantidadPersonas}\n`
       + `Inicio: ${fechaInicioLabel}\n`
       + `Fin: ${fechaFinLabel}\n\n`
-      + "Ingresa al Back Office para revisar y gestionar la reserva.",
+      + "Ingresá al Back Office para revisar y gestionar la reserva.",
     html: `
       <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
         <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
           <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Nueva reserva desde Salones</h1>
           <p style="margin: 0 0 20px; line-height: 1.6;">
-            Se registro una nueva solicitud de reserva en estado <strong>Pendiente</strong>.
+            Se registró una nueva solicitud de reserva en estado <strong>${escapeHtml(RESERVA_ESTADO_PENDIENTE_VALIDACION)}</strong>.
           </p>
           <div style="margin: 0 0 16px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Reserva:</strong> ${escapeHtml(reservaLabel)}</p>
@@ -1679,7 +1685,7 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
             <p style="margin: 0; line-height: 1.5;"><strong>Fin:</strong> ${escapeHtml(fechaFinLabel)}</p>
           </div>
           <p style="margin: 0; line-height: 1.6; color: #475569;">
-            Ingresa al Back Office para revisar y gestionar esta reserva.
+            Ingresá al Back Office para revisar y gestionar esta reserva.
           </p>
         </div>
       </div>
@@ -3301,7 +3307,7 @@ const processReservaVencimientoHandler = async (c: any) => {
     const { data: reservasPendientes, error: reservasError } = await supabaseAdmin
       .from("reservas")
       .select("id, cliente_nombre, estado, fecha_inicio, creado_en, actualizado_en")
-      .eq("estado", "Pendiente");
+      .in("estado", RESERVA_ESTADOS_PENDIENTES_GESTION);
 
     if (reservasError) {
       return c.json({ error: reservasError.message }, 500);
@@ -3358,6 +3364,7 @@ const processReservaVencimientoHandler = async (c: any) => {
         reason: "inicio_evento" | "inactividad_7_dias";
         cycleKey: string;
         clienteNombre: string;
+        estado: string;
       }
     >();
 
@@ -3418,6 +3425,7 @@ const processReservaVencimientoHandler = async (c: any) => {
           reason: "inicio_evento",
           cycleKey: startCycleKey,
           clienteNombre,
+          estado: String(reserva.estado || ""),
         });
         continue;
       }
@@ -3427,6 +3435,7 @@ const processReservaVencimientoHandler = async (c: any) => {
           reason: "inactividad_7_dias",
           cycleKey: inactivityCycleKey,
           clienteNombre,
+          estado: String(reserva.estado || ""),
         });
         continue;
       }
@@ -3467,7 +3476,7 @@ const processReservaVencimientoHandler = async (c: any) => {
               cycle_key: inactivityCycleKey,
               regla_dias: RESERVA_AUTO_CANCEL_DAYS,
               regla_tipo: "inactividad",
-              estado: "Pendiente",
+              estado: reserva.estado,
             },
           });
         }
@@ -3492,8 +3501,8 @@ const processReservaVencimientoHandler = async (c: any) => {
             ? `Reserva #${reserva.id}: último día antes de la fecha de inicio`
             : `Reserva #${reserva.id}: inicia en ${startDaysRemaining} días y sigue pendiente`;
           const message = startDaysRemaining === 1
-            ? `Último día para confirmar la reserva #${reserva.id} de ${clienteNombre}. Si llega la fecha de inicio en estado Pendiente, se cancelará automáticamente.`
-            : `La reserva #${reserva.id} de ${clienteNombre} inicia en ${startDaysRemaining} días y sigue pendiente. Si llega la fecha de inicio sin confirmarse, se cancelará automáticamente.`;
+            ? `Último día para confirmar la reserva #${reserva.id} de ${clienteNombre}. Si llega la fecha de inicio en estado pendiente de gestión, se cancelará automáticamente.`
+            : `La reserva #${reserva.id} de ${clienteNombre} inicia en ${startDaysRemaining} días y sigue pendiente de gestión. Si llega la fecha de inicio sin confirmarse, se cancelará automáticamente.`;
 
           warningNotificationsToInsert.push({
             tipo: "ESTADO_CAMBIADO",
@@ -3506,7 +3515,7 @@ const processReservaVencimientoHandler = async (c: any) => {
               dias_restantes: startDaysRemaining,
               cycle_key: startCycleKey,
               regla_tipo: "fecha_inicio",
-              estado: "Pendiente",
+              estado: reserva.estado,
             },
           });
         }
@@ -3532,7 +3541,7 @@ const processReservaVencimientoHandler = async (c: any) => {
         .from("reservas")
         .update({ estado: "Cancelado" })
         .in("id", reservasToCancel)
-        .eq("estado", "Pendiente")
+        .in("estado", RESERVA_ESTADOS_PENDIENTES_GESTION)
         .select("id, cliente_nombre");
 
       if (cancelError) {
@@ -3565,8 +3574,8 @@ const processReservaVencimientoHandler = async (c: any) => {
 
         const clienteNombre = cancelCandidate.clienteNombre;
         const cancellationMessage = cancelCandidate.reason === "inicio_evento"
-          ? `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente porque llegó su fecha de inicio y continuaba en estado Pendiente.`
-          : `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente por superar ${RESERVA_AUTO_CANCEL_DAYS} días en estado Pendiente sin confirmación ni modificaciones.`;
+          ? `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente porque llegó su fecha de inicio y continuaba en estado ${cancelCandidate.estado || "pendiente de gestión"}.`
+          : `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente por superar ${RESERVA_AUTO_CANCEL_DAYS} días en estado ${cancelCandidate.estado || "pendiente de gestión"} sin confirmación ni modificaciones.`;
 
         autoCancelNotificationsToInsert.push({
           tipo: "ESTADO_CAMBIADO",
@@ -3837,7 +3846,7 @@ const publicReservaHandler = async (c: any) => {
       {
         id: 0,
         id_salon: salonData.id,
-        estado: "Pendiente",
+        estado: RESERVA_ESTADO_PENDIENTE_VALIDACION,
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
       },
@@ -3872,7 +3881,7 @@ const publicReservaHandler = async (c: any) => {
       id_distribucion: distribucionData?.id ?? null,
       fecha_inicio: fechaInicio,
       fecha_fin: fechaFin,
-      estado: "Pendiente",
+      estado: RESERVA_ESTADO_PENDIENTE_VALIDACION,
       monto: salonTotal,
       cantidad_personas: totalPersonas,
       observaciones: observacionesText,
@@ -3893,7 +3902,7 @@ const publicReservaHandler = async (c: any) => {
     await registerPublicReservaNotification(supabaseAdmin, {
       reservaId: reservaData.id,
       clienteNombre: (nombre || "Sin nombre").trim() || "Sin nombre",
-      estado: "Pendiente",
+      estado: RESERVA_ESTADO_PENDIENTE_VALIDACION,
       salonId: salonData.id,
     });
 

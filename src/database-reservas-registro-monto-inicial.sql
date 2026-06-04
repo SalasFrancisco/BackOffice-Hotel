@@ -14,14 +14,24 @@ alter table public.reservas
 alter table public.reservas
   add column if not exists rango tstzrange generated always as (tstzrange(fecha_inicio, fecha_fin, '[)')) stored;
 
+drop trigger if exists reservas_validate_estado_transition on public.reservas;
+
 alter table public.reservas drop constraint if exists reservas_estado_check;
+update public.reservas
+set estado = 'Pendiente validación'
+where estado = 'Pendiente';
+
+update public.reservas
+set estado = 'Validado Pendiente de Seña'
+where estado = 'Validado Pendiente Seña';
+
 alter table public.reservas add constraint reservas_estado_check
-  check (estado in ('Pendiente','Validado Pendiente Seña','Confirmado','Pagado','Cancelado'));
+  check (estado in ('Pendiente validación','Validado Pendiente de Seña','Confirmado','Pagado','Cancelado'));
 
 alter table public.reservas drop constraint if exists reservas_no_solape_excl;
 alter table public.reservas add constraint reservas_no_solape_excl
   exclude using gist (id_salon with =, rango with &&)
-  where (estado in ('Validado Pendiente Seña','Confirmado','Pagado'));
+  where (estado in ('Confirmado','Pagado'));
 
 drop trigger if exists reservas_block_locked_overlap on public.reservas;
 drop function if exists public.prevent_reserva_overlap_with_locked_reservas();
@@ -41,7 +51,7 @@ begin
     where r.id <> coalesce(new.id, -1)
       and r.id_salon = new.id_salon
       and tstzrange(r.fecha_inicio, r.fecha_fin, '[)') && tstzrange(new.fecha_inicio, new.fecha_fin, '[)')
-      and r.estado in ('Validado Pendiente Seña', 'Confirmado', 'Pagado')
+      and r.estado in ('Confirmado', 'Pagado')
   ) then
     raise exception using
       errcode = '23P01',
@@ -68,41 +78,33 @@ begin
     return new;
   end if;
 
-  if old.estado = 'Pagado' then
+  if old.estado in ('Pagado', 'Cancelado') then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Una reserva en Pagado no puede volver a estados anteriores.',
+        'Transicion de estado no permitida: %s -> %s. Pagado y Cancelado son estados finales.',
         old.estado,
         new.estado
       );
   end if;
 
-  if old.estado = 'Cancelado' then
+  if old.estado = 'Pendiente validación'
+    and new.estado not in ('Validado Pendiente de Seña', 'Confirmado', 'Pagado', 'Cancelado') then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Una reserva cancelada no puede volver a estados anteriores.',
+        'Transicion de estado no permitida: %s -> %s. Pendiente validacion puede pasar a Validado Pendiente de Sena, Confirmado, Pagado o Cancelado.',
         old.estado,
         new.estado
       );
   end if;
 
-  if old.estado = 'Pendiente' and new.estado not in ('Validado Pendiente Seña', 'Confirmado', 'Cancelado') then
+  if old.estado = 'Validado Pendiente de Seña'
+    and new.estado not in ('Confirmado', 'Pagado', 'Cancelado') then
     raise exception using
       errcode = '23514',
       message = format(
-        'Transicion de estado no permitida: %s -> %s. Una reserva pendiente solo puede pasar a Validado Pendiente Seña, Confirmado o Cancelado.',
-        old.estado,
-        new.estado
-      );
-  end if;
-
-  if old.estado = 'Validado Pendiente Seña' and new.estado not in ('Confirmado', 'Cancelado') then
-    raise exception using
-      errcode = '23514',
-      message = format(
-        'Transicion de estado no permitida: %s -> %s. Una reserva validada pendiente de seña solo puede pasar a Confirmado o Cancelado.',
+        'Transicion de estado no permitida: %s -> %s. Validado Pendiente de Sena puede pasar a Confirmado, Pagado o Cancelado.',
         old.estado,
         new.estado
       );
@@ -122,7 +124,6 @@ begin
 end;
 $$;
 
-drop trigger if exists reservas_validate_estado_transition on public.reservas;
 create trigger reservas_validate_estado_transition
 before update on public.reservas
 for each row

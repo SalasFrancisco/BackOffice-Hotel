@@ -17,6 +17,11 @@ import {
   getReservaExpirationWarningText,
   getReservaStartWarningText,
 } from '../utils/reservaExpiration';
+import {
+  getReservaEstados,
+  RESERVA_ESTADO_COLORS,
+  RESERVA_ESTADOS_PENDIENTES_GESTION,
+} from '../utils/reservaEstadoTransitions';
 
 type ReservasProps = {
   perfil: Perfil;
@@ -29,14 +34,6 @@ type ReservasProps = {
 
 type SortKey = 'id' | 'cliente' | 'registradaPor' | 'salon' | 'fechaInicio' | 'fechaFin' | 'estado' | 'montoInicial' | 'monto';
 type SortDirection = 'asc' | 'desc';
-
-const ESTADO_COLORS = {
-  Pendiente: '#F7C948',
-  'Validado Pendiente Seña': '#8B5CF6',
-  Confirmado: '#4C7AF2',
-  Pagado: '#35B679',
-  Cancelado: '#B0B7C3',
-};
 
 const getReservaServiciosTotal = (reserva: Reserva) =>
   (reserva.reserva_servicios || []).reduce((acc, item) => {
@@ -152,7 +149,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         supabase
           .from('reservas')
           .select('id, id_salon, estado, fecha_inicio, fecha_fin')
-          .eq('estado', 'Pendiente'),
+          .in('estado', RESERVA_ESTADOS_PENDIENTES_GESTION),
       ]);
 
       if (queryError) throw queryError;
@@ -635,11 +632,9 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
         >
           <option value="">Todos los estados</option>
-          <option value="Pendiente">Pendiente</option>
-          <option value="Validado Pendiente Seña">Validado Pendiente Seña</option>
-          <option value="Confirmado">Confirmado</option>
-          <option value="Pagado">Pagado</option>
-          <option value="Cancelado">Cancelado</option>
+          {getReservaEstados().map((estado) => (
+            <option key={estado} value={estado}>{estado}</option>
+          ))}
         </select>
       </div>
 
@@ -803,7 +798,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                         <td className="px-6 py-4">
                           <span
                             className="inline-block px-3 py-1 rounded-full text-xs text-white"
-                            style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
+                            style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
                           >
                             {reserva.estado}
                           </span>
@@ -985,7 +980,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   </div>
                   <span
                     className="inline-block px-3 py-1 rounded-full text-xs text-white"
-                    style={{ backgroundColor: ESTADO_COLORS[reserva.estado] }}
+                    style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
                   >
                     {reserva.estado}
                   </span>

@@ -2,16 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Perfil, Reserva, Salon, supabase } from '../utils/supabase/client';
 import { ReservaModal } from './ReservaModal';
-
-const ESTADO_COLORS = {
-  Pendiente: '#F7C948',
-  'Validado Pendiente Seña': '#8B5CF6',
-  Confirmado: '#4C7AF2',
-  Pagado: '#35B679',
-};
+import {
+  getReservaEstados,
+  RESERVA_ESTADO_CANCELADO,
+  RESERVA_ESTADO_COLORS,
+} from '../utils/reservaEstadoTransitions';
 
 const getEstadoColor = (estado: Reserva['estado']) =>
-  ESTADO_COLORS[estado as keyof typeof ESTADO_COLORS] || '#B0B7C3';
+  RESERVA_ESTADO_COLORS[estado] || '#B0B7C3';
 
 type ReservaCalendarProps = {
   perfil: Perfil;
@@ -261,10 +259,11 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
           className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
         >
           <option value="">Todos los estados</option>
-          <option value="Pendiente">Pendiente</option>
-          <option value="Validado Pendiente Seña">Validado Pendiente Seña</option>
-          <option value="Confirmado">Confirmado</option>
-          <option value="Pagado">Pagado</option>
+          {getReservaEstados()
+            .filter((estado) => estado !== RESERVA_ESTADO_CANCELADO)
+            .map((estado) => (
+              <option key={estado} value={estado}>{estado}</option>
+            ))}
         </select>
 
         {(filterSalon || filterEstado) && (
@@ -390,7 +389,9 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
       </div>
 
       <div className="mt-6 flex gap-4 flex-wrap">
-        {Object.entries(ESTADO_COLORS).map(([estado, color]) => (
+        {Object.entries(RESERVA_ESTADO_COLORS)
+          .filter(([estado]) => estado !== RESERVA_ESTADO_CANCELADO)
+          .map(([estado, color]) => (
           <div key={estado} className="flex items-center gap-2">
             <div className="w-4 h-4 rounded" style={{ backgroundColor: color }} />
             <span className="text-sm text-gray-700">{estado}</span>

@@ -11,7 +11,11 @@ import {
 import { InfoDialog } from './InfoDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
+  RESERVA_ESTADO_BACKOFFICE_INICIAL,
+  RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
+  RESERVA_ESTADOS_BLOQUEANTES,
   getAllowedReservaEstadoTransitions,
+  isReservaEstadoPendienteGestion,
   isReservaEstadoTransitionAllowed,
 } from '../utils/reservaEstadoTransitions';
 
@@ -161,8 +165,7 @@ const calculateSalonBillableDayUnits = ({
 };
 
 const HOTEL_TIME_ZONE = 'America/Argentina/Cordoba';
-const BACKOFFICE_INITIAL_ESTADO: Reserva['estado'] = 'Validado Pendiente Seña';
-const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(['Validado Pendiente Seña', 'Confirmado', 'Pagado']);
+const ESTADOS_BLOQUEANTES = new Set<Reserva['estado']>(RESERVA_ESTADOS_BLOQUEANTES);
 
 type ReservaOverlapComparable = {
   id: number;
@@ -398,10 +401,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [fechaFinHora, setFechaFinHora] = useState(
     initialFechaFinParts?.time || '',
   );
-  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || BACKOFFICE_INITIAL_ESTADO);
+  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
 
   useEffect(() => {
-    setEstado(reserva?.estado || BACKOFFICE_INITIAL_ESTADO);
+    setEstado(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
   }, [reserva]);
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
@@ -567,7 +570,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     : '';
   const allowedEstadoTransitions = reserva
     ? getAllowedReservaEstadoTransitions(reserva.estado)
-    : [BACKOFFICE_INITIAL_ESTADO];
+    : [RESERVA_ESTADO_BACKOFFICE_INICIAL];
 
   useEffect(() => {
     loadInitialData();
@@ -821,7 +824,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             item.fecha_fin,
           ));
         const hasBlockingReserva = overlappingReservas.some((item) => ESTADOS_BLOQUEANTES.has(item.estado));
-        const hasPendingReserva = overlappingReservas.some((item) => item.estado === 'Pendiente');
+        const hasPendingReserva = overlappingReservas.some((item) => isReservaEstadoPendienteGestion(item.estado));
 
         if (hasBlockingReserva) {
           summary.occupied.push(salon);
@@ -1107,9 +1110,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     }
 
     if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
-      showWarningDialog(
-        'Transicion de estado no permitida para la reserva.',
-      );
+      showWarningDialog(RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE);
       return;
     }
 

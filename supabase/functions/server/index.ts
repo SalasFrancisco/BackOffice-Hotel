@@ -1351,19 +1351,58 @@ function getRequestOrigin(c: any): string | null {
   return null;
 }
 
+function isLocalhostUrl(url: URL) {
+  return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+}
+
+function toPasswordRecoveryUrl(value?: string | null) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("recovery", "1");
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function getConfiguredPasswordRecoveryRedirectUrl() {
+  const configuredUrl = toPasswordRecoveryUrl(Deno.env.get("PASSWORD_RECOVERY_REDIRECT_URL"));
+  if (configuredUrl && !isLocalhostUrl(configuredUrl)) {
+    return configuredUrl.toString();
+  }
+
+  for (const origin of ALLOWED_ORIGINS) {
+    const allowedUrl = toPasswordRecoveryUrl(origin);
+    if (allowedUrl && !isLocalhostUrl(allowedUrl)) {
+      return allowedUrl.toString();
+    }
+  }
+
+  return null;
+}
+
 function buildPasswordRecoveryRedirectUrl(c: any, requestedRedirectTo: unknown): string | null {
   const requestOrigin = getRequestOrigin(c);
 
   if (typeof requestedRedirectTo === "string" && requestedRedirectTo.trim()) {
     try {
       const redirectUrl = new URL(requestedRedirectTo);
-      if (!requestOrigin || redirectUrl.origin === requestOrigin) {
+      if (!isLocalhostUrl(redirectUrl) && (!requestOrigin || redirectUrl.origin === requestOrigin)) {
         redirectUrl.searchParams.set("recovery", "1");
         return redirectUrl.toString();
       }
     } catch {
       // ignore malformed redirect URL and fall back to the request origin
     }
+  }
+
+  const configuredRedirectUrl = getConfiguredPasswordRecoveryRedirectUrl();
+  if (configuredRedirectUrl) {
+    return configuredRedirectUrl;
   }
 
   if (!requestOrigin) {

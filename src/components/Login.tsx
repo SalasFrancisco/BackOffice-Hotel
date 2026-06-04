@@ -18,6 +18,7 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const [recoverySent, setRecoverySent] = useState(false);
+  const visibleAuthMessage = authMessage?.text === error ? null : authMessage;
 
   const parseServerResponse = async (response: Response) => {
     const text = await response.text();
@@ -251,21 +252,21 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
             <p className="text-gray-600">Sistema de Gestión de Reservas</p>
           </div>
 
-          {authMessage && (
+          {visibleAuthMessage && (
             <div
               className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
-                authMessage.type === 'success'
+                visibleAuthMessage.type === 'success'
                   ? 'bg-green-50 border border-green-200'
                   : 'bg-red-50 border border-red-200'
               }`}
             >
-              {authMessage.type === 'success' ? (
+              {visibleAuthMessage.type === 'success' ? (
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
               ) : (
                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
               )}
-              <p className={`text-sm ${authMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-                {authMessage.text}
+              <p className={`text-sm ${visibleAuthMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+                {visibleAuthMessage.text}
               </p>
             </div>
           )}

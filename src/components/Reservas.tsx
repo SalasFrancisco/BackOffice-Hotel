@@ -812,21 +812,21 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                     {renderSortIcon('estado')}
                   </button>
                 </th>
-                <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs text-gray-600 uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort('montoInicial')}
-                    className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
+                    className="inline-flex w-full items-center justify-end gap-1 hover:text-gray-900 transition-colors"
                   >
                     Monto inicial
                     {renderSortIcon('montoInicial')}
                   </button>
                 </th>
-                <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs text-gray-600 uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort('monto')}
-                    className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors"
+                    className="inline-flex w-full items-center justify-end gap-1 hover:text-gray-900 transition-colors"
                   >
                     Monto Total
                     {renderSortIcon('monto')}
@@ -896,13 +896,13 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                         <td className="px-6 py-4">
                           {renderEstadoControl(reserva)}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
+                        <td className="px-6 py-4 text-right text-sm text-gray-900">
                           {montoInicial === null
                             ? 'Sin presupuesto'
                             : `$${montoInicial.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          <div>
+                        <td className="px-6 py-4 text-right text-sm text-gray-900">
+                          <div className="text-right">
                             <div className="font-medium text-gray-900">
                               ${totalReserva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                             </div>

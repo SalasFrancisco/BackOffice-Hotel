@@ -411,6 +411,22 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
+.bo-dashboard-analytics-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 1rem;
+}
+
+.bo-dashboard-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.bo-dashboard-chart-wide {
+  grid-column: 1 / -1;
+}
+
 .bo-availability-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
@@ -784,6 +800,14 @@ textarea {
 @media (max-width: 1023px) {
   .bo-page {
     padding: 1.5rem;
+  }
+
+  .bo-dashboard-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bo-dashboard-chart-wide {
+    grid-column: auto;
   }
 }
 

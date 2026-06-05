@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AlertCircle, BarChart3, Building2, CheckCircle2, ReceiptText, Wallet } from 'lucide-react';
-import { Perfil, Reserva, supabase } from '../utils/supabase/client';
+import { Perfil, Reserva, Salon, supabase } from '../utils/supabase/client';
+
+const DashboardAnalytics = lazy(() =>
+  import('./DashboardAnalytics').then((module) => ({
+    default: module.DashboardAnalytics,
+  })),
+);
 
 type DashboardProps = {
   perfil: Perfil;
@@ -36,6 +42,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
   const [porcentajeFacturacionMensual, setPorcentajeFacturacionMensual] = useState(0);
   const [facturacionMensualActual, setFacturacionMensualActual] = useState(0);
   const [facturacionMensualPotencial, setFacturacionMensualPotencial] = useState(0);
+  const [salones, setSalones] = useState<Salon[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -151,6 +158,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
         setPorcentajeFacturacionMensual(porcentajeFacturacionMensualCalc);
         setFacturacionMensualActual(facturacionMensualActualCalc);
         setFacturacionMensualPotencial(facturacionMensualPotencialCalc);
+        setSalones(salonesActivos);
       } catch (err: any) {
         console.error('Error loading dashboard:', err);
         setError(err?.message || 'No se pudo cargar el dashboard.');
@@ -202,7 +210,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           </div>
           <p className="text-gray-600 text-sm mb-1">Reservas Confirmadas / Solicitadas (Mes)</p>
           <p className="text-3xl text-gray-900">{totalConfirmadas} / {totalSolicitudes}</p>
-          <p className="text-sm text-blue-700 mt-1">{porcentajeConfirmacion.toFixed(1)}% de conversion</p>
+          <p className="text-sm text-blue-700 mt-1">{porcentajeConfirmacion.toFixed(1)}% de conversión</p>
         </div>
 
         <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -231,10 +239,10 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
               <Building2 className="w-6 h-6 text-amber-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Ocupacion Mensual de Salones</p>
+          <p className="text-gray-600 text-sm mb-1">Ocupación Mensual de Salones</p>
           <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
           <p className="text-sm text-amber-700 mt-1">
-            {salonesOcupadosMensual} / {totalSalonesMensual} dias de todos los salones ocupados
+            {salonesOcupadosMensual} / {totalSalonesMensual} días de todos los salones ocupados
           </p>
         </div>
 
@@ -244,13 +252,24 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
               <BarChart3 className="w-6 h-6 text-cyan-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Facturacion Mensual vs Potencial</p>
+          <p className="text-gray-600 text-sm mb-1">Facturación Mensual vs Potencial</p>
           <p className="text-3xl text-gray-900">{porcentajeFacturacionMensual.toFixed(1)}%</p>
           <p className="text-sm text-cyan-700 mt-1">
             {formatCurrency(facturacionMensualActual)} / {formatCurrency(facturacionMensualPotencial)}
           </p>
         </div>
       </div>
+
+      <Suspense
+        fallback={
+          <div className="mt-8 space-y-4">
+            <div className="h-7 w-48 animate-pulse rounded bg-gray-200" />
+            <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
+          </div>
+        }
+      >
+        <DashboardAnalytics salones={salones} />
+      </Suspense>
     </div>
   );
 }

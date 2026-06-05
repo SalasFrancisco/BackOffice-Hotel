@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send, History } from 'lucide-react';
+import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send, History, Download } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { ReservaCalendar } from './ReservaCalendar';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -55,6 +55,21 @@ const getReservaMontoInicial = (reserva: Reserva) => {
 
   const value = Number(reserva.monto_inicial);
   return Number.isFinite(value) ? value : null;
+};
+
+const escapeCsvCell = (value: unknown) => {
+  const rawValue = value === null || value === undefined ? '' : String(value);
+  const safeValue = /^[=+\-@]/.test(rawValue.trimStart()) ? `'${rawValue}` : rawValue;
+  return `"${safeValue.replace(/"/g, '""')}"`;
+};
+
+const formatCsvAmount = (value: number | null) =>
+  value === null ? '' : value.toFixed(2).replace('.', ',');
+
+const formatCsvDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
 };
 
 export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: ReservasProps) {
@@ -144,6 +159,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           reserva_servicios(
             cantidad,
             servicio:servicios(
+              nombre,
               precio
             )
           )
@@ -577,6 +593,89 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     return sortDirection === 'asc' ? compareResult : -compareResult;
   });
 
+  const handleExportReservas = () => {
+    if (sortedReservas.length === 0) {
+      showTemporaryMessage('error', 'No hay reservas para exportar.');
+      return;
+    }
+
+    const headers = [
+      'ID reserva',
+      'Cliente',
+      'Email',
+      'Teléfono',
+      'Registrada por',
+      'Salón',
+      'Distribución',
+      'Fecha inicio',
+      'Fecha fin',
+      'Estado',
+      'Cantidad de personas',
+      'Monto inicial',
+      'Monto salón',
+      'Servicios',
+      'Monto servicios',
+      'Monto total',
+      'Observaciones',
+      'Fecha de creación',
+    ];
+
+    const rows = sortedReservas.map((reserva) => {
+      const servicios = (reserva.reserva_servicios || [])
+        .map((item) => {
+          const nombre = item.servicio?.nombre || `Servicio #${item.id_servicio || ''}`;
+          return `${nombre} x${Number(item.cantidad) || 0}`;
+        })
+        .join(' | ');
+      const montoSalon = Number(reserva.monto) || 0;
+      const montoServicios = getReservaServiciosTotal(reserva);
+
+      return [
+        reserva.id,
+        reserva.cliente_nombre || '',
+        reserva.cliente_email || '',
+        reserva.cliente_telefono || '',
+        getReservaRegistradaPor(reserva),
+        reserva.salon?.nombre || '',
+        reserva.distribucion?.nombre || '',
+        formatCsvDate(reserva.fecha_inicio),
+        formatCsvDate(reserva.fecha_fin),
+        reserva.estado,
+        reserva.cantidad_personas,
+        formatCsvAmount(getReservaMontoInicial(reserva)),
+        formatCsvAmount(montoSalon),
+        servicios,
+        formatCsvAmount(montoServicios),
+        formatCsvAmount(montoSalon + montoServicios),
+        reserva.observaciones || '',
+        formatCsvDate(reserva.creado_en),
+      ];
+    });
+
+    const csvContent = [
+      headers.map(escapeCsvCell).join(';'),
+      ...rows.map((row) => row.map(escapeCsvCell).join(';')),
+    ].join('\r\n');
+    const blob = new Blob([`\uFEFF${csvContent}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const exportDate = new Date().toISOString().slice(0, 10);
+
+    link.href = downloadUrl;
+    link.download = `reservas-${exportDate}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(downloadUrl);
+
+    showTemporaryMessage(
+      'success',
+      `${sortedReservas.length} reserva(s) exportada(s) correctamente.`,
+    );
+  };
+
   const defaultDirectionByColumn = (column: SortKey): SortDirection => (
     column === 'id'
     || column === 'fechaInicio'
@@ -651,13 +750,26 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     <div className="bo-page">
       <div className="bo-page-header mb-6">
         <h2 className="text-gray-900">Gestión de Reservas</h2>
-        <button
-          onClick={handleCreateNew}
-          className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Nueva Reserva
-        </button>
+        <div className="bo-page-actions flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={handleExportReservas}
+            disabled={loading || sortedReservas.length === 0}
+            className="bo-mobile-full inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Exportar la lista visible en formato CSV compatible con Excel y Power BI"
+          >
+            <Download className="h-5 w-5" />
+            Exportar CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleCreateNew}
+            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            Nueva Reserva
+          </button>
+        </div>
       </div>
 
       {message && (

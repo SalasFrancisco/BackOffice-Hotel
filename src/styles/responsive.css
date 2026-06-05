@@ -723,7 +723,8 @@ textarea {
   overflow-y: auto;
 }
 
-.bo-dialog-content.bo-reserva-export-dialog {
+.bo-dialog-content.bo-reserva-export-dialog,
+.bo-dialog-content.bo-reserva-compact-dialog {
   width: min(26rem, calc(100vw - 2rem));
   max-width: min(26rem, calc(100vw - 2rem));
 }
@@ -971,7 +972,8 @@ textarea {
     max-height: calc(100dvh - 1rem);
   }
 
-  .bo-dialog-content.bo-reserva-export-dialog {
+  .bo-dialog-content.bo-reserva-export-dialog,
+  .bo-dialog-content.bo-reserva-compact-dialog {
     width: min(26rem, calc(100vw - 1rem));
     max-width: min(26rem, calc(100vw - 1rem));
   }

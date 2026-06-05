@@ -89,7 +89,7 @@ export function ReservaEstadoHistorialModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-2xl">
+      <DialogContent className="bo-reserva-compact-dialog max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Historial de estados</DialogTitle>
           <DialogDescription>

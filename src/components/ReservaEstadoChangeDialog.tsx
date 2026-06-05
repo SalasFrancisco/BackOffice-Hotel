@@ -33,7 +33,7 @@ export function ReservaEstadoChangeDialog({
 }: ReservaEstadoChangeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !loading && onOpenChange(nextOpen)}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="bo-reserva-compact-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cambiar estado de la reserva</DialogTitle>
           <DialogDescription>

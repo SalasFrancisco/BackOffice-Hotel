@@ -8,6 +8,10 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
 import { ReservaEstadoChangeDialog } from './ReservaEstadoChangeDialog';
 import { ReservaEstadoHistorialModal } from './ReservaEstadoHistorialModal';
+import {
+  ReservaExportDialog,
+  type ReservaExportFilters,
+} from './ReservaExportDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import {
@@ -72,6 +76,63 @@ const formatCsvDate = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 };
 
+const parseLocalDate = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const getExportDateRange = (filters: ReservaExportFilters) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (filters.period === 'last30') {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 29);
+    return { start, endExclusive: tomorrow, fileSuffix: 'ultimos-30-dias' };
+  }
+
+  if (filters.period === 'currentMonth') {
+    return {
+      start: new Date(today.getFullYear(), today.getMonth(), 1),
+      endExclusive: new Date(today.getFullYear(), today.getMonth() + 1, 1),
+      fileSuffix: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`,
+    };
+  }
+
+  if (filters.period === 'specificMonth') {
+    const [year, month] = filters.month.split('-').map(Number);
+    return {
+      start: new Date(year, month - 1, 1),
+      endExclusive: new Date(year, month, 1),
+      fileSuffix: filters.month,
+    };
+  }
+
+  if (filters.period === 'dateRange') {
+    const endExclusive = parseLocalDate(filters.dateTo);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    return {
+      start: parseLocalDate(filters.dateFrom),
+      endExclusive,
+      fileSuffix: `${filters.dateFrom}-a-${filters.dateTo}`,
+    };
+  }
+
+  if (filters.period === 'last12Months') {
+    const start = new Date(today);
+    start.setFullYear(start.getFullYear() - 1);
+    return { start, endExclusive: tomorrow, fileSuffix: 'ultimos-12-meses' };
+  }
+
+  return {
+    start: null,
+    endExclusive: null,
+    fileSuffix: 'todas',
+  };
+};
+
 export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: ReservasProps) {
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
@@ -111,6 +172,9 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [estadoChangeDetalle, setEstadoChangeDetalle] = useState('');
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null);
   const [historialReserva, setHistorialReserva] = useState<Reserva | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportingReservas, setExportingReservas] = useState(false);
+  const [exportError, setExportError] = useState('');
   const highlightTimeoutRef = useRef<number | null>(null);
   const isAdmin = perfil.rol === 'ADMIN';
 
@@ -157,6 +221,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           salon:salones(*),
           distribucion:distribuciones(*),
           reserva_servicios(
+            id_servicio,
             cantidad,
             servicio:servicios(
               nombre,
@@ -593,12 +658,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     return sortDirection === 'asc' ? compareResult : -compareResult;
   });
 
-  const handleExportReservas = () => {
-    if (sortedReservas.length === 0) {
-      showTemporaryMessage('error', 'No hay reservas para exportar.');
-      return;
-    }
-
+  const handleExportReservas = async (filters: ReservaExportFilters) => {
     const headers = [
       'ID reserva',
       'Cliente',
@@ -620,60 +680,147 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       'Fecha de creación',
     ];
 
-    const rows = sortedReservas.map((reserva) => {
-      const servicios = (reserva.reserva_servicios || [])
-        .map((item) => {
-          const nombre = item.servicio?.nombre || `Servicio #${item.id_servicio || ''}`;
-          return `${nombre} x${Number(item.cantidad) || 0}`;
-        })
-        .join(' | ');
-      const montoSalon = Number(reserva.monto) || 0;
-      const montoServicios = getReservaServiciosTotal(reserva);
+    try {
+      setExportingReservas(true);
+      setExportError('');
 
-      return [
-        reserva.id,
-        reserva.cliente_nombre || '',
-        reserva.cliente_email || '',
-        reserva.cliente_telefono || '',
-        getReservaRegistradaPor(reserva),
-        reserva.salon?.nombre || '',
-        reserva.distribucion?.nombre || '',
-        formatCsvDate(reserva.fecha_inicio),
-        formatCsvDate(reserva.fecha_fin),
-        reserva.estado,
-        reserva.cantidad_personas,
-        formatCsvAmount(getReservaMontoInicial(reserva)),
-        formatCsvAmount(montoSalon),
-        servicios,
-        formatCsvAmount(montoServicios),
-        formatCsvAmount(montoSalon + montoServicios),
-        reserva.observaciones || '',
-        formatCsvDate(reserva.creado_en),
-      ];
-    });
+      const { start, endExclusive, fileSuffix } = getExportDateRange(filters);
+      const pageSize = 1000;
+      const exportReservas: Reserva[] = [];
+      let page = 0;
 
-    const csvContent = [
-      headers.map(escapeCsvCell).join(';'),
-      ...rows.map((row) => row.map(escapeCsvCell).join(';')),
-    ].join('\r\n');
-    const blob = new Blob([`\uFEFF${csvContent}`], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const downloadUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const exportDate = new Date().toISOString().slice(0, 10);
+      while (true) {
+        let query = supabase
+          .from('reservas')
+          .select(`
+            *,
+            salon:salones(*),
+            distribucion:distribuciones(*),
+            reserva_servicios(
+              id_servicio,
+              cantidad,
+              servicio:servicios(
+                nombre,
+                precio
+              )
+            )
+          `)
+          .order('fecha_inicio', { ascending: true })
+          .order('id', { ascending: true })
+          .range(page * pageSize, ((page + 1) * pageSize) - 1);
 
-    link.href = downloadUrl;
-    link.download = `reservas-${exportDate}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(downloadUrl);
+        if (start) {
+          query = query.gte('fecha_inicio', start.toISOString());
+        }
+        if (endExclusive) {
+          query = query.lt('fecha_inicio', endExclusive.toISOString());
+        }
+        if (filters.estado) {
+          query = query.eq('estado', filters.estado);
+        }
+        if (filters.origen === 'web') {
+          query = query.is('creado_por', null);
+        } else if (filters.origen === 'backoffice') {
+          query = query.not('creado_por', 'is', null);
+        }
 
-    showTemporaryMessage(
-      'success',
-      `${sortedReservas.length} reserva(s) exportada(s) correctamente.`,
-    );
+        const { data, error: exportQueryError } = await query;
+        if (exportQueryError) throw exportQueryError;
+
+        const pageData = (data || []) as Reserva[];
+        exportReservas.push(...pageData);
+        if (pageData.length < pageSize) break;
+        page += 1;
+      }
+
+      if (exportReservas.length === 0) {
+        setExportError('No se encontraron reservas para los filtros seleccionados.');
+        return;
+      }
+
+      const creatorIds = Array.from(new Set(
+        exportReservas
+          .map((reserva) => reserva.creado_por)
+          .filter((value): value is string => Boolean(value)),
+      ));
+      const exportCreatorNames: Record<string, string> = {};
+
+      if (creatorIds.length > 0) {
+        const { data: perfilesData, error: perfilesError } = await supabase
+          .from('perfiles')
+          .select('user_id, nombre')
+          .in('user_id', creatorIds);
+
+        if (perfilesError) throw perfilesError;
+        (perfilesData || []).forEach((creator) => {
+          if (creator.user_id) {
+            exportCreatorNames[creator.user_id] = creator.nombre || 'Usuario back office';
+          }
+        });
+      }
+
+      const rows = exportReservas.map((reserva) => {
+        const servicios = (reserva.reserva_servicios || [])
+          .map((item) => {
+            const nombre = item.servicio?.nombre || `Servicio #${item.id_servicio || ''}`;
+            return `${nombre} x${Number(item.cantidad) || 0}`;
+          })
+          .join(' | ');
+        const montoSalon = Number(reserva.monto) || 0;
+        const montoServicios = getReservaServiciosTotal(reserva);
+
+        return [
+          reserva.id,
+          reserva.cliente_nombre || '',
+          reserva.cliente_email || '',
+          reserva.cliente_telefono || '',
+          reserva.creado_por
+            ? exportCreatorNames[reserva.creado_por] || 'Usuario back office'
+            : 'Formulario WEB',
+          reserva.salon?.nombre || '',
+          reserva.distribucion?.nombre || '',
+          formatCsvDate(reserva.fecha_inicio),
+          formatCsvDate(reserva.fecha_fin),
+          reserva.estado,
+          reserva.cantidad_personas,
+          formatCsvAmount(getReservaMontoInicial(reserva)),
+          formatCsvAmount(montoSalon),
+          servicios,
+          formatCsvAmount(montoServicios),
+          formatCsvAmount(montoSalon + montoServicios),
+          reserva.observaciones || '',
+          formatCsvDate(reserva.creado_en),
+        ];
+      });
+
+      const csvContent = [
+        headers.map(escapeCsvCell).join(';'),
+        ...rows.map((row) => row.map(escapeCsvCell).join(';')),
+      ].join('\r\n');
+      const blob = new Blob([`\uFEFF${csvContent}`], {
+        type: 'text/csv;charset=utf-8;',
+      });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = downloadUrl;
+      link.download = `reservas-${fileSuffix}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+
+      setExportDialogOpen(false);
+      showTemporaryMessage(
+        'success',
+        `${exportReservas.length} reserva(s) exportada(s) correctamente.`,
+      );
+    } catch (err: any) {
+      console.error('Error exporting reservas:', err);
+      setExportError(err?.message || 'No se pudo generar la exportación.');
+    } finally {
+      setExportingReservas(false);
+    }
   };
 
   const defaultDirectionByColumn = (column: SortKey): SortDirection => (
@@ -753,10 +900,13 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         <div className="bo-page-actions flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={handleExportReservas}
-            disabled={loading || sortedReservas.length === 0}
+            onClick={() => {
+              setExportError('');
+              setExportDialogOpen(true);
+            }}
+            disabled={loading}
             className="bo-mobile-full inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            title="Exportar la lista visible en formato CSV compatible con Excel y Power BI"
+            title="Exportar reservas en formato CSV compatible con Excel y Power BI"
           >
             <Download className="h-5 w-5" />
             Exportar CSV
@@ -1373,6 +1523,25 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         onOpenChange={(open) => {
           if (!open) {
             setHistorialReserva(null);
+          }
+        }}
+      />
+
+      <ReservaExportDialog
+        open={exportDialogOpen}
+        loading={exportingReservas}
+        error={exportError}
+        initialEstado={
+          filterEstado && getReservaEstados().includes(filterEstado as Reserva['estado'])
+            ? filterEstado as Reserva['estado']
+            : ''
+        }
+        estados={getReservaEstados()}
+        onConfirm={handleExportReservas}
+        onOpenChange={(open) => {
+          setExportDialogOpen(open);
+          if (!open) {
+            setExportError('');
           }
         }}
       />

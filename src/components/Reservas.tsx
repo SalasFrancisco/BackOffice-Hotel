@@ -83,7 +83,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [reservaToDelete, setReservaToDelete] = useState<Reserva | null>(null);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('fechaInicio');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [reservasPendientes, setReservasPendientes] = useState<ReservaPendingConflictComparable[]>([]);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string[] } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);

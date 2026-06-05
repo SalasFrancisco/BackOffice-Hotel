@@ -85,7 +85,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [sortBy, setSortBy] = useState<SortKey>('fechaInicio');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [reservasPendientes, setReservasPendientes] = useState<ReservaPendingConflictComparable[]>([]);
-  const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
+  const [warningDialog, setWarningDialog] = useState<{ title: string; description: string[] } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
@@ -612,7 +612,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
     setWarningDialog({
       title: `Advertencias de la reserva #${reserva.id}`,
-      description: warningMessages.map((message) => `- ${message}`).join('\n'),
+      description: warningMessages,
     });
   };
 
@@ -1240,7 +1240,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           }
         }}
         title={warningDialog?.title || 'Advertencias'}
-        description={warningDialog?.description || ''}
+        description={warningDialog?.description || []}
         actionText="Cerrar"
       />
 

@@ -1332,6 +1332,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       }
 
       let presupuestoErrorMessage: string | null = null;
+      let emailWarningMessage: string | null = null;
 
       if (reservaId) {
         if (!selectedSalon) {
@@ -1339,10 +1340,21 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
             'No se encontró el salón seleccionado para generar el presupuesto.';
         } else {
           try {
-            await invokeProtectedFunction('upsert-presupuesto', {
+            const presupuestoResult = await invokeProtectedFunction('upsert-presupuesto', {
               reservaId,
               presupuestoPath: reserva?.presupuesto_url || null,
+              notificationAction: reserva ? 'updated' : 'created',
             });
+            const emailWarnings = Array.isArray(presupuestoResult?.emailWarnings)
+              ? presupuestoResult.emailWarnings
+                  .filter((warning: unknown): warning is string => typeof warning === 'string')
+                  .map((warning: string) => warning.trim())
+                  .filter(Boolean)
+              : [];
+
+            if (emailWarnings.length > 0) {
+              emailWarningMessage = emailWarnings.join(' ');
+            }
           } catch (error: any) {
             presupuestoErrorMessage =
               error?.message || 'Ocurrio un error inesperado al generar el presupuesto.';
@@ -1358,6 +1370,13 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           reserva
             ? `Reserva actualizada, pero no se pudo regenerar el presupuesto: ${presupuestoErrorMessage}`
             : `Reserva creada, pero no se pudo generar el presupuesto: ${presupuestoErrorMessage}`,
+          reserva ? 'Reserva actualizada con advertencias' : 'Reserva creada con advertencias',
+        );
+      } else if (emailWarningMessage) {
+        setInitialFormSnapshot(currentFormSnapshot);
+        onDirtyChange?.(false);
+        showWarningDialog(
+          `${reserva ? 'La reserva se actualizó' : 'La reserva se creó'} y el presupuesto se generó correctamente, pero hubo problemas con los correos: ${emailWarningMessage}`,
           reserva ? 'Reserva actualizada con advertencias' : 'Reserva creada con advertencias',
         );
       } else {

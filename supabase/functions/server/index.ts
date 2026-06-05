@@ -1517,6 +1517,7 @@ function buildPresupuestoReservationEmail(input: {
   fechaInicio: string;
   fechaFin: string;
   downloadUrl: string;
+  hasChanges?: boolean;
 }) {
   const clienteNombre = input.clienteNombre?.trim() || "cliente";
   const safeClienteNombre = escapeHtml(clienteNombre);
@@ -1524,24 +1525,31 @@ function buildPresupuestoReservationEmail(input: {
   const fechaInicioLabel = `${formatDate(input.fechaInicio)} ${formatTime(input.fechaInicio)}`;
   const fechaFinLabel = `${formatDate(input.fechaFin)} ${formatTime(input.fechaFin)}`;
   const reservaLabel = `#${input.reservaId}`;
+  const title = input.hasChanges
+    ? "Aquí está el presupuesto de la reserva con los cambios aplicados"
+    : "Aquí está el presupuesto de la reserva";
+  const description = input.hasChanges
+    ? `Adjuntamos el presupuesto actualizado de tu reserva ${reservaLabel}, con los cambios aplicados.`
+    : `Adjuntamos el presupuesto correspondiente a tu reserva ${reservaLabel}.`;
 
   return {
-    subject: `Presupuesto de reserva ${reservaLabel} - Quinto Centenario Hotel`,
+    subject: `${title} ${reservaLabel} - Quinto Centenario Hotel`,
     text:
       `Hola ${clienteNombre},\n\n`
-      + `Adjuntamos el presupuesto correspondiente a tu reserva ${reservaLabel}.\n`
+      + `${title}.\n\n`
+      + `${description}\n`
       + `Inicio: ${fechaInicioLabel}\n`
       + `Fin: ${fechaFinLabel}\n\n`
-      + "Tambien podes descargarlo desde el siguiente enlace, valido por 7 dias:\n"
+      + "También podés descargarlo desde el siguiente enlace, válido por 7 días:\n"
       + `${input.downloadUrl}\n\n`
       + "Saludos,\nQuinto Centenario Hotel",
     html: `
       <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
         <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
-          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Presupuesto de tu reserva</h1>
+          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">${escapeHtml(title)}</h1>
           <p style="margin: 0 0 16px; line-height: 1.6;">Hola ${safeClienteNombre},</p>
           <p style="margin: 0 0 16px; line-height: 1.6;">
-            Adjuntamos el presupuesto correspondiente a tu reserva <strong>${escapeHtml(reservaLabel)}</strong>.
+            ${escapeHtml(description)}
           </p>
           <div style="margin: 0 0 20px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Inicio:</strong> ${escapeHtml(fechaInicioLabel)}</p>
@@ -1557,7 +1565,7 @@ function buildPresupuestoReservationEmail(input: {
             Abrir presupuesto
           </a>
           <p style="margin: 24px 0 8px; line-height: 1.6;">
-            Si el botón no funciona, accede desde el siguiente enlace:
+            Si el botón no funciona, accedé desde el siguiente enlace:
           </p>
           <p style="margin: 0; line-height: 1.6; word-break: break-all;">
             <a href="${safeDownloadUrl}" style="color: #0f766e;">${safeDownloadUrl}</a>
@@ -1582,6 +1590,7 @@ async function sendPresupuestoReservationEmail(
     downloadUrl: string;
     attachmentFileName: string;
     attachmentContent: Buffer;
+    hasChanges?: boolean;
   },
 ) {
   const emailContent = buildPresupuestoReservationEmail({
@@ -1590,6 +1599,7 @@ async function sendPresupuestoReservationEmail(
     fechaInicio: input.fechaInicio,
     fechaFin: input.fechaFin,
     downloadUrl: input.downloadUrl,
+    hasChanges: input.hasChanges,
   });
 
   await sendSmtpEmail(smtpConfig, {
@@ -1666,7 +1676,10 @@ const formatOptionalText = (value: unknown, fallback: string) => {
   return normalized.length > 0 ? normalized : fallback;
 };
 
-function buildPublicReservaBackofficeNotificationEmail(input: {
+type ReservaEmailAction = "created" | "updated";
+
+function buildBackofficeReservaNotificationEmail(input: {
+  action: ReservaEmailAction;
   reservaId: number;
   clienteNombre: string;
   clienteEmail: string;
@@ -1688,18 +1701,23 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
   const cantidadPersonas = Number.isFinite(input.cantidadPersonas) ? input.cantidadPersonas : 0;
   const fechaInicioLabel = `${formatDate(input.fechaInicio)} ${formatTime(input.fechaInicio)}`;
   const fechaFinLabel = `${formatDate(input.fechaFin)} ${formatTime(input.fechaFin)}`;
+  const title = input.action === "updated"
+    ? "Se modificó una reserva"
+    : "Se ha registrado una nueva reserva";
+  const actionDescription = input.action === "updated"
+    ? `Se modificó la reserva ${reservaLabel}.`
+    : `Se ha registrado una nueva reserva ${reservaLabel}.`;
 
   return {
-    subject: `Nueva reserva ${reservaLabel} desde Salones - ${RESERVA_ESTADO_PENDIENTE_VALIDACION}`,
+    subject: `${title} ${reservaLabel} - Quinto Centenario Hotel`,
     text:
-      "Se registró una nueva solicitud de reserva desde el formulario de Salones.\n\n"
+      `${actionDescription}\n\n`
       + `Reserva: ${reservaLabel}\n`
-      + `Estado: ${RESERVA_ESTADO_PENDIENTE_VALIDACION}\n`
       + `Cliente: ${clienteNombre}\n`
       + `Email cliente: ${clienteEmail}\n`
-      + `Telefono cliente: ${clienteTelefono}\n`
-      + `Salon: ${salonNombre}\n`
-      + `Distribucion: ${distribucionNombre}\n`
+      + `Teléfono cliente: ${clienteTelefono}\n`
+      + `Salón: ${salonNombre}\n`
+      + `Distribución: ${distribucionNombre}\n`
       + `Tipo de evento: ${tipoEvento}\n`
       + `Cantidad de personas: ${cantidadPersonas}\n`
       + `Inicio: ${fechaInicioLabel}\n`
@@ -1708,17 +1726,17 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
     html: `
       <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
         <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
-          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Nueva reserva desde Salones</h1>
+          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">${escapeHtml(title)}</h1>
           <p style="margin: 0 0 20px; line-height: 1.6;">
-            Se registró una nueva solicitud de reserva en estado <strong>${escapeHtml(RESERVA_ESTADO_PENDIENTE_VALIDACION)}</strong>.
+            ${escapeHtml(actionDescription)}
           </p>
           <div style="margin: 0 0 16px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Reserva:</strong> ${escapeHtml(reservaLabel)}</p>
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Cliente:</strong> ${escapeHtml(clienteNombre)}</p>
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Email cliente:</strong> ${escapeHtml(clienteEmail)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Telefono cliente:</strong> ${escapeHtml(clienteTelefono)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Salon:</strong> ${escapeHtml(salonNombre)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Distribucion:</strong> ${escapeHtml(distribucionNombre)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Teléfono cliente:</strong> ${escapeHtml(clienteTelefono)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Salón:</strong> ${escapeHtml(salonNombre)}</p>
+            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Distribución:</strong> ${escapeHtml(distribucionNombre)}</p>
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Tipo de evento:</strong> ${escapeHtml(tipoEvento)}</p>
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Cantidad de personas:</strong> ${escapeHtml(String(cantidadPersonas))}</p>
             <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Inicio:</strong> ${escapeHtml(fechaInicioLabel)}</p>
@@ -1733,7 +1751,10 @@ function buildPublicReservaBackofficeNotificationEmail(input: {
   };
 }
 
-async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient) {
+async function getBackofficeNotificationRecipients(
+  supabaseAdmin: SupabaseClient,
+  excludedUserId?: string | null,
+) {
   const { data: perfilesData, error: perfilesError } = await supabaseAdmin
     .from("perfiles")
     .select("user_id, nombre, rol, activo");
@@ -1744,7 +1765,9 @@ async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient
 
   const perfiles = (perfilesData || []).filter((perfil) => {
     const normalizedRol = normalizeRole(perfil?.rol);
-    return perfil?.activo !== false && (normalizedRol === "ADMIN" || normalizedRol === "OPERADOR");
+    return perfil?.activo !== false
+      && perfil?.user_id !== excludedUserId
+      && (normalizedRol === "ADMIN" || normalizedRol === "OPERADOR");
   });
 
   if (perfiles.length === 0) {
@@ -1760,13 +1783,13 @@ async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient
 
       const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
       if (userError) {
-        console.warn(`No se pudo obtener el usuario ${userId} para notificacion de reserva publica:`, userError);
+        console.warn(`No se pudo obtener el usuario ${userId} para notificación de reserva:`, userError);
         return;
       }
 
       const email = normalizeEmail(userData?.user?.email);
       if (!email) {
-        console.warn(`El usuario ${userId} no tiene email para notificacion de reserva publica.`);
+        console.warn(`El usuario ${userId} no tiene email para notificación de reserva.`);
         return;
       }
 
@@ -1786,10 +1809,12 @@ async function getBackofficeNotificationRecipients(supabaseAdmin: SupabaseClient
   return Array.from(recipientsByEmail.values());
 }
 
-async function sendPublicReservaBackofficeNotificationEmails(
+async function sendBackofficeReservaNotificationEmails(
   smtpConfig: SmtpConfig,
   supabaseAdmin: SupabaseClient,
   input: {
+    action: ReservaEmailAction;
+    excludedUserId?: string | null;
     reservaId: number;
     clienteNombre: string;
     clienteEmail: string;
@@ -1802,20 +1827,23 @@ async function sendPublicReservaBackofficeNotificationEmails(
     fechaFin: string;
   },
 ) {
-  const recipients = await getBackofficeNotificationRecipients(supabaseAdmin);
+  const recipients = await getBackofficeNotificationRecipients(
+    supabaseAdmin,
+    input.excludedUserId,
+  );
   if (recipients.length === 0) {
-    console.warn("No hay destinatarios ADMIN/OPERADOR para notificaciones de reserva publica.");
+    console.info("No hay otros destinatarios ADMIN/OPERADOR para notificar la reserva.");
     return { sent: false, recipientsCount: 0 } as const;
   }
 
   const primaryRecipient = recipients[0]?.email;
   if (!primaryRecipient) {
-    console.warn("No se pudo resolver destinatario principal para notificaciones de reserva publica.");
+    console.warn("No se pudo resolver el destinatario principal para la notificación de reserva.");
     return { sent: false, recipientsCount: 0 } as const;
   }
 
   const bccRecipients = recipients.slice(1).map((recipient) => recipient.email);
-  const emailContent = buildPublicReservaBackofficeNotificationEmail(input);
+  const emailContent = buildBackofficeReservaNotificationEmail(input);
 
   await sendSmtpEmail(smtpConfig, {
     to: primaryRecipient,
@@ -2507,9 +2535,65 @@ const upsertPresupuestoForReserva = async (
   return {
     storagePath,
     fileName,
+    pdfBuffer,
     context,
   };
 };
+
+async function sendGeneratedPresupuestoToClient(
+  smtpConfig: SmtpConfig,
+  supabaseAdmin: SupabaseClient,
+  input: {
+    action: ReservaEmailAction;
+    reservaId: number;
+    storagePath: string;
+    fileName: string;
+    pdfBuffer: Uint8Array;
+    clienteNombre?: string | null;
+    clienteEmail?: string | null;
+    fechaInicio: string;
+    fechaFin: string;
+  },
+) {
+  const clienteEmail = normalizeEmail(input.clienteEmail);
+  if (!clienteEmail) {
+    return { sent: false, reason: "missing_client_email" } as const;
+  }
+
+  const signedUrlResult = await createPresupuestoSignedUrl(
+    supabaseAdmin,
+    input.storagePath,
+    PRESUPUESTO_EMAIL_LINK_TTL_SECONDS,
+  );
+  if ("error" in signedUrlResult) {
+    throw new Error(signedUrlResult.error);
+  }
+
+  let shortUrl: string | null = null;
+  try {
+    const shortLinkResult = await createPresupuestoShortLink(
+      input.reservaId,
+      PRESUPUESTO_EMAIL_LINK_TTL_SECONDS,
+    );
+    shortUrl = shortLinkResult?.shortUrl || null;
+  } catch (shortLinkError) {
+    console.warn("No se pudo generar enlace corto para el presupuesto por email:", shortLinkError);
+  }
+
+  await sendPresupuestoReservationEmail(smtpConfig, {
+    to: clienteEmail,
+    reservaId: input.reservaId,
+    clienteNombre: input.clienteNombre,
+    fechaInicio: input.fechaInicio,
+    fechaFin: input.fechaFin,
+    downloadUrl: shortUrl || signedUrlResult.signedUrl,
+    attachmentFileName: input.fileName,
+    attachmentContent: Buffer.from(input.pdfBuffer),
+    hasChanges: input.action === "updated",
+  });
+
+  return { sent: true, sentTo: clienteEmail } as const;
+}
 
 const toValidDate = (value?: string | null) => {
   if (!value) return null;
@@ -3120,6 +3204,7 @@ const sendPresupuestoEmailHandler = async (c: any) => {
     const presupuestoPathFromBody = typeof body?.presupuestoPath === "string"
       ? body.presupuestoPath.trim()
       : "";
+    const hasChanges = body?.hasChanges === true;
 
     if (!Number.isFinite(reservaId) || reservaId <= 0) {
       return c.json({ error: "Missing required field: reservaId" }, 400);
@@ -3192,6 +3277,7 @@ const sendPresupuestoEmailHandler = async (c: any) => {
       downloadUrl: shortUrl || signedUrlResult.signedUrl,
       attachmentFileName,
       attachmentContent,
+      hasChanges,
     });
 
     return c.json({
@@ -3231,6 +3317,10 @@ const upsertPresupuestoHandler = async (c: any) => {
     const presupuestoPathFromBody = typeof body?.presupuestoPath === "string"
       ? body.presupuestoPath.trim()
       : "";
+    const notificationAction: ReservaEmailAction | null =
+      body?.notificationAction === "created" || body?.notificationAction === "updated"
+        ? body.notificationAction
+        : null;
 
     if (!Number.isFinite(reservaId) || reservaId <= 0) {
       return c.json({ error: "Missing required field: reservaId" }, 400);
@@ -3242,11 +3332,92 @@ const upsertPresupuestoHandler = async (c: any) => {
       presupuestoPathFromBody || null,
     );
 
+    const emailWarnings: string[] = [];
+    let clientEmailSent = false;
+    let staffEmailsSent = 0;
+
+    if (notificationAction) {
+      try {
+        const smtpConfig = getSmtpConfig();
+
+        const [clientEmailResult, staffEmailResult] = await Promise.allSettled([
+          sendGeneratedPresupuestoToClient(
+            smtpConfig,
+            supabaseAdmin,
+            {
+              action: notificationAction,
+              reservaId,
+              storagePath: result.storagePath,
+              fileName: result.fileName,
+              pdfBuffer: result.pdfBuffer,
+              clienteNombre: result.context.cliente.nombre,
+              clienteEmail: result.context.cliente.email,
+              fechaInicio: result.context.fechaInicio,
+              fechaFin: result.context.fechaFin,
+            },
+          ),
+          sendBackofficeReservaNotificationEmails(
+            smtpConfig,
+            supabaseAdmin,
+            {
+              action: notificationAction,
+              excludedUserId: accessCheck.userId,
+              reservaId,
+              clienteNombre: result.context.cliente.nombre,
+              clienteEmail: result.context.cliente.email || "No informado",
+              clienteTelefono: result.context.cliente.telefono,
+              salonNombre: result.context.salon.nombre,
+              distribucionNombre: result.context.distribucion?.nombre,
+              tipoEvento: result.context.tipoEvento,
+              cantidadPersonas: result.context.cantidadPersonas,
+              fechaInicio: result.context.fechaInicio,
+              fechaFin: result.context.fechaFin,
+            },
+          ),
+        ]);
+
+        if (clientEmailResult.status === "fulfilled") {
+          clientEmailSent = clientEmailResult.value.sent;
+          if (
+            !clientEmailResult.value.sent
+            && clientEmailResult.value.reason === "missing_client_email"
+          ) {
+            emailWarnings.push("Cliente: la reserva no tiene un correo electrónico asociado.");
+          }
+        } else {
+          const message = getErrorMessage(
+            clientEmailResult.reason,
+            "No se pudo enviar el presupuesto al cliente.",
+          );
+          emailWarnings.push(`Cliente: ${message}`);
+          console.warn("No se pudo enviar el presupuesto al cliente:", clientEmailResult.reason);
+        }
+
+        if (staffEmailResult.status === "fulfilled") {
+          staffEmailsSent = staffEmailResult.value.recipientsCount;
+        } else {
+          const message = getErrorMessage(
+            staffEmailResult.reason,
+            "No se pudo notificar al personal.",
+          );
+          emailWarnings.push(`Personal: ${message}`);
+          console.warn("No se pudo notificar al personal sobre la reserva:", staffEmailResult.reason);
+        }
+      } catch (smtpError) {
+        const message = getErrorMessage(smtpError, "No se pudo configurar el envío de correos.");
+        emailWarnings.push(message);
+        console.warn("No se pudieron enviar los correos de la reserva:", smtpError);
+      }
+    }
+
     return c.json({
       success: true,
       reservaId,
       storagePath: result.storagePath,
       fileName: result.fileName,
+      clientEmailSent,
+      staffEmailsSent,
+      emailWarnings,
     });
   } catch (error) {
     console.error("Error in upsert-presupuesto endpoint:", error);
@@ -3955,10 +4126,11 @@ const publicReservaHandler = async (c: any) => {
 
     try {
       const smtpConfig = getSmtpConfig();
-      const notificationEmailResult = await sendPublicReservaBackofficeNotificationEmails(
+      const notificationEmailResult = await sendBackofficeReservaNotificationEmails(
         smtpConfig,
         supabaseAdmin,
         {
+          action: "created",
           reservaId: reservaData.id,
           clienteNombre: formatOptionalText(nombre, "Sin nombre"),
           clienteEmail: formatOptionalText(email, "No informado"),
@@ -3974,11 +4146,11 @@ const publicReservaHandler = async (c: any) => {
 
       if (notificationEmailResult.sent) {
         console.info(
-          `Notificacion por email de reserva publica enviada a ${notificationEmailResult.recipientsCount} destinatario(s).`,
+          `Notificación por email de reserva pública enviada a ${notificationEmailResult.recipientsCount} destinatario(s).`,
         );
       }
     } catch (emailNotificationError) {
-      console.warn("No se pudo enviar la notificacion por email de reserva publica:", emailNotificationError);
+      console.warn("No se pudo enviar la notificación por email de reserva pública:", emailNotificationError);
     }
 
     const selectedServicios = Array.isArray(servicios) ? servicios : [];
@@ -4060,6 +4232,8 @@ const publicReservaHandler = async (c: any) => {
     let shortDownloadUrl: string | undefined = undefined;
     let storagePath: string | undefined = undefined;
     let fileName: string | undefined = undefined;
+    let clientEmailSent = false;
+    let clientEmailError: string | undefined = undefined;
 
     try {
       const upsertResult = await upsertPresupuestoForReserva(supabaseAdmin, reservaData.id);
@@ -4093,6 +4267,35 @@ const publicReservaHandler = async (c: any) => {
       }
 
       pdfGenerated = true;
+
+      try {
+        const smtpConfig = getSmtpConfig();
+        const clientEmailResult = await sendGeneratedPresupuestoToClient(
+          smtpConfig,
+          supabaseAdmin,
+          {
+            action: "created",
+            reservaId: reservaData.id,
+            storagePath: upsertResult.storagePath,
+            fileName: upsertResult.fileName,
+            pdfBuffer: upsertResult.pdfBuffer,
+            clienteNombre: upsertResult.context.cliente.nombre,
+            clienteEmail: upsertResult.context.cliente.email,
+            fechaInicio: upsertResult.context.fechaInicio,
+            fechaFin: upsertResult.context.fechaFin,
+          },
+        );
+        clientEmailSent = clientEmailResult.sent;
+      } catch (clientEmailSendError) {
+        clientEmailError = getErrorMessage(
+          clientEmailSendError,
+          "No se pudo enviar el presupuesto al cliente.",
+        );
+        console.warn(
+          "No se pudo enviar por email el presupuesto de la reserva pública:",
+          clientEmailSendError,
+        );
+      }
     } catch (err) {
       pdfError = getErrorMessage(err, String(err));
       uploadErrorMsg = pdfError;
@@ -4110,6 +4313,7 @@ const publicReservaHandler = async (c: any) => {
       pdfGenerated,
       uploaded,
       signed,
+      clientEmailSent,
       capacityWarning: exceedsSalonCapacity || exceedsDistribucionCapacity,
       capacityWarningDetail: {
         exceedsSalonCapacity,
@@ -4120,6 +4324,7 @@ const publicReservaHandler = async (c: any) => {
     if (pdfError) responseBody.pdfError = pdfError;
     if (uploadErrorMsg) responseBody.uploadError = uploadErrorMsg;
     if (signedErrorMsg) responseBody.signedError = signedErrorMsg;
+    if (clientEmailError) responseBody.clientEmailError = clientEmailError;
 
     return c.json(responseBody);
   } catch (error) {

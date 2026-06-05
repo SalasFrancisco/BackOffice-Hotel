@@ -31,9 +31,12 @@ export function InfoDialog({
           {Array.isArray(description) ? (
             <AlertDialogDescription asChild>
               <div className="text-left">
-                <ul className="list-disc space-y-2 pl-5">
+                <ul className="space-y-2">
                   {description.map((item, index) => (
-                    <li key={`${index}-${item}`}>{item}</li>
+                    <li key={`${index}-${item}`} className="flex items-start gap-2">
+                      <span className="mt-[0.35rem] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-current" aria-hidden="true" />
+                      <span>{item}</span>
+                    </li>
                   ))}
                 </ul>
               </div>

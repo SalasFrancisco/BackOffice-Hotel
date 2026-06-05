@@ -726,10 +726,19 @@ textarea {
 .bo-notifications-panel {
   position: absolute;
   top: 2.75rem;
-  right: 0;
   z-index: 50;
   width: min(22rem, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
+}
+
+.bo-notifications-panel-desktop {
+  right: auto;
+  left: 0;
+}
+
+.bo-notifications-panel-mobile {
+  right: 0;
+  left: auto;
 }
 
 .bo-toast {

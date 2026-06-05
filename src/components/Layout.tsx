@@ -414,7 +414,13 @@ export function Layout({
       </button>
 
       {notificationsOpen && (
-        <div className="bo-notifications-panel absolute right-0 top-11 z-50 rounded-lg border border-gray-200 bg-white shadow-xl">
+        <div
+          className={`bo-notifications-panel ${
+            refIndex === 1
+              ? "bo-notifications-panel-desktop"
+              : "bo-notifications-panel-mobile"
+          } rounded-lg border border-gray-200 bg-white shadow-xl`}
+        >
           <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
             <p className="text-sm text-gray-900">Notificaciones</p>
             <button

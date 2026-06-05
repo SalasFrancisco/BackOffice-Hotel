@@ -96,7 +96,7 @@ export function ReservaExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !loading && onOpenChange(nextOpen)}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+      <DialogContent className="bo-reserva-export-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Exportar reservas</DialogTitle>
           <DialogDescription>

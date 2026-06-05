@@ -745,6 +745,12 @@ textarea {
   max-width: min(26rem, calc(100vw - 2rem));
 }
 
+.bo-dialog-content.bo-service-dialog > button {
+  top: 2.125rem;
+  right: 1.5rem;
+  transform: translateY(-50%);
+}
+
 .bo-notifications-panel {
   position: absolute;
   top: 2.75rem;
@@ -1000,6 +1006,10 @@ textarea {
   .bo-dialog-content.bo-reserva-compact-dialog {
     width: min(26rem, calc(100vw - 1rem));
     max-width: min(26rem, calc(100vw - 1rem));
+  }
+
+  .bo-dialog-content.bo-service-dialog > button {
+    right: 1rem;
   }
 
   .bo-reserva-modal {

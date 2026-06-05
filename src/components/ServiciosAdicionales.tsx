@@ -634,9 +634,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           }
         }}
       >
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden p-0">
-          <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">
-            <DialogTitle>Ordenar categorias</DialogTitle>
+        <DialogContent className="bo-service-dialog max-w-lg max-h-[85vh] gap-0 overflow-hidden p-0">
+          <DialogHeader className="min-h-[4.25rem] justify-center border-b border-gray-200 bg-gray-50/70 px-6 py-4 pr-14">
+            <DialogTitle>Ordenar categorías</DialogTitle>
           </DialogHeader>
 
           <div className="flex max-h-[calc(85vh-5rem)] flex-col">
@@ -729,13 +729,13 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Dialog - Crear/Editar Categoria */}
       <Dialog open={showCategoriaDialog} onOpenChange={setShowCategoriaDialog}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-hidden p-0">
-          <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">
+        <DialogContent className="bo-service-dialog max-w-md max-h-[85vh] gap-0 overflow-hidden p-0">
+          <DialogHeader className="min-h-[4.25rem] justify-center border-b border-gray-200 bg-gray-50/70 px-6 py-4 pr-14">
             <DialogTitle>
               {editingCategoria ? 'Editar Categoría' : 'Nueva Categoría'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveCategoria} className="space-y-4 p-2">
+          <form onSubmit={handleSaveCategoria} className="space-y-4 px-6 py-5">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre <span className="text-red-500">*</span>
@@ -784,8 +784,8 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Dialog - Crear/Editar Servicio */}
       <Dialog open={showServicioDialog} onOpenChange={setShowServicioDialog}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-hidden p-0">
-          <DialogHeader className="border-b px-6 pt-6 pb-4 pr-12">
+        <DialogContent className="bo-service-dialog max-w-md max-h-[85vh] gap-0 overflow-hidden p-0">
+          <DialogHeader className="min-h-[4.25rem] justify-center border-b border-gray-200 bg-gray-50/70 px-6 py-4 pr-14">
             <DialogTitle>
               {editingServicio ? 'Editar Servicio' : 'Nuevo Servicio'}
             </DialogTitle>

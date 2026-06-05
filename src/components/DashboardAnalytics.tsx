@@ -1,5 +1,5 @@
-import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
-import { BarChart3, Filter, PieChart as PieChartIcon, RotateCcw, TrendingUp } from 'lucide-react';
+import { useMemo } from 'react';
+import { BarChart3, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -12,83 +12,32 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Reserva, Salon, supabase } from '../utils/supabase/client';
+import type { Reserva, Salon } from '../utils/supabase/client';
 import {
   getReservaEstados,
   RESERVA_ESTADO_COLORS,
   type ReservaEstado,
 } from '../utils/reservaEstadoTransitions';
+import { parseDashboardInputDate } from './DashboardFilters';
+
+export type DashboardAnalyticsReserva = Pick<
+  Reserva,
+  'id' | 'id_salon' | 'estado' | 'fecha_inicio' | 'fecha_fin' | 'monto'
+>;
 
 type DashboardAnalyticsProps = {
+  reservas: DashboardAnalyticsReserva[];
   salones: Salon[];
-};
-
-type AnalyticsPeriod = 'currentMonth' | 'last6Months' | 'currentYear' | 'custom';
-
-type AnalyticsFilters = {
-  period: AnalyticsPeriod;
   from: string;
   to: string;
-  salonId: string;
-  estado: 'all' | ReservaEstado;
+  loading: boolean;
 };
-
-type AnalyticsReserva = Pick<Reserva, 'id' | 'id_salon' | 'estado' | 'fecha_inicio'>;
 
 const BAR_COLOR = '#2563EB';
 const SALON_BAR_COLOR = '#0F766E';
 
-const toDateInputValue = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const getPresetRange = (period: Exclude<AnalyticsPeriod, 'custom'>) => {
-  const now = new Date();
-
-  if (period === 'currentMonth') {
-    return {
-      from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
-      to: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-    };
-  }
-
-  if (period === 'last6Months') {
-    return {
-      from: toDateInputValue(new Date(now.getFullYear(), now.getMonth() - 5, 1)),
-      to: toDateInputValue(now),
-    };
-  }
-
-  return {
-    from: toDateInputValue(new Date(now.getFullYear(), 0, 1)),
-    to: toDateInputValue(new Date(now.getFullYear(), 11, 31)),
-  };
-};
-
-const createDefaultFilters = (): AnalyticsFilters => ({
-  period: 'currentYear',
-  ...getPresetRange('currentYear'),
-  salonId: 'all',
-  estado: 'all',
-});
-
-const parseInputDate = (value: string, endOfDay = false) => {
-  const date = new Date(`${value}T00:00:00`);
-  if (endOfDay) {
-    date.setHours(23, 59, 59, 999);
-  }
-  return date;
-};
-
-const formatShortDate = (value: string) =>
-  parseInputDate(value).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+const isReservaConfirmadaOPagada = (estado: ReservaEstado) =>
+  estado === 'Confirmado' || estado === 'Pagado';
 
 const getMonthKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -101,82 +50,21 @@ const formatMonthLabel = (date: Date) => {
   return label.replace('.', '');
 };
 
-const openNativeDatePicker = (event: MouseEvent<HTMLInputElement>) => {
-  const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
-  try {
-    input.showPicker?.();
-  } catch {
-    input.focus();
-  }
-};
-
-function ChartEmptyState() {
+function ChartEmptyState({ message }: { message?: string }) {
   return (
     <div className="flex h-64 items-center justify-center px-4 text-center text-sm text-gray-500">
-      No hay reservas para los filtros seleccionados.
+      {message || 'No hay reservas para los filtros seleccionados.'}
     </div>
   );
 }
 
-export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
-  const [draftFilters, setDraftFilters] = useState<AnalyticsFilters>(createDefaultFilters);
-  const [appliedFilters, setAppliedFilters] = useState<AnalyticsFilters>(createDefaultFilters);
-  const [reservas, setReservas] = useState<AnalyticsReserva[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadAnalytics = async () => {
-      try {
-        setLoading(true);
-        setError('');
-
-        const fromDate = parseInputDate(appliedFilters.from);
-        const toDate = parseInputDate(appliedFilters.to, true);
-
-        let query = supabase
-          .from('reservas')
-          .select('id, id_salon, estado, fecha_inicio')
-          .gte('fecha_inicio', fromDate.toISOString())
-          .lte('fecha_inicio', toDate.toISOString())
-          .order('fecha_inicio', { ascending: true });
-
-        if (appliedFilters.salonId !== 'all') {
-          query = query.eq('id_salon', Number(appliedFilters.salonId));
-        }
-
-        if (appliedFilters.estado !== 'all') {
-          query = query.eq('estado', appliedFilters.estado);
-        }
-
-        const { data, error: queryError } = await query;
-        if (queryError) throw queryError;
-
-        if (isActive) {
-          setReservas((data || []) as AnalyticsReserva[]);
-        }
-      } catch (err: any) {
-        console.error('Error loading dashboard analytics:', err);
-        if (isActive) {
-          setReservas([]);
-          setError(err?.message || 'No se pudieron cargar los gráficos.');
-        }
-      } finally {
-        if (isActive) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadAnalytics();
-
-    return () => {
-      isActive = false;
-    };
-  }, [appliedFilters]);
-
+export function DashboardAnalytics({
+  reservas,
+  salones,
+  from,
+  to,
+  loading,
+}: DashboardAnalyticsProps) {
   const salonNameById = useMemo(
     () => new Map(salones.map((salon) => [Number(salon.id), salon.nombre])),
     [salones],
@@ -184,10 +72,13 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
 
   const reservasPorSalon = useMemo(() => {
     const counts = new Map<number, number>();
-    reservas.forEach((reserva) => {
-      const salonId = Number(reserva.id_salon);
-      counts.set(salonId, (counts.get(salonId) || 0) + 1);
-    });
+
+    reservas
+      .filter((reserva) => isReservaConfirmadaOPagada(reserva.estado))
+      .forEach((reserva) => {
+        const salonId = Number(reserva.id_salon);
+        counts.set(salonId, (counts.get(salonId) || 0) + 1);
+      });
 
     return Array.from(counts.entries())
       .map(([salonId, cantidad]) => ({
@@ -198,8 +89,8 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
   }, [reservas, salonNameById]);
 
   const reservasPorMes = useMemo(() => {
-    const fromDate = parseInputDate(appliedFilters.from);
-    const toDate = parseInputDate(appliedFilters.to);
+    const fromDate = parseDashboardInputDate(from);
+    const toDate = parseDashboardInputDate(to);
     const counts = new Map<string, number>();
 
     reservas.forEach((reserva) => {
@@ -223,7 +114,7 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
     }
 
     return result;
-  }, [reservas, appliedFilters.from, appliedFilters.to]);
+  }, [reservas, from, to]);
 
   const reservasPorEstado = useMemo(() => {
     const counts = new Map<ReservaEstado, number>();
@@ -240,47 +131,8 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
       .filter((item) => item.cantidad > 0);
   }, [reservas]);
 
-  const handlePeriodChange = (period: AnalyticsPeriod) => {
-    setDraftFilters((current) => {
-      if (period === 'custom') {
-        return { ...current, period };
-      }
-
-      return {
-        ...current,
-        period,
-        ...getPresetRange(period),
-      };
-    });
-  };
-
-  const handleApplyFilters = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!draftFilters.from || !draftFilters.to) {
-      setError('Seleccione las fechas desde y hasta.');
-      return;
-    }
-
-    if (parseInputDate(draftFilters.from) > parseInputDate(draftFilters.to)) {
-      setError('La fecha desde no puede ser posterior a la fecha hasta.');
-      return;
-    }
-
-    setError('');
-    setAppliedFilters({ ...draftFilters });
-  };
-
-  const handleResetFilters = () => {
-    const defaultFilters = createDefaultFilters();
-    setDraftFilters(defaultFilters);
-    setAppliedFilters(defaultFilters);
-    setError('');
-  };
-
   const salonChartHeight = Math.max(260, reservasPorSalon.length * 48);
   const monthChartMinWidth = Math.max(520, reservasPorMes.length * 64);
-  const periodSummary = `${formatShortDate(appliedFilters.from)} al ${formatShortDate(appliedFilters.to)}`;
 
   return (
     <section className="mt-8" aria-labelledby="dashboard-analytics-title">
@@ -290,137 +142,17 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
             Análisis de reservas
           </h3>
           <p className="mt-1 text-sm text-gray-600">
-            {reservas.length} reservas · {periodSummary}
+            Visualización de las {reservas.length} reservas del período filtrado
           </p>
         </div>
       </div>
-
-      <form
-        onSubmit={handleApplyFilters}
-        className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
-      >
-        <div className="bo-dashboard-analytics-filters">
-          <div>
-            <label className="mb-2 block text-sm text-gray-700">Período</label>
-            <select
-              aria-label="Período de análisis"
-              value={draftFilters.period}
-              onChange={(event) => handlePeriodChange(event.target.value as AnalyticsPeriod)}
-              className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="currentMonth">Mes actual</option>
-              <option value="last6Months">Últimos 6 meses</option>
-              <option value="currentYear">Año actual</option>
-              <option value="custom">Rango personalizado</option>
-            </select>
-          </div>
-
-          {draftFilters.period === 'custom' && (
-            <>
-              <div>
-                <label className="mb-2 block text-sm text-gray-700">Desde</label>
-                <input
-                  aria-label="Fecha desde"
-                  type="date"
-                  value={draftFilters.from}
-                  onClick={openNativeDatePicker}
-                  onChange={(event) => {
-                    setDraftFilters((current) => ({ ...current, from: event.target.value }));
-                  }}
-                  className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm text-gray-700">Hasta</label>
-                <input
-                  aria-label="Fecha hasta"
-                  type="date"
-                  value={draftFilters.to}
-                  onClick={openNativeDatePicker}
-                  onChange={(event) => {
-                    setDraftFilters((current) => ({ ...current, to: event.target.value }));
-                  }}
-                  className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </>
-          )}
-
-          <div>
-            <label className="mb-2 block text-sm text-gray-700">Salón</label>
-            <select
-              aria-label="Filtrar por salón"
-              value={draftFilters.salonId}
-              onChange={(event) => {
-                setDraftFilters((current) => ({ ...current, salonId: event.target.value }));
-              }}
-              className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">Todos los salones</option>
-              {salones.map((salon) => (
-                <option key={salon.id} value={salon.id}>
-                  {salon.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm text-gray-700">Estado</label>
-            <select
-              aria-label="Filtrar por estado"
-              value={draftFilters.estado}
-              onChange={(event) => {
-                setDraftFilters((current) => ({
-                  ...current,
-                  estado: event.target.value as AnalyticsFilters['estado'],
-                }));
-              }}
-              className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">Todos los estados</option>
-              {getReservaEstados().map((estado) => (
-                <option key={estado} value={estado}>
-                  {estado}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={handleResetFilters}
-            disabled={loading}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Restablecer
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
-          >
-            <Filter className="h-4 w-4" />
-            {loading ? 'Cargando...' : 'Aplicar filtros'}
-          </button>
-        </div>
-      </form>
-
-      {error && (
-        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-800">{error}</p>
-        </div>
-      )}
 
       <div className="bo-dashboard-analytics-grid">
         <article className="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h4 className="font-medium text-gray-900">Cantidad de reservas por salón</h4>
-              <p className="mt-1 text-sm text-gray-500">Distribución del período seleccionado</p>
+              <p className="mt-1 text-sm text-gray-500">Solo reservas confirmadas o pagadas</p>
             </div>
             <BarChart3 className="h-5 w-5 flex-shrink-0 text-teal-700" />
           </div>
@@ -428,9 +160,9 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
           {loading ? (
             <div className="h-64 animate-pulse rounded-lg bg-gray-100" />
           ) : reservasPorSalon.length === 0 ? (
-            <ChartEmptyState />
+            <ChartEmptyState message="No hay reservas confirmadas o pagadas para los filtros seleccionados." />
           ) : (
-            <div style={{ height: salonChartHeight }} role="img" aria-label="Cantidad de reservas por salón">
+            <div style={{ height: salonChartHeight }} role="img" aria-label="Cantidad de reservas confirmadas o pagadas por salón">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={reservasPorSalon}
@@ -455,7 +187,7 @@ export function DashboardAnalytics({ salones }: DashboardAnalyticsProps) {
                   />
                   <Bar
                     dataKey="cantidad"
-                    name="Reservas"
+                    name="Confirmadas o pagadas"
                     fill={SALON_BAR_COLOR}
                     radius={[0, 4, 4, 0]}
                     maxBarSize={28}

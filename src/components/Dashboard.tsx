@@ -1,6 +1,15 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, BarChart3, Building2, CheckCircle2, ReceiptText, Wallet } from 'lucide-react';
-import { Perfil, Reserva, Salon, supabase } from '../utils/supabase/client';
+import type { Perfil, Reserva, Salon } from '../utils/supabase/client';
+import { supabase } from '../utils/supabase/client';
+import type { DashboardAnalyticsReserva } from './DashboardAnalytics';
+import {
+  createDefaultDashboardFilters,
+  DashboardFilters,
+  formatDashboardShortDate,
+  parseDashboardInputDate,
+  type DashboardFilterValues,
+} from './DashboardFilters';
 
 const DashboardAnalytics = lazy(() =>
   import('./DashboardAnalytics').then((module) => ({
@@ -26,236 +35,321 @@ const buildDayKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const isReservaCerrada = (estado: Reserva['estado']) => estado === 'Confirmado' || estado === 'Pagado';
+const toCalendarDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const countCalendarDaysInclusive = (from: Date, to: Date) => {
+  const fromUtc = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+  const toUtc = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.max(0, Math.floor((toUtc - fromUtc) / (24 * 60 * 60 * 1000)) + 1);
+};
+
+const isReservaConfirmadaOPagada = (estado: Reserva['estado']) =>
+  estado === 'Confirmado' || estado === 'Pagado';
 
 export function Dashboard({ perfil: _perfil }: DashboardProps) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [totalSolicitudes, setTotalSolicitudes] = useState(0);
-  const [totalConfirmadas, setTotalConfirmadas] = useState(0);
-  const [porcentajeConfirmacion, setPorcentajeConfirmacion] = useState(0);
-  const [capitalObtenido, setCapitalObtenido] = useState(0);
-  const [ticketPromedioPagado, setTicketPromedioPagado] = useState(0);
-  const [porcentajeOcupacionMensual, setPorcentajeOcupacionMensual] = useState(0);
-  const [salonesOcupadosMensual, setSalonesOcupadosMensual] = useState(0);
-  const [totalSalonesMensual, setTotalSalonesMensual] = useState(0);
-  const [porcentajeFacturacionMensual, setPorcentajeFacturacionMensual] = useState(0);
-  const [facturacionMensualActual, setFacturacionMensualActual] = useState(0);
-  const [facturacionMensualPotencial, setFacturacionMensualPotencial] = useState(0);
   const [salones, setSalones] = useState<Salon[]>([]);
+  const [reservas, setReservas] = useState<DashboardAnalyticsReserva[]>([]);
+  const [draftFilters, setDraftFilters] = useState<DashboardFilterValues>(
+    createDefaultDashboardFilters,
+  );
+  const [appliedFilters, setAppliedFilters] = useState<DashboardFilterValues>(
+    createDefaultDashboardFilters,
+  );
+  const [loadingSalones, setLoadingSalones] = useState(true);
+  const [loadingReservas, setLoadingReservas] = useState(true);
+  const [error, setError] = useState('');
+  const [filterError, setFilterError] = useState('');
 
   useEffect(() => {
-    const loadData = async () => {
+    let isActive = true;
+
+    const loadSalones = async () => {
       try {
-        setLoading(true);
-        setError('');
-
-        const currentDate = new Date();
-        const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
-        const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59).toISOString();
-
-        const [
-          { data: salonesData, error: salonesError },
-          { data: reservasMensualesData, error: reservasMensualesError },
-        ] = await Promise.all([
-          supabase
-            .from('salones')
-            .select('*')
-            .or('activo.is.null,activo.eq.true')
-            .order('nombre'),
-          supabase
-            .from('reservas')
-            .select('id_salon, estado, monto, fecha_inicio, fecha_fin')
-            .lte('fecha_inicio', endOfMonth)
-            .gte('fecha_fin', startOfMonth),
-        ]);
+        setLoadingSalones(true);
+        const { data, error: salonesError } = await supabase
+          .from('salones')
+          .select('*')
+          .or('activo.is.null,activo.eq.true')
+          .order('nombre');
 
         if (salonesError) throw salonesError;
-        if (reservasMensualesError) throw reservasMensualesError;
 
-        const salonesActivos = (salonesData || []).filter((salon) => salon.activo !== false);
-        const reservasMensuales = (reservasMensualesData || []) as Array<Pick<Reserva, 'id_salon' | 'estado' | 'monto' | 'fecha_inicio' | 'fecha_fin'>>;
-        const reservasMensualesCerradas = reservasMensuales.filter((reservaMensual) => isReservaCerrada(reservaMensual.estado));
-
-        const monthStartDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        const monthEndDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-        const daysInCurrentMonth = monthEndDate.getDate();
-        const ocupacionPorSalon = new Map<number, Set<string>>();
-
-        salonesActivos.forEach((salon) => {
-          ocupacionPorSalon.set(Number(salon.id), new Set<string>());
-        });
-
-        reservasMensualesCerradas.forEach((reservaMensual) => {
-          const salonId = Number(reservaMensual.id_salon);
-          if (!Number.isFinite(salonId) || !ocupacionPorSalon.has(salonId)) return;
-
-          const inicioReserva = new Date(reservaMensual.fecha_inicio);
-          const finReserva = new Date(reservaMensual.fecha_fin);
-          if (Number.isNaN(inicioReserva.getTime()) || Number.isNaN(finReserva.getTime())) return;
-
-          const inicioReservaDia = new Date(inicioReserva.getFullYear(), inicioReserva.getMonth(), inicioReserva.getDate());
-          const finReservaDia = new Date(finReserva.getFullYear(), finReserva.getMonth(), finReserva.getDate());
-          const inicioEfectivo = inicioReservaDia > monthStartDate ? inicioReservaDia : monthStartDate;
-          const finEfectivo = finReservaDia < monthEndDate ? finReservaDia : monthEndDate;
-          if (inicioEfectivo > finEfectivo) return;
-
-          const diasOcupadosSalon = ocupacionPorSalon.get(salonId);
-          if (!diasOcupadosSalon) return;
-
-          const cursor = new Date(inicioEfectivo);
-          while (cursor <= finEfectivo) {
-            diasOcupadosSalon.add(buildDayKey(cursor));
-            cursor.setDate(cursor.getDate() + 1);
-          }
-        });
-
-        const totalSalonesCalc = salonesActivos.length;
-        const diasOcupadosCalc = Array.from(ocupacionPorSalon.values()).reduce(
-          (acc, diasOcupadosSalon) => acc + diasOcupadosSalon.size,
-          0,
-        );
-        const baseTotalOcupacionCalc = totalSalonesCalc * daysInCurrentMonth;
-        const porcentajeOcupacionCalc = baseTotalOcupacionCalc > 0
-          ? (diasOcupadosCalc / baseTotalOcupacionCalc) * 100
-          : 0;
-
-        const facturacionMensualActualCalc = reservasMensualesCerradas.reduce(
-          (acc, reservaMensual) => acc + Number(reservaMensual.monto || 0),
-          0,
-        );
-        const precioDiarioTotalSalonesCalc = salonesActivos.reduce(
-          (acc, salon) => acc + Number(salon.precio_base || 0),
-          0,
-        );
-        const facturacionMensualPotencialCalc = precioDiarioTotalSalonesCalc * daysInCurrentMonth;
-        const porcentajeFacturacionMensualCalc = facturacionMensualPotencialCalc > 0
-          ? (facturacionMensualActualCalc / facturacionMensualPotencialCalc) * 100
-          : 0;
-
-        const totalSolicitudesCalc = reservasMensuales.length;
-        const totalConfirmadasCalc = reservasMensuales.filter((reservaMetrica) => isReservaCerrada(reservaMetrica.estado)).length;
-        const porcentajeConfirmacionCalc = totalSolicitudesCalc > 0
-          ? (totalConfirmadasCalc / totalSolicitudesCalc) * 100
-          : 0;
-        const reservasConCapital = reservasMensuales.filter((reservaMetrica) => isReservaCerrada(reservaMetrica.estado));
-        const capitalObtenidoCalc = reservasConCapital.reduce(
-          (acc, reservaMetrica) => acc + Number(reservaMetrica.monto || 0),
-          0,
-        );
-        const ticketPromedioCalc = reservasConCapital.length > 0
-          ? capitalObtenidoCalc / reservasConCapital.length
-          : 0;
-
-        setTotalSolicitudes(totalSolicitudesCalc);
-        setTotalConfirmadas(totalConfirmadasCalc);
-        setPorcentajeConfirmacion(porcentajeConfirmacionCalc);
-        setCapitalObtenido(capitalObtenidoCalc);
-        setTicketPromedioPagado(ticketPromedioCalc);
-        setPorcentajeOcupacionMensual(porcentajeOcupacionCalc);
-        setSalonesOcupadosMensual(diasOcupadosCalc);
-        setTotalSalonesMensual(baseTotalOcupacionCalc);
-        setPorcentajeFacturacionMensual(porcentajeFacturacionMensualCalc);
-        setFacturacionMensualActual(facturacionMensualActualCalc);
-        setFacturacionMensualPotencial(facturacionMensualPotencialCalc);
-        setSalones(salonesActivos);
+        if (isActive) {
+          setSalones((data || []).filter((salon) => salon.activo !== false));
+        }
       } catch (err: any) {
-        console.error('Error loading dashboard:', err);
-        setError(err?.message || 'No se pudo cargar el dashboard.');
+        console.error('Error loading dashboard salons:', err);
+        if (isActive) {
+          setError(err?.message || 'No se pudieron cargar los salones.');
+        }
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoadingSalones(false);
+        }
       }
     };
 
-    void loadData();
+    void loadSalones();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="bo-page">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4" />
-          <div className="bo-kpi-grid gap-6">
-            {[1, 2, 3, 4, 5].map((item) => (
-              <div key={item} className="h-32 bg-gray-200 rounded-lg" />
-            ))}
-          </div>
-        </div>
-      </div>
+  useEffect(() => {
+    let isActive = true;
+
+    const loadReservas = async () => {
+      try {
+        setLoadingReservas(true);
+        setError('');
+
+        const fromDate = parseDashboardInputDate(appliedFilters.from);
+        const toDate = parseDashboardInputDate(appliedFilters.to, true);
+
+        let query = supabase
+          .from('reservas')
+          .select('id, id_salon, estado, monto, fecha_inicio, fecha_fin')
+          .gte('fecha_inicio', fromDate.toISOString())
+          .lte('fecha_inicio', toDate.toISOString())
+          .order('fecha_inicio', { ascending: true });
+
+        if (appliedFilters.salonId !== 'all') {
+          query = query.eq('id_salon', Number(appliedFilters.salonId));
+        }
+
+        if (appliedFilters.estado !== 'all') {
+          query = query.eq('estado', appliedFilters.estado);
+        }
+
+        const { data, error: reservasError } = await query;
+        if (reservasError) throw reservasError;
+
+        if (isActive) {
+          setReservas((data || []) as DashboardAnalyticsReserva[]);
+        }
+      } catch (err: any) {
+        console.error('Error loading dashboard reservations:', err);
+        if (isActive) {
+          setReservas([]);
+          setError(err?.message || 'No se pudieron cargar las reservas del dashboard.');
+        }
+      } finally {
+        if (isActive) {
+          setLoadingReservas(false);
+        }
+      }
+    };
+
+    void loadReservas();
+
+    return () => {
+      isActive = false;
+    };
+  }, [appliedFilters]);
+
+  const selectedSalones = useMemo(() => {
+    if (appliedFilters.salonId === 'all') {
+      return salones;
+    }
+
+    return salones.filter((salon) => Number(salon.id) === Number(appliedFilters.salonId));
+  }, [salones, appliedFilters.salonId]);
+
+  const metrics = useMemo(() => {
+    const reservasConfirmadasOPagadas = reservas.filter((reserva) =>
+      isReservaConfirmadaOPagada(reserva.estado),
     );
-  }
+    const totalSolicitudes = reservas.length;
+    const totalConfirmadasOPagadas = reservasConfirmadasOPagadas.length;
+    const porcentajeConfirmacion = totalSolicitudes > 0
+      ? (totalConfirmadasOPagadas / totalSolicitudes) * 100
+      : 0;
+    const capitalObtenido = reservasConfirmadasOPagadas.reduce(
+      (acc, reserva) => acc + Number(reserva.monto || 0),
+      0,
+    );
+    const ticketPromedio = totalConfirmadasOPagadas > 0
+      ? capitalObtenido / totalConfirmadasOPagadas
+      : 0;
+
+    const rangeStart = toCalendarDay(parseDashboardInputDate(appliedFilters.from));
+    const rangeEnd = toCalendarDay(parseDashboardInputDate(appliedFilters.to));
+    const daysInRange = countCalendarDaysInclusive(rangeStart, rangeEnd);
+    const ocupacionPorSalon = new Map<number, Set<string>>();
+
+    selectedSalones.forEach((salon) => {
+      ocupacionPorSalon.set(Number(salon.id), new Set<string>());
+    });
+
+    reservasConfirmadasOPagadas.forEach((reserva) => {
+      const salonId = Number(reserva.id_salon);
+      const diasOcupadosSalon = ocupacionPorSalon.get(salonId);
+      if (!diasOcupadosSalon) return;
+
+      const inicioReserva = new Date(reserva.fecha_inicio);
+      const finReserva = new Date(reserva.fecha_fin);
+      if (Number.isNaN(inicioReserva.getTime()) || Number.isNaN(finReserva.getTime())) return;
+
+      const inicioReservaDia = toCalendarDay(inicioReserva);
+      const finReservaDia = toCalendarDay(finReserva);
+      const inicioEfectivo = inicioReservaDia > rangeStart ? inicioReservaDia : rangeStart;
+      const finEfectivo = finReservaDia < rangeEnd ? finReservaDia : rangeEnd;
+      if (inicioEfectivo > finEfectivo) return;
+
+      const cursor = new Date(inicioEfectivo);
+      while (cursor <= finEfectivo) {
+        diasOcupadosSalon.add(buildDayKey(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    });
+
+    const diasOcupados = Array.from(ocupacionPorSalon.values()).reduce(
+      (acc, diasSalon) => acc + diasSalon.size,
+      0,
+    );
+    const totalDiasDisponibles = selectedSalones.length * daysInRange;
+    const porcentajeOcupacion = totalDiasDisponibles > 0
+      ? (diasOcupados / totalDiasDisponibles) * 100
+      : 0;
+    const facturacionPotencial = selectedSalones.reduce(
+      (acc, salon) => acc + Number(salon.precio_base || 0),
+      0,
+    ) * daysInRange;
+    const porcentajeFacturacion = facturacionPotencial > 0
+      ? (capitalObtenido / facturacionPotencial) * 100
+      : 0;
+
+    return {
+      totalSolicitudes,
+      totalConfirmadasOPagadas,
+      porcentajeConfirmacion,
+      capitalObtenido,
+      ticketPromedio,
+      diasOcupados,
+      totalDiasDisponibles,
+      porcentajeOcupacion,
+      facturacionPotencial,
+      porcentajeFacturacion,
+    };
+  }, [reservas, selectedSalones, appliedFilters.from, appliedFilters.to]);
+
+  const handleApplyFilters = () => {
+    if (!draftFilters.from || !draftFilters.to) {
+      setFilterError('Seleccione las fechas desde y hasta.');
+      return;
+    }
+
+    if (
+      parseDashboardInputDate(draftFilters.from)
+      > parseDashboardInputDate(draftFilters.to)
+    ) {
+      setFilterError('La fecha desde no puede ser posterior a la fecha hasta.');
+      return;
+    }
+
+    setFilterError('');
+    setAppliedFilters({ ...draftFilters });
+  };
+
+  const handleResetFilters = () => {
+    const defaultFilters = createDefaultDashboardFilters();
+    setDraftFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    setFilterError('');
+  };
+
+  const loading = loadingSalones || loadingReservas;
+  const periodSummary =
+    `${formatDashboardShortDate(appliedFilters.from)} al ${formatDashboardShortDate(appliedFilters.to)}`;
 
   return (
     <div className="bo-page">
       <div className="bo-page-header mb-6">
         <div>
           <h2 className="text-gray-900">Dashboard</h2>
-          <p className="text-sm text-gray-600 mt-1">Resumen del mes actual</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Resumen de {reservas.length} reservas · {periodSummary}
+          </p>
         </div>
       </div>
 
-      {error && (
-        <div className="flex items-start gap-2 p-4 bg-red-50 border border-red-200 rounded-lg mb-6">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-800">{error}</p>
+      <DashboardFilters
+        filters={draftFilters}
+        salones={salones}
+        loading={loading}
+        onChange={setDraftFilters}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+      />
+
+      {(error || filterError) && (
+        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-4">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-600" />
+          <p className="text-sm text-red-800">{filterError || error}</p>
         </div>
       )}
 
-      <div className="bo-kpi-grid gap-6">
-        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-blue-600" />
+      <div className="bo-kpi-grid gap-6" aria-busy={loading}>
+        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+              <CheckCircle2 className="h-6 w-6 text-blue-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Reservas Confirmadas / Solicitadas (Mes)</p>
-          <p className="text-3xl text-gray-900">{totalConfirmadas} / {totalSolicitudes}</p>
-          <p className="text-sm text-blue-700 mt-1">{porcentajeConfirmacion.toFixed(1)}% de conversión</p>
-        </div>
-
-        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Wallet className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm mb-1">Capital Obtenido (Mes)</p>
-          <p className="text-3xl text-gray-900">{formatCurrency(capitalObtenido)}</p>
-        </div>
-
-        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <ReceiptText className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm mb-1">Ticket Promedio (Mes)</p>
-          <p className="text-3xl text-gray-900">{formatCurrency(ticketPromedioPagado)}</p>
-        </div>
-
-        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-amber-600" />
-            </div>
-          </div>
-          <p className="text-gray-600 text-sm mb-1">Ocupación Mensual de Salones</p>
-          <p className="text-3xl text-gray-900">{porcentajeOcupacionMensual.toFixed(1)}%</p>
-          <p className="text-sm text-amber-700 mt-1">
-            {salonesOcupadosMensual} / {totalSalonesMensual} días de todos los salones ocupados
+          <p className="mb-1 text-sm text-gray-600">Confirmadas o pagadas / Solicitadas</p>
+          <p className="text-3xl text-gray-900">
+            {metrics.totalConfirmadasOPagadas} / {metrics.totalSolicitudes}
+          </p>
+          <p className="mt-1 text-sm text-blue-700">
+            {metrics.porcentajeConfirmacion.toFixed(1)}% de conversión
           </p>
         </div>
 
-        <div className="bo-kpi-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-cyan-600" />
+        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100">
+              <Wallet className="h-6 w-6 text-purple-600" />
             </div>
           </div>
-          <p className="text-gray-600 text-sm mb-1">Facturación Mensual vs Potencial</p>
-          <p className="text-3xl text-gray-900">{porcentajeFacturacionMensual.toFixed(1)}%</p>
-          <p className="text-sm text-cyan-700 mt-1">
-            {formatCurrency(facturacionMensualActual)} / {formatCurrency(facturacionMensualPotencial)}
+          <p className="mb-1 text-sm text-gray-600">Capital obtenido</p>
+          <p className="text-3xl text-gray-900">{formatCurrency(metrics.capitalObtenido)}</p>
+        </div>
+
+        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100">
+              <ReceiptText className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+          <p className="mb-1 text-sm text-gray-600">Ticket promedio</p>
+          <p className="text-3xl text-gray-900">{formatCurrency(metrics.ticketPromedio)}</p>
+        </div>
+
+        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-100">
+              <Building2 className="h-6 w-6 text-amber-600" />
+            </div>
+          </div>
+          <p className="mb-1 text-sm text-gray-600">Ocupación de salones</p>
+          <p className="text-3xl text-gray-900">{metrics.porcentajeOcupacion.toFixed(1)}%</p>
+          <p className="mt-1 text-sm text-amber-700">
+            {metrics.diasOcupados} / {metrics.totalDiasDisponibles} días disponibles ocupados
+          </p>
+        </div>
+
+        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-cyan-100">
+              <BarChart3 className="h-6 w-6 text-cyan-600" />
+            </div>
+          </div>
+          <p className="mb-1 text-sm text-gray-600">Facturación vs potencial</p>
+          <p className="text-3xl text-gray-900">{metrics.porcentajeFacturacion.toFixed(1)}%</p>
+          <p className="mt-1 text-sm text-cyan-700">
+            {formatCurrency(metrics.capitalObtenido)} / {formatCurrency(metrics.facturacionPotencial)}
           </p>
         </div>
       </div>
@@ -268,7 +362,13 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           </div>
         }
       >
-        <DashboardAnalytics salones={salones} />
+        <DashboardAnalytics
+          reservas={reservas}
+          salones={salones}
+          from={appliedFilters.from}
+          to={appliedFilters.to}
+          loading={loadingReservas}
+        />
       </Suspense>
     </div>
   );

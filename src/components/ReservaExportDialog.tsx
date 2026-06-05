@@ -49,6 +49,14 @@ const getCurrentMonthValue = () => {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const openNativePicker = (input: HTMLInputElement) => {
+  try {
+    input.showPicker?.();
+  } catch {
+    // El navegador mantiene disponible la escritura manual si no soporta showPicker.
+  }
+};
+
 export function ReservaExportDialog({
   open,
   loading,
@@ -88,7 +96,7 @@ export function ReservaExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !loading && onOpenChange(nextOpen)}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Exportar reservas</DialogTitle>
           <DialogDescription>
@@ -129,6 +137,7 @@ export function ReservaExportDialog({
                 id="export-month"
                 type="month"
                 value={filters.month}
+                onClick={(event) => openNativePicker(event.currentTarget)}
                 onChange={(event) => setFilters((current) => ({
                   ...current,
                   month: event.target.value,
@@ -149,6 +158,7 @@ export function ReservaExportDialog({
                   id="export-date-from"
                   type="date"
                   value={filters.dateFrom}
+                  onClick={(event) => openNativePicker(event.currentTarget)}
                   onChange={(event) => setFilters((current) => ({
                     ...current,
                     dateFrom: event.target.value,
@@ -165,6 +175,7 @@ export function ReservaExportDialog({
                   id="export-date-to"
                   type="date"
                   value={filters.dateTo}
+                  onClick={(event) => openNativePicker(event.currentTarget)}
                   onChange={(event) => setFilters((current) => ({
                     ...current,
                     dateTo: event.target.value,

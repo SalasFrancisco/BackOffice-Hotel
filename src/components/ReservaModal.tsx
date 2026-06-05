@@ -4,12 +4,7 @@ import { X, Trash2, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
-import {
-  RESERVA_ESTADO_COLORS,
-  RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
-  getAllowedReservaEstadoTransitions,
-  isReservaEstadoTransitionAllowed,
-} from '../utils/reservaEstadoTransitions';
+import { RESERVA_ESTADO_COLORS } from '../utils/reservaEstadoTransitions';
 
 type ReservaModalProps = {
   reserva: Reserva;
@@ -30,8 +25,6 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
   const [loadingServicios, setLoadingServicios] = useState(true);
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [registradaPor, setRegistradaPor] = useState('Formulario WEB');
-  const allowedEstados = getAllowedReservaEstadoTransitions(reserva.estado);
-  const changeableEstados = allowedEstados.filter((estado) => estado !== reserva.estado);
   const totalServicios = reservaServicios.reduce(
     (sum, rs) => sum + ((Number(rs.servicio?.precio) || 0) * (Number(rs.cantidad) || 0)),
     0,
@@ -95,38 +88,6 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
       console.error('Error loading servicios:', err);
     } finally {
       setLoadingServicios(false);
-    }
-  };
-
-  const handleChangeEstado = async (nuevoEstado: Reserva['estado']) => {
-    if (!isReservaEstadoTransitionAllowed(reserva.estado, nuevoEstado)) {
-      setMessage({
-        type: 'error',
-        text: RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
-      });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setMessage(null);
-
-      const { error } = await supabase
-        .from('reservas')
-        .update({ estado: nuevoEstado })
-        .eq('id', reserva.id);
-
-      if (error) throw error;
-
-      setMessage({ type: 'success', text: `Estado actualizado a ${nuevoEstado}` });
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (err: any) {
-      console.error('Error updating estado:', err);
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -333,27 +294,6 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
             </div>
           )}
 
-          {/* Cambiar Estado */}
-          <div>
-            <p className="text-sm text-gray-600 mb-2">Cambiar Estado</p>
-            <div className="flex gap-2 flex-wrap">
-              {changeableEstados.length > 0 ? (
-                changeableEstados.map(estado => (
-                  <button
-                    key={estado}
-                    onClick={() => handleChangeEstado(estado)}
-                    disabled={loading}
-                    className="bo-reserva-state-button px-4 py-2 rounded-lg text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: RESERVA_ESTADO_COLORS[estado] }}
-                  >
-                    {estado}
-                  </button>
-                ))
-              ) : (
-                <p className="text-sm text-gray-500">Estado final</p>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

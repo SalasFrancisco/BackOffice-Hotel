@@ -12,11 +12,8 @@ import { InfoDialog } from './InfoDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
   RESERVA_ESTADO_BACKOFFICE_INICIAL,
-  RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE,
   RESERVA_ESTADOS_BLOQUEANTES,
-  getAllowedReservaEstadoTransitions,
   isReservaEstadoPendienteGestion,
-  isReservaEstadoTransitionAllowed,
 } from '../utils/reservaEstadoTransitions';
 
 type ReservaFormProps = {
@@ -401,11 +398,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [fechaFinHora, setFechaFinHora] = useState(
     initialFechaFinParts?.time || '',
   );
-  const [estado, setEstado] = useState<Reserva['estado']>(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
-
-  useEffect(() => {
-    setEstado(reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL);
-  }, [reserva]);
+  const estadoReserva = reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL;
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
     reserva?.cantidad_personas ? reserva.cantidad_personas.toString() : ''
@@ -431,7 +424,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       fechaInicioHora,
       fechaFinDate,
       fechaFinHora,
-      estado,
       observaciones,
       cantidadPersonas,
       selectedServicios: selectedServiciosSnapshot,
@@ -446,7 +438,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       fechaInicioHora,
       fechaFinDate,
       fechaFinHora,
-      estado,
       observaciones,
       cantidadPersonas,
       selectedServiciosSnapshot,
@@ -568,9 +559,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const capacityWarningText = hasCapacityWarning
     ? `Advertencia: la cantidad ingresada ${capacityWarningDetails.join(' y ')}. Podés guardar la reserva igualmente.`
     : '';
-  const allowedEstadoTransitions = reserva
-    ? getAllowedReservaEstadoTransitions(reserva.estado)
-    : [RESERVA_ESTADO_BACKOFFICE_INICIAL];
 
   useEffect(() => {
     loadInitialData();
@@ -1109,11 +1097,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       return;
     }
 
-    if (reserva && !isReservaEstadoTransitionAllowed(reserva.estado, estado)) {
-      showWarningDialog(RESERVA_ESTADO_TRANSITION_ERROR_MESSAGE);
-      return;
-    }
-
     try {
       setLoading(true);
 
@@ -1130,7 +1113,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         {
           id: reserva?.id || 0,
           id_salon: idSalon,
-          estado,
+          estado: estadoReserva,
           fecha_inicio: fechaInicioIsoString,
           fecha_fin: fechaFinIsoString,
         },
@@ -1167,7 +1150,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         id_distribucion: idDistribucion || null,
         fecha_inicio: fechaInicioIsoString,
         fecha_fin: fechaFinIsoString,
-        estado,
         monto,
         cantidad_personas: totalPersonas,
         observaciones: hasNonWhitespaceValue(observacionesSanitizadas) ? observacionesSanitizadas : null,
@@ -1185,7 +1167,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       } else {
         const { data: newReserva, error: insertError } = await supabase
           .from('reservas')
-          .insert([{ ...reservaData, creado_por: userData.user?.id || null }])
+          .insert([{
+            ...reservaData,
+            estado: RESERVA_ESTADO_BACKOFFICE_INICIAL,
+            creado_por: userData.user?.id || null,
+          }])
           .select()
           .single();
         error = insertError;
@@ -1543,28 +1529,6 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         </div>
 
         {activeDatePicker && renderAvailabilityCalendar(activeDatePicker)}
-
-        {/* Estado (solo editable cuando se está editando una reserva) */}
-        {reserva && (
-          <div className="bo-form-grid-2">
-            <div>
-              <label className="block text-sm text-gray-700 mb-2">
-                Estado
-              </label>
-              <select
-                value={estado}
-                onChange={(e) => setEstado(e.target.value as Reserva['estado'])}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {allowedEstadoTransitions.map((optionEstado) => (
-                  <option key={optionEstado} value={optionEstado}>
-                    {optionEstado}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
 
         {/* Precio Info */}
         {idSalon > 0 && (

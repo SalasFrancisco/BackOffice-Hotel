@@ -1,11 +1,13 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send } from 'lucide-react';
+import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send, History } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { ReservaCalendar } from './ReservaCalendar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
+import { ReservaEstadoChangeDialog } from './ReservaEstadoChangeDialog';
+import { ReservaEstadoHistorialModal } from './ReservaEstadoHistorialModal';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import {
@@ -18,6 +20,7 @@ import {
   getReservaStartWarningText,
 } from '../utils/reservaExpiration';
 import {
+  getAllowedReservaEstadoTransitions,
   getReservaEstados,
   RESERVA_ESTADO_COLORS,
   RESERVA_ESTADOS_PENDIENTES_GESTION,
@@ -86,6 +89,13 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const [pendingEstadoChange, setPendingEstadoChange] = useState<{
+    reserva: Reserva;
+    nuevoEstado: Reserva['estado'];
+  } | null>(null);
+  const [estadoChangeDetalle, setEstadoChangeDetalle] = useState('');
+  const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null);
+  const [historialReserva, setHistorialReserva] = useState<Reserva | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
   const isAdmin = perfil.rol === 'ADMIN';
 
@@ -408,6 +418,52 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     }
   };
 
+  const handleEstadoSelection = (reserva: Reserva, nuevoEstado: Reserva['estado']) => {
+    const allowedEstados = getAllowedReservaEstadoTransitions(reserva.estado);
+    if (nuevoEstado === reserva.estado || !allowedEstados.includes(nuevoEstado)) return;
+
+    setPendingEstadoChange({ reserva, nuevoEstado });
+    setEstadoChangeDetalle('');
+  };
+
+  const handleEstadoChangeDialogOpenChange = (open: boolean) => {
+    if (open) return;
+    setPendingEstadoChange(null);
+    setEstadoChangeDetalle('');
+  };
+
+  const confirmEstadoChange = async () => {
+    if (!pendingEstadoChange) return;
+
+    const { reserva, nuevoEstado } = pendingEstadoChange;
+
+    try {
+      setChangingEstadoId(reserva.id);
+
+      const { error: changeError } = await supabase.rpc('cambiar_estado_reserva', {
+        p_reserva_id: reserva.id,
+        p_nuevo_estado: nuevoEstado,
+        p_detalle: estadoChangeDetalle.trim() || null,
+      });
+
+      if (changeError) throw changeError;
+
+      setPendingEstadoChange(null);
+      setEstadoChangeDetalle('');
+      setCalendarRefreshKey((key) => key + 1);
+      await loadReservas();
+      showTemporaryMessage('success', `Estado actualizado a ${nuevoEstado}.`);
+    } catch (err: any) {
+      console.error('Error updating reserva estado:', err);
+      showTemporaryMessage(
+        'error',
+        err?.message || 'No se pudo actualizar el estado de la reserva.',
+      );
+    } finally {
+      setChangingEstadoId(null);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleString('es-AR', {
@@ -418,6 +474,48 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       minute: '2-digit',
       timeZone: 'America/Argentina/Cordoba',
     });
+  };
+
+  const renderEstadoControl = (reserva: Reserva, mobile = false) => {
+    const availableEstados = getAllowedReservaEstadoTransitions(reserva.estado)
+      .filter((estado) => estado !== reserva.estado);
+    const isChanging = changingEstadoId === reserva.id;
+    const isFinal = availableEstados.length === 0;
+
+    return (
+      <div className={`flex items-center gap-2 ${mobile ? 'w-full' : ''}`}>
+        <select
+          value={reserva.estado}
+          onChange={(event) => handleEstadoSelection(
+            reserva,
+            event.target.value as Reserva['estado'],
+          )}
+          disabled={isChanging || isFinal}
+          className={`min-h-10 rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 ${
+            mobile ? 'min-w-0 flex-1' : 'min-w-[190px] max-w-[220px]'
+          }`}
+          style={{ borderColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+          title={isFinal ? `${reserva.estado} es un estado final` : 'Cambiar estado'}
+          aria-label={`Estado de la reserva ${reserva.id}`}
+        >
+          <option value={reserva.estado}>{reserva.estado}</option>
+          {availableEstados.map((estado) => (
+            <option key={estado} value={estado}>
+              {estado}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setHistorialReserva(reserva)}
+          className={`${ACTION_BUTTON_BASE} h-10 w-10 flex-shrink-0 border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 focus-visible:ring-gray-500`}
+          title="Ver historial de estados"
+          aria-label={`Ver historial de estados de la reserva ${reserva.id}`}
+        >
+          <History className={ACTION_ICON_BASE} />
+        </button>
+      </div>
+    );
   };
 
   const filteredReservas = reservas.filter(r => {
@@ -796,12 +894,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                         <td className="px-6 py-4 text-sm text-gray-900">{formatDate(reserva.fecha_inicio)}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{formatDate(reserva.fecha_fin)}</td>
                         <td className="px-6 py-4">
-                          <span
-                            className="inline-block px-3 py-1 rounded-full text-xs text-white"
-                            style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
-                          >
-                            {reserva.estado}
-                          </span>
+                          {renderEstadoControl(reserva)}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {montoInicial === null
@@ -986,6 +1079,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   </span>
                 </div>
 
+                <div className="mb-4">
+                  <p className="mb-2 text-sm text-gray-500">Estado</p>
+                  {renderEstadoControl(reserva, true)}
+                </div>
+
                 <div className="bo-mobile-card-grid text-sm">
                   <div>
                     <p className="text-gray-500">Registrada por</p>
@@ -1144,6 +1242,27 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         title={warningDialog?.title || 'Advertencias'}
         description={warningDialog?.description || ''}
         actionText="Cerrar"
+      />
+
+      <ReservaEstadoChangeDialog
+        open={pendingEstadoChange !== null}
+        reserva={pendingEstadoChange?.reserva || null}
+        nuevoEstado={pendingEstadoChange?.nuevoEstado || null}
+        detalle={estadoChangeDetalle}
+        loading={changingEstadoId !== null}
+        onDetalleChange={setEstadoChangeDetalle}
+        onConfirm={confirmEstadoChange}
+        onOpenChange={handleEstadoChangeDialogOpenChange}
+      />
+
+      <ReservaEstadoHistorialModal
+        open={historialReserva !== null}
+        reserva={historialReserva}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHistorialReserva(null);
+          }
+        }}
       />
     </div>
   );

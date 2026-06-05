@@ -59,6 +59,16 @@ export type ReservaServicio = {
   servicio?: Servicio;
 };
 
+export type Cliente = {
+  id: number;
+  nombre: string;
+  email: string;
+  telefono: string;
+  creado_por?: string | null;
+  creado_en?: string;
+  actualizado_en?: string;
+};
+
 export type NotificacionTipo =
   | 'RESERVA_NUEVA'
   | 'RESERVA_EDITADA'
@@ -87,6 +97,7 @@ export type Reserva = {
   cliente_nombre?: string | null;
   cliente_email?: string | null;
   cliente_telefono?: string | null;
+  id_cliente?: number | null;
   id_salon: number;
   id_distribucion?: number;
   fecha_inicio: string;

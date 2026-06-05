@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { AlertCircle, CalendarDays, CheckCircle, ChevronLeft, ChevronRight, Package, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio, Cliente } from '../utils/supabase/client';
+import { AlertCircle, CalendarDays, CheckCircle, ChevronLeft, ChevronRight, Loader2, Package, UserRound, X } from 'lucide-react';
 import { projectId } from '../utils/supabase/info';
 import {
   hasNonWhitespaceValue,
@@ -373,6 +373,14 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   const [calendarMonthReservas, setCalendarMonthReservas] = useState<AvailabilityReserva[]>([]);
   const [message, setMessage] = useState<{ text: string } | null>(null);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string } | null>(null);
+  const [clientesSugeridos, setClientesSugeridos] = useState<Cliente[]>([]);
+  const [loadingClientes, setLoadingClientes] = useState(false);
+  const [showClientesSugeridos, setShowClientesSugeridos] = useState(false);
+  const [activeClienteIndex, setActiveClienteIndex] = useState(-1);
+  const [selectedClienteId, setSelectedClienteId] = useState<number | null>(
+    reserva?.id_cliente || null,
+  );
+  const clienteAutocompleteRef = useRef<HTMLDivElement | null>(null);
   
   // Selected services: Map<servicioId, cantidad>
   const [selectedServicios, setSelectedServicios] = useState<Map<number, number>>(new Map());
@@ -565,6 +573,68 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   }, []);
 
   useEffect(() => {
+    if (reserva || selectedClienteId !== null) {
+      setClientesSugeridos([]);
+      setShowClientesSugeridos(false);
+      setLoadingClientes(false);
+      return;
+    }
+
+    const busqueda = nombreCliente.trim();
+    if (!busqueda) {
+      setClientesSugeridos([]);
+      setShowClientesSugeridos(false);
+      setLoadingClientes(false);
+      return;
+    }
+
+    let isActive = true;
+    setLoadingClientes(true);
+    setShowClientesSugeridos(true);
+    setActiveClienteIndex(-1);
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.rpc('buscar_clientes_recurrentes', {
+          p_busqueda: busqueda,
+          p_limite: 8,
+        });
+
+        if (error) throw error;
+        if (isActive) {
+          setClientesSugeridos((data || []) as Cliente[]);
+        }
+      } catch (err) {
+        console.error('Error searching recurrent clients:', err);
+        if (isActive) {
+          setClientesSugeridos([]);
+        }
+      } finally {
+        if (isActive) {
+          setLoadingClientes(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [nombreCliente, reserva, selectedClienteId]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!clienteAutocompleteRef.current?.contains(event.target as Node)) {
+        setShowClientesSugeridos(false);
+        setActiveClienteIndex(-1);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
     if (!activeDatePicker || !idSalon) {
       setCalendarMonthReservas([]);
       setCalendarAvailabilityError('');
@@ -664,6 +734,48 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
       title,
       description,
     });
+  };
+
+  const selectClienteSugerido = (cliente: Cliente) => {
+    setSelectedClienteId(cliente.id);
+    setNombreCliente(cliente.nombre);
+    setEmailCliente(cliente.email);
+    setTelefonoCliente(sanitizePhoneInput(cliente.telefono));
+    setClientesSugeridos([]);
+    setShowClientesSugeridos(false);
+    setActiveClienteIndex(-1);
+  };
+
+  const handleNombreClienteChange = (value: string) => {
+    setSelectedClienteId(null);
+    setNombreCliente(value);
+  };
+
+  const handleNombreClienteKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showClientesSugeridos || clientesSugeridos.length === 0) {
+      if (event.key === 'Escape') {
+        setShowClientesSugeridos(false);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveClienteIndex((current) => (
+        current >= clientesSugeridos.length - 1 ? 0 : current + 1
+      ));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveClienteIndex((current) => (
+        current <= 0 ? clientesSugeridos.length - 1 : current - 1
+      ));
+    } else if (event.key === 'Enter' && activeClienteIndex >= 0) {
+      event.preventDefault();
+      selectClienteSugerido(clientesSugeridos[activeClienteIndex]);
+    } else if (event.key === 'Escape') {
+      setShowClientesSugeridos(false);
+      setActiveClienteIndex(-1);
+    }
   };
 
   const loadInitialData = async () => {
@@ -1169,6 +1281,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           .from('reservas')
           .insert([{
             ...reservaData,
+            id_cliente: selectedClienteId,
             estado: RESERVA_ESTADO_BACKOFFICE_INICIAL,
             creado_por: userData.user?.id || null,
           }])
@@ -1293,18 +1406,85 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         <div className="bo-card-compact bg-gray-50 p-4 rounded-lg">
           <h4 className="text-gray-900 mb-4">Datos del cliente</h4>
           <div className="bo-form-grid-3">
-            <div>
+            <div ref={clienteAutocompleteRef} className="relative">
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={nombreCliente}
-                onChange={(e) => setNombreCliente(e.target.value)}
+                onChange={(e) => handleNombreClienteChange(e.target.value)}
+                onFocus={() => {
+                  if (!reserva && nombreCliente.trim() && selectedClienteId === null) {
+                    setShowClientesSugeridos(true);
+                  }
+                }}
+                onKeyDown={handleNombreClienteKeyDown}
                 required
+                autoComplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={!reserva && showClientesSugeridos}
+                aria-controls="clientes-recurrentes-listbox"
+                aria-activedescendant={
+                  activeClienteIndex >= 0
+                    ? `cliente-recurrente-${clientesSugeridos[activeClienteIndex]?.id}`
+                    : undefined
+                }
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Nombre del cliente o empresa"
               />
+              {!reserva && showClientesSugeridos && (
+                <div
+                  id="clientes-recurrentes-listbox"
+                  role="listbox"
+                  className="absolute left-0 right-0 top-full z-40 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl"
+                >
+                  {loadingClientes ? (
+                    <div className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-gray-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Buscando clientes...
+                    </div>
+                  ) : clientesSugeridos.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-sm text-gray-500">
+                      No se encontraron clientes coincidentes.
+                    </div>
+                  ) : (
+                    clientesSugeridos.map((cliente, index) => (
+                      <button
+                        key={cliente.id}
+                        id={`cliente-recurrente-${cliente.id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={activeClienteIndex === index}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectClienteSugerido(cliente)}
+                        onMouseEnter={() => setActiveClienteIndex(index)}
+                        className={`flex w-full items-start gap-3 border-b border-gray-100 px-3 py-2.5 text-left last:border-b-0 ${
+                          activeClienteIndex === index
+                            ? 'bg-blue-50'
+                            : 'bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+                          <UserRound className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-gray-900">
+                            {cliente.nombre}
+                          </span>
+                          <span className="block truncate text-xs text-gray-600">
+                            {cliente.email}
+                          </span>
+                          <span className="block text-xs text-gray-500">
+                            {cliente.telefono}
+                          </span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm text-gray-700 mb-2">

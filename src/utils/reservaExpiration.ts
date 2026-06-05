@@ -34,11 +34,11 @@ const formatDateTime = (date: Date) => {
 };
 
 export const getReservaExpirationBaseDate = (
-  reserva: Pick<Reserva, 'creado_en' | 'actualizado_en'>,
-) => toValidDate(reserva.actualizado_en) || toValidDate(reserva.creado_en);
+  reserva: Pick<Reserva, 'presupuesto_emitido_en'>,
+) => toValidDate(reserva.presupuesto_emitido_en);
 
 export const getReservaExpirationWarningInfo = (
-  reserva: Pick<Reserva, 'estado' | 'creado_en' | 'actualizado_en'>,
+  reserva: Pick<Reserva, 'estado' | 'presupuesto_emitido_en'>,
   now: Date = new Date(),
 ): ReservaExpirationWarningInfo | null => {
   if (!isReservaEstadoPendienteGestion(reserva.estado)) return null;
@@ -97,20 +97,20 @@ export const getReservaStartWarningInfo = (
 };
 
 export const getReservaExpirationWarningText = (
-  reserva: Pick<Reserva, 'estado' | 'creado_en' | 'actualizado_en'>,
+  reserva: Pick<Reserva, 'estado' | 'presupuesto_emitido_en'>,
 ) => {
   const warningInfo = getReservaExpirationWarningInfo(reserva);
   if (!warningInfo) return '';
 
   if (warningInfo.daysRemaining <= 0) {
-    return 'La reserva ya superó el plazo de 7 días en estado pendiente de gestión y se cancelará automáticamente.';
+    return 'El presupuesto de la reserva ya superó los 7 días de vigencia y se cancelará automáticamente.';
   }
 
   if (warningInfo.daysRemaining === 1) {
-    return `Último día para confirmar o modificar la reserva antes de su cancelación automática por inactividad (${formatDateTime(warningInfo.expiresAt)}).`;
+    return `Último día de vigencia del presupuesto. Si la reserva continúa pendiente, se cancelará automáticamente (${formatDateTime(warningInfo.expiresAt)}).`;
   }
 
-  return `Quedan ${warningInfo.daysRemaining} días para confirmar o modificar la reserva antes de su cancelación automática por inactividad (${formatDateTime(warningInfo.expiresAt)}).`;
+  return `Quedan ${warningInfo.daysRemaining} días de vigencia del presupuesto. Si la reserva continúa pendiente, se cancelará automáticamente (${formatDateTime(warningInfo.expiresAt)}).`;
 };
 
 export const getReservaStartWarningText = (

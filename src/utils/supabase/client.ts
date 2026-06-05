@@ -116,6 +116,7 @@ export type Reserva = {
   creado_en: string;
   actualizado_en?: string;
   presupuesto_url?: string | null;
+  presupuesto_emitido_en?: string | null;
   salon?: Salon;
   distribucion?: Distribucion;
   reserva_servicios?: ReservaServicio[];

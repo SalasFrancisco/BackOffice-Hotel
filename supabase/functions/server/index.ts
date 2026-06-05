@@ -509,8 +509,9 @@ const PUBLIC_RESERVA_NOTIFICATION_ORIGIN = "salones_form";
 const RESERVA_EXPIRATION_NOTIFICATION_ORIGIN = "reserva_vencimiento_auto";
 const RESERVA_AUTO_CANCEL_DAYS = 7;
 const RESERVA_EXPIRATION_WARNING_DAYS = [3, 2, 1] as const;
-const RESERVA_ALERTA_INACTIVIDAD = "vencimiento_inactividad";
-const RESERVA_ALERTA_INACTIVIDAD_LEGACY = "vencimiento";
+const RESERVA_ALERTA_PRESUPUESTO = "vencimiento_presupuesto";
+const RESERVA_ALERTA_INACTIVIDAD_LEGACY = "vencimiento_inactividad";
+const RESERVA_ALERTA_INACTIVIDAD_LEGACY_ALT = "vencimiento";
 const RESERVA_ALERTA_INICIO_EVENTO = "vencimiento_inicio_evento";
 const RESERVA_ALERTA_CANCELACION_AUTOMATICA = "cancelacion_automatica";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -2483,7 +2484,10 @@ const upsertPresupuestoForReserva = async (
 
   const { error: updateError } = await supabaseAdmin
     .from("reservas")
-    .update({ presupuesto_url: storagePath })
+    .update({
+      presupuesto_url: storagePath,
+      presupuesto_emitido_en: new Date().toISOString(),
+    })
     .eq("id", reservaId);
 
   if (updateError) {
@@ -2514,8 +2518,8 @@ const toValidDate = (value?: string | null) => {
 };
 
 const getReservaExpirationBaseDate = (
-  reserva: { creado_en?: string | null; actualizado_en?: string | null },
-) => toValidDate(reserva.actualizado_en) || toValidDate(reserva.creado_en);
+  reserva: { presupuesto_emitido_en?: string | null },
+) => toValidDate(reserva.presupuesto_emitido_en);
 
 const asMetadataObject = (metadata: unknown): Record<string, unknown> => {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
@@ -3343,9 +3347,22 @@ const processReservaVencimientoHandler = async (c: any) => {
 
     const now = new Date();
 
+    const {
+      data: reservasCanceladasPorPresupuesto,
+      error: cancelacionPresupuestoError,
+    } = await supabaseAdmin.rpc("cancelar_reservas_presupuesto_vencido");
+
+    if (cancelacionPresupuestoError) {
+      return c.json({ error: cancelacionPresupuestoError.message }, 500);
+    }
+
+    const cancelledByBudgetCount = Array.isArray(reservasCanceladasPorPresupuesto)
+      ? reservasCanceladasPorPresupuesto.length
+      : 0;
+
     const { data: reservasPendientes, error: reservasError } = await supabaseAdmin
       .from("reservas")
-      .select("id, cliente_nombre, estado, fecha_inicio, creado_en, actualizado_en")
+      .select("id, cliente_nombre, estado, fecha_inicio, presupuesto_emitido_en")
       .in("estado", RESERVA_ESTADOS_PENDIENTES_GESTION);
 
     if (reservasError) {
@@ -3357,8 +3374,10 @@ const processReservaVencimientoHandler = async (c: any) => {
       return c.json({
         success: true,
         pendingCount: 0,
-        cancelledCount: 0,
-        notificationsCreated: 0,
+        cancelledCount: cancelledByBudgetCount,
+        notificationsCreated: cancelledByBudgetCount,
+        warningNotificationsCreated: 0,
+        cancellationNotificationsCreated: cancelledByBudgetCount,
       });
     }
 
@@ -3400,7 +3419,7 @@ const processReservaVencimientoHandler = async (c: any) => {
     const cancelCandidatesByReservaId = new Map<
       number,
       {
-        reason: "inicio_evento" | "inactividad_7_dias";
+        reason: "inicio_evento";
         cycleKey: string;
         clienteNombre: string;
         estado: string;
@@ -3410,7 +3429,7 @@ const processReservaVencimientoHandler = async (c: any) => {
     for (const reserva of reservas) {
       const baseDate = getReservaExpirationBaseDate(reserva);
       const startDate = toValidDate(reserva.fecha_inicio);
-      const inactivityCycleKey = baseDate?.toISOString() || "";
+      const presupuestoCycleKey = baseDate?.toISOString() || "";
       const startCycleKey = startDate?.toISOString() || "";
       const clienteNombre = (reserva.cliente_nombre || "Sin nombre").trim() || "Sin nombre";
 
@@ -3419,11 +3438,12 @@ const processReservaVencimientoHandler = async (c: any) => {
       for (const existingNotification of existingNotifications) {
         const alertType = getMetadataString(existingNotification.metadata, "alerta");
         const notificationCycleKey = getMetadataString(existingNotification.metadata, "cycle_key");
-        const isInactividadAlert = alertType === RESERVA_ALERTA_INACTIVIDAD
-          || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY;
+        const isPresupuestoAlert = alertType === RESERVA_ALERTA_PRESUPUESTO
+          || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY
+          || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY_ALT;
         const isInicioAlert = alertType === RESERVA_ALERTA_INICIO_EVENTO;
 
-        if (isInactividadAlert && notificationCycleKey !== inactivityCycleKey) {
+        if (isPresupuestoAlert && notificationCycleKey !== presupuestoCycleKey) {
           staleWarningNotificationIds.add(existingNotification.id);
           continue;
         }
@@ -3433,17 +3453,14 @@ const processReservaVencimientoHandler = async (c: any) => {
         }
       }
 
-      let inactivityDaysRemaining: number | null = null;
-      let inactivityExpired = false;
+      let presupuestoDaysRemaining: number | null = null;
 
       if (baseDate) {
         const expiresAt = new Date(baseDate.getTime() + (RESERVA_AUTO_CANCEL_DAYS * DAY_MS));
         const remainingMs = expiresAt.getTime() - now.getTime();
 
-        if (remainingMs <= 0) {
-          inactivityExpired = true;
-        } else {
-          inactivityDaysRemaining = Math.ceil(remainingMs / DAY_MS);
+        if (remainingMs > 0) {
+          presupuestoDaysRemaining = Math.ceil(remainingMs / DAY_MS);
         }
       }
 
@@ -3469,39 +3486,30 @@ const processReservaVencimientoHandler = async (c: any) => {
         continue;
       }
 
-      if (inactivityExpired) {
-        cancelCandidatesByReservaId.set(reserva.id, {
-          reason: "inactividad_7_dias",
-          cycleKey: inactivityCycleKey,
-          clienteNombre,
-          estado: String(reserva.estado || ""),
-        });
-        continue;
-      }
-
       if (
-        inactivityDaysRemaining !== null
-        && RESERVA_EXPIRATION_WARNING_DAYS.includes(inactivityDaysRemaining as 1 | 2 | 3)
+        presupuestoDaysRemaining !== null
+        && RESERVA_EXPIRATION_WARNING_DAYS.includes(presupuestoDaysRemaining as 1 | 2 | 3)
       ) {
         const warningAlreadyExists = existingNotifications.some((notification) => {
           const alertType = getMetadataString(notification.metadata, "alerta");
           const notificationCycleKey = getMetadataString(notification.metadata, "cycle_key");
           const notificationDays = getMetadataNumber(notification.metadata, "dias_restantes");
-          const isInactividadAlert = alertType === RESERVA_ALERTA_INACTIVIDAD
-            || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY;
+          const isPresupuestoAlert = alertType === RESERVA_ALERTA_PRESUPUESTO
+            || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY
+            || alertType === RESERVA_ALERTA_INACTIVIDAD_LEGACY_ALT;
 
-          return isInactividadAlert
-            && notificationCycleKey === inactivityCycleKey
-            && notificationDays === inactivityDaysRemaining;
+          return isPresupuestoAlert
+            && notificationCycleKey === presupuestoCycleKey
+            && notificationDays === presupuestoDaysRemaining;
         });
 
         if (!warningAlreadyExists) {
-          const title = inactivityDaysRemaining === 1
-            ? `Reserva #${reserva.id}: último día para confirmar o modificar`
-            : `Reserva #${reserva.id}: vence en ${inactivityDaysRemaining} días por inactividad`;
-          const message = inactivityDaysRemaining === 1
-            ? `Último día para confirmar o modificar la reserva #${reserva.id} de ${clienteNombre}. Si no hay cambios, se cancelará automáticamente por inactividad.`
-            : `La reserva #${reserva.id} de ${clienteNombre} se cancelará automáticamente en ${inactivityDaysRemaining} días si continúa pendiente y sin modificaciones.`;
+          const title = presupuestoDaysRemaining === 1
+            ? `Reserva #${reserva.id}: último día de vigencia del presupuesto`
+            : `Reserva #${reserva.id}: el presupuesto vence en ${presupuestoDaysRemaining} días`;
+          const message = presupuestoDaysRemaining === 1
+            ? `Último día de vigencia del presupuesto de la reserva #${reserva.id} de ${clienteNombre}. Si continúa pendiente, se cancelará automáticamente.`
+            : `El presupuesto de la reserva #${reserva.id} de ${clienteNombre} vence en ${presupuestoDaysRemaining} días. Si continúa pendiente, se cancelará automáticamente.`;
 
           warningNotificationsToInsert.push({
             tipo: "ESTADO_CAMBIADO",
@@ -3510,11 +3518,11 @@ const processReservaVencimientoHandler = async (c: any) => {
             reserva_id: reserva.id,
             metadata: {
               origen: RESERVA_EXPIRATION_NOTIFICATION_ORIGIN,
-              alerta: RESERVA_ALERTA_INACTIVIDAD,
-              dias_restantes: inactivityDaysRemaining,
-              cycle_key: inactivityCycleKey,
+              alerta: RESERVA_ALERTA_PRESUPUESTO,
+              dias_restantes: presupuestoDaysRemaining,
+              cycle_key: presupuestoCycleKey,
               regla_dias: RESERVA_AUTO_CANCEL_DAYS,
-              regla_tipo: "inactividad",
+              regla_tipo: "vigencia_presupuesto",
               estado: reserva.estado,
             },
           });
@@ -3573,7 +3581,7 @@ const processReservaVencimientoHandler = async (c: any) => {
       }
     }
 
-    let cancelledCount = 0;
+    let cancelledCount = cancelledByBudgetCount;
     const reservasToCancel = Array.from(cancelCandidatesByReservaId.keys());
     if (reservasToCancel.length > 0) {
       const { data: cancelledRows, error: cancelError } = await supabaseAdmin
@@ -3588,7 +3596,7 @@ const processReservaVencimientoHandler = async (c: any) => {
       }
 
       const cancelledReservas = cancelledRows || [];
-      cancelledCount = cancelledReservas.length;
+      cancelledCount += cancelledReservas.length;
 
       for (const cancelledReserva of cancelledReservas) {
         const reservaId = cancelledReserva.id;
@@ -3612,9 +3620,8 @@ const processReservaVencimientoHandler = async (c: any) => {
         }
 
         const clienteNombre = cancelCandidate.clienteNombre;
-        const cancellationMessage = cancelCandidate.reason === "inicio_evento"
-          ? `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente porque llegó su fecha de inicio y continuaba en estado ${cancelCandidate.estado || "pendiente de gestión"}.`
-          : `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente por superar ${RESERVA_AUTO_CANCEL_DAYS} días en estado ${cancelCandidate.estado || "pendiente de gestión"} sin confirmación ni modificaciones.`;
+        const cancellationMessage =
+          `La reserva #${reservaId} de ${clienteNombre} fue cancelada automáticamente porque llegó su fecha de inicio y continuaba en estado ${cancelCandidate.estado || "pendiente de gestión"}.`;
 
         autoCancelNotificationsToInsert.push({
           tipo: "ESTADO_CAMBIADO",
@@ -3627,8 +3634,8 @@ const processReservaVencimientoHandler = async (c: any) => {
             dias_restantes: 0,
             cycle_key: cycleKey,
             motivo: cancelCandidate.reason,
-            regla_dias: cancelCandidate.reason === "inactividad_7_dias" ? RESERVA_AUTO_CANCEL_DAYS : null,
-            regla_tipo: cancelCandidate.reason === "inicio_evento" ? "fecha_inicio" : "inactividad",
+            regla_dias: null,
+            regla_tipo: "fecha_inicio",
             estado: "Cancelado",
           },
         });
@@ -3654,9 +3661,10 @@ const processReservaVencimientoHandler = async (c: any) => {
       success: true,
       pendingCount: reservas.length,
       cancelledCount,
-      notificationsCreated: notificationsToInsert.length,
+      notificationsCreated: notificationsToInsert.length + cancelledByBudgetCount,
       warningNotificationsCreated: warningNotificationsToInsert.length,
-      cancellationNotificationsCreated: autoCancelNotificationsToInsert.length,
+      cancellationNotificationsCreated:
+        autoCancelNotificationsToInsert.length + cancelledByBudgetCount,
     });
   } catch (error) {
     console.error("Error in process-reserva-vencimiento endpoint:", error);

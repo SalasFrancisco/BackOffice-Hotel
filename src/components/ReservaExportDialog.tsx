@@ -106,9 +106,9 @@ export function ReservaExportDialog({
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="export-period" className="mb-2 block text-sm text-gray-700">
+            <p className="mb-2 block text-sm text-gray-700">
               Período
-            </label>
+            </p>
             <select
               id="export-period"
               value={filters.period}
@@ -130,9 +130,9 @@ export function ReservaExportDialog({
 
           {filters.period === 'specificMonth' && (
             <div>
-              <label htmlFor="export-month" className="mb-2 block text-sm text-gray-700">
+              <p className="mb-2 block text-sm text-gray-700">
                 Mes
-              </label>
+              </p>
               <input
                 id="export-month"
                 type="month"
@@ -151,9 +151,9 @@ export function ReservaExportDialog({
           {filters.period === 'dateRange' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label htmlFor="export-date-from" className="mb-2 block text-sm text-gray-700">
+                <p className="mb-2 block text-sm text-gray-700">
                   Desde
-                </label>
+                </p>
                 <input
                   id="export-date-from"
                   type="date"
@@ -168,9 +168,9 @@ export function ReservaExportDialog({
                 />
               </div>
               <div>
-                <label htmlFor="export-date-to" className="mb-2 block text-sm text-gray-700">
+                <p className="mb-2 block text-sm text-gray-700">
                   Hasta
-                </label>
+                </p>
                 <input
                   id="export-date-to"
                   type="date"
@@ -194,9 +194,9 @@ export function ReservaExportDialog({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="export-estado" className="mb-2 block text-sm text-gray-700">
+              <p className="mb-2 block text-sm text-gray-700">
                 Estado
-              </label>
+              </p>
               <select
                 id="export-estado"
                 value={filters.estado}
@@ -215,9 +215,9 @@ export function ReservaExportDialog({
             </div>
 
             <div>
-              <label htmlFor="export-origin" className="mb-2 block text-sm text-gray-700">
+              <p className="mb-2 block text-sm text-gray-700">
                 Origen
-              </label>
+              </p>
               <select
                 id="export-origin"
                 value={filters.origen}

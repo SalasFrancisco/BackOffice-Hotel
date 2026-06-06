@@ -634,13 +634,13 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           }
         }}
       >
-        <DialogContent className="bo-service-dialog max-w-lg max-h-[85vh] gap-0 overflow-hidden p-0">
-          <DialogHeader className="min-h-[4.25rem] justify-center border-b border-gray-200 bg-gray-50/70 px-6 py-4 pr-14">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
             <DialogTitle>Ordenar categorías</DialogTitle>
           </DialogHeader>
 
-          <div className="flex max-h-[calc(85vh-5rem)] flex-col">
-            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+          <div className="space-y-4 p-2">
+            <div className="space-y-4">
               <p className="text-sm text-gray-600">
                 Agarrá y arrastrá cada categoría para reordenarla. Al final, guardá los cambios.
               </p>
@@ -700,7 +700,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               )}
             </div>
 
-            <div className="bo-form-actions border-t bg-white px-6 py-4">
+            <div className="bo-form-actions pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => {
@@ -710,7 +710,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                   setDraggingCategoriaId(null);
                 }}
                 disabled={savingOrdenCategorias}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -718,7 +718,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                 type="button"
                 onClick={handleSaveOrdenCategorias}
                 disabled={savingOrdenCategorias || categoriasOrdenDraft.length < 2}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savingOrdenCategorias ? 'Guardando...' : 'Guardar orden'}
               </button>
@@ -729,13 +729,13 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Dialog - Crear/Editar Categoria */}
       <Dialog open={showCategoriaDialog} onOpenChange={setShowCategoriaDialog}>
-        <DialogContent className="bo-service-dialog max-w-md max-h-[85vh] gap-0 overflow-hidden p-0">
-          <DialogHeader className="min-h-[4.25rem] justify-center border-b border-gray-200 bg-gray-50/70 px-6 py-4 pr-14">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
             <DialogTitle>
               {editingCategoria ? 'Editar Categoría' : 'Nueva Categoría'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveCategoria} className="space-y-4 px-6 py-5">
+          <form onSubmit={handleSaveCategoria} className="space-y-4 p-2">
             <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Nombre <span className="text-red-500">*</span>
@@ -763,17 +763,17 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               />
             </div>
 
-            <div className="bo-form-actions pt-4">
+            <div className="bo-form-actions pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => setShowCategoriaDialog(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 {editingCategoria ? 'Guardar Cambios' : 'Crear Categoría'}
               </button>
@@ -784,14 +784,14 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Dialog - Crear/Editar Servicio */}
       <Dialog open={showServicioDialog} onOpenChange={setShowServicioDialog}>
-        <DialogContent className="bo-service-dialog max-w-md max-h-[85vh] gap-0 overflow-hidden p-0">
-          <DialogHeader className="min-h-[4.25rem] justify-center border-b border-gray-200 bg-gray-50/70 px-6 py-4 pr-14">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
             <DialogTitle>
               {editingServicio ? 'Editar Servicio' : 'Nuevo Servicio'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveServicio} className="flex max-h-[calc(85vh-5rem)] flex-col">
-            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+          <form onSubmit={handleSaveServicio} className="space-y-4 p-2">
+            <div className="space-y-4">
               <div>
               <label className="block text-sm text-gray-700 mb-2">
                 Categoría <span className="text-red-500">*</span>
@@ -855,17 +855,17 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
             </div>
             </div>
 
-            <div className="bo-form-actions border-t bg-white px-6 py-4">
+            <div className="bo-form-actions pt-4 border-t border-gray-200">
               <button
                 type="button"
                 onClick={() => setShowServicioDialog(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 {editingServicio ? 'Guardar Cambios' : 'Crear Servicio'}
               </button>

@@ -266,15 +266,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
 
   return (
     <div className="bo-page">
-      <div className="bo-page-header mb-6">
-        <div>
-          <h2 className="text-gray-900">Dashboard</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Resumen de {reservas.length} reservas · {periodSummary}
-          </p>
-        </div>
-      </div>
-
+      
       <DashboardFilters
         filters={draftFilters}
         salones={salones}

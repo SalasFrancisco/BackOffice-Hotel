@@ -58,8 +58,8 @@ export const getDashboardPresetRange = (
 };
 
 export const createDefaultDashboardFilters = (): DashboardFilterValues => ({
-  period: 'currentYear',
-  ...getDashboardPresetRange('currentYear'),
+  period: 'currentMonth',
+  ...getDashboardPresetRange('currentMonth'),
   salonId: 'all',
   estado: 'all',
 });

@@ -69,7 +69,7 @@ const clearPasswordRecoveryUrl = () => {
 };
 
 const INACTIVE_USER_MESSAGE = 'Usuario dado de baja. Contacte al administrador.';
-const SESSION_EXPIRED_MESSAGE = 'La sesiÃ³n se cerrÃ³ por inactividad. Inicie sesiÃ³n nuevamente.';
+const SESSION_EXPIRED_MESSAGE = 'La sesión se cerró por inactividad. Inicie sesión nuevamente.';
 
 const isPerfilActivo = (perfil?: Perfil | null) => perfil?.activo !== false;
 

@@ -333,3 +333,12 @@ html.dark .recharts-tooltip-label,
 html.dark .recharts-tooltip-item {
   color: #e5e7eb !important;
 }
+
+html.dark .bo-dashboard-animated-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 18px 38px rgb(0 0 0 / 0.35);
+}
+
+html.dark .bo-animated-chart:hover .recharts-cartesian-grid line {
+  stroke: #475569;
+}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
 import {
   Bar,
@@ -34,7 +34,25 @@ type DashboardAnalyticsProps = {
 };
 
 const BAR_COLOR = '#2563EB';
+const BAR_ACTIVE_COLOR = '#60A5FA';
 const SALON_BAR_COLOR = '#0F766E';
+const SALON_BAR_ACTIVE_COLOR = '#14B8A6';
+
+const usePrefersReducedMotion = () => {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
+    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleChange = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  return prefersReducedMotion;
+};
 
 const isReservaConfirmadaOPagada = (estado: ReservaEstado) =>
   estado === 'Confirmado' || estado === 'Pagado';
@@ -65,6 +83,7 @@ export function DashboardAnalytics({
   to,
   loading,
 }: DashboardAnalyticsProps) {
+  const prefersReducedMotion = usePrefersReducedMotion();
   const salonNameById = useMemo(
     () => new Map(salones.map((salon) => [Number(salon.id), salon.nombre])),
     [salones],
@@ -148,13 +167,13 @@ export function DashboardAnalytics({
       </div>
 
       <div className="bo-dashboard-analytics-grid">
-        <article className="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+        <article className="bo-dashboard-animated-card min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h4 className="font-medium text-gray-900">Cantidad de reservas por salón</h4>
               <p className="mt-1 text-sm text-gray-500">Solo reservas confirmadas o pagadas</p>
             </div>
-            <BarChart3 className="h-5 w-5 flex-shrink-0 text-teal-700" />
+            <BarChart3 className="bo-dashboard-card-icon h-5 w-5 flex-shrink-0 text-teal-700" />
           </div>
 
           {loading ? (
@@ -162,7 +181,12 @@ export function DashboardAnalytics({
           ) : reservasPorSalon.length === 0 ? (
             <ChartEmptyState message="No hay reservas confirmadas o pagadas para los filtros seleccionados." />
           ) : (
-            <div style={{ height: salonChartHeight }} role="img" aria-label="Cantidad de reservas confirmadas o pagadas por salón">
+            <div
+              className="bo-animated-chart bo-bar-chart"
+              style={{ height: salonChartHeight }}
+              role="img"
+              aria-label="Cantidad de reservas confirmadas o pagadas por salón"
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={reservasPorSalon}
@@ -184,13 +208,23 @@ export function DashboardAnalytics({
                   <Tooltip
                     cursor={{ fill: '#F3F4F6' }}
                     contentStyle={{ borderRadius: 8, borderColor: '#E5E7EB' }}
+                    animationDuration={180}
                   />
                   <Bar
                     dataKey="cantidad"
                     name="Confirmadas o pagadas"
                     fill={SALON_BAR_COLOR}
+                    activeBar={{
+                      fill: SALON_BAR_ACTIVE_COLOR,
+                      stroke: SALON_BAR_COLOR,
+                      strokeWidth: 1,
+                    }}
                     radius={[0, 4, 4, 0]}
                     maxBarSize={28}
+                    isAnimationActive={!prefersReducedMotion}
+                    animationBegin={100}
+                    animationDuration={900}
+                    animationEasing="ease-out"
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -198,13 +232,13 @@ export function DashboardAnalytics({
           )}
         </article>
 
-        <article className="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+        <article className="bo-dashboard-animated-card min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h4 className="font-medium text-gray-900">Reservas por estado</h4>
               <p className="mt-1 text-sm text-gray-500">Composición del período seleccionado</p>
             </div>
-            <PieChartIcon className="h-5 w-5 flex-shrink-0 text-violet-600" />
+            <PieChartIcon className="bo-dashboard-card-icon h-5 w-5 flex-shrink-0 text-violet-600" />
           </div>
 
           {loading ? (
@@ -213,7 +247,7 @@ export function DashboardAnalytics({
             <ChartEmptyState />
           ) : (
             <>
-              <div className="h-64" role="img" aria-label="Distribución de reservas por estado">
+              <div className="bo-animated-chart bo-pie-chart h-64" role="img" aria-label="Distribución de reservas por estado">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart accessibilityLayer>
                     <Pie
@@ -225,12 +259,19 @@ export function DashboardAnalytics({
                       innerRadius={52}
                       outerRadius={88}
                       paddingAngle={2}
+                      isAnimationActive={!prefersReducedMotion}
+                      animationBegin={160}
+                      animationDuration={900}
+                      animationEasing="ease-out"
                     >
                       {reservasPorEstado.map((item) => (
                         <Cell key={item.estado} fill={item.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: 8, borderColor: '#E5E7EB' }} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, borderColor: '#E5E7EB' }}
+                      animationDuration={180}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -252,13 +293,13 @@ export function DashboardAnalytics({
           )}
         </article>
 
-        <article className="bo-dashboard-chart-wide min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+        <article className="bo-dashboard-animated-card bo-dashboard-chart-wide min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h4 className="font-medium text-gray-900">Cantidad de reservas por mes</h4>
               <p className="mt-1 text-sm text-gray-500">Evolución según la fecha de inicio</p>
             </div>
-            <TrendingUp className="h-5 w-5 flex-shrink-0 text-blue-600" />
+            <TrendingUp className="bo-dashboard-card-icon h-5 w-5 flex-shrink-0 text-blue-600" />
           </div>
 
           {loading ? (
@@ -267,7 +308,10 @@ export function DashboardAnalytics({
             <ChartEmptyState />
           ) : (
             <div className="overflow-x-auto pb-2">
-              <div style={{ minWidth: monthChartMinWidth, height: 288 }}>
+              <div
+                className="bo-animated-chart bo-bar-chart"
+                style={{ minWidth: monthChartMinWidth, height: 288 }}
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={reservasPorMes}
@@ -280,13 +324,23 @@ export function DashboardAnalytics({
                     <Tooltip
                       cursor={{ fill: '#F3F4F6' }}
                       contentStyle={{ borderRadius: 8, borderColor: '#E5E7EB' }}
+                      animationDuration={180}
                     />
                     <Bar
                       dataKey="cantidad"
                       name="Reservas"
                       fill={BAR_COLOR}
+                      activeBar={{
+                        fill: BAR_ACTIVE_COLOR,
+                        stroke: BAR_COLOR,
+                        strokeWidth: 1,
+                      }}
                       radius={[4, 4, 0, 0]}
                       maxBarSize={38}
+                      isAnimationActive={!prefersReducedMotion}
+                      animationBegin={220}
+                      animationDuration={950}
+                      animationEasing="ease-out"
                     />
                   </BarChart>
                 </ResponsiveContainer>

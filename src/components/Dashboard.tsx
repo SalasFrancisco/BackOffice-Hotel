@@ -284,9 +284,9 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       )}
 
       <div className="bo-kpi-grid gap-6" aria-busy={loading}>
-        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+            <div className="bo-dashboard-card-icon flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
               <CheckCircle2 className="h-6 w-6 text-blue-600" />
             </div>
           </div>
@@ -299,9 +299,9 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           </p>
         </div>
 
-        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100">
+            <div className="bo-dashboard-card-icon flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100">
               <Wallet className="h-6 w-6 text-purple-600" />
             </div>
           </div>
@@ -309,9 +309,9 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           <p className="text-3xl text-gray-900">{formatCurrency(metrics.capitalObtenido)}</p>
         </div>
 
-        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100">
+            <div className="bo-dashboard-card-icon flex h-12 w-12 items-center justify-center rounded-lg bg-green-100">
               <ReceiptText className="h-6 w-6 text-green-600" />
             </div>
           </div>
@@ -319,9 +319,9 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           <p className="text-3xl text-gray-900">{formatCurrency(metrics.ticketPromedio)}</p>
         </div>
 
-        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-100">
+            <div className="bo-dashboard-card-icon flex h-12 w-12 items-center justify-center rounded-lg bg-amber-100">
               <Building2 className="h-6 w-6 text-amber-600" />
             </div>
           </div>
@@ -332,9 +332,9 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           </p>
         </div>
 
-        <div className="bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-cyan-100">
+            <div className="bo-dashboard-card-icon flex h-12 w-12 items-center justify-center rounded-lg bg-cyan-100">
               <BarChart3 className="h-6 w-6 text-cyan-600" />
             </div>
           </div>

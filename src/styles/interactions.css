@@ -16,3 +16,117 @@ input[type="submit"]:disabled,
 input[type="reset"]:disabled {
   cursor: not-allowed;
 }
+
+@keyframes bo-dashboard-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.bo-dashboard-animated-card {
+  animation: bo-dashboard-card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
+  will-change: transform;
+}
+
+.bo-kpi-grid .bo-dashboard-animated-card:nth-child(2),
+.bo-dashboard-analytics-grid .bo-dashboard-animated-card:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.bo-kpi-grid .bo-dashboard-animated-card:nth-child(3),
+.bo-dashboard-analytics-grid .bo-dashboard-animated-card:nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.bo-kpi-grid .bo-dashboard-animated-card:nth-child(4) {
+  animation-delay: 210ms;
+}
+
+.bo-kpi-grid .bo-dashboard-animated-card:nth-child(5) {
+  animation-delay: 280ms;
+}
+
+.bo-dashboard-animated-card:hover {
+  transform: translateY(-3px);
+  border-color: #93c5fd;
+  box-shadow: 0 16px 34px rgb(15 23 42 / 0.12);
+}
+
+.bo-dashboard-card-icon {
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 220ms ease;
+}
+
+.bo-dashboard-animated-card:hover .bo-dashboard-card-icon {
+  transform: scale(1.08) rotate(-3deg);
+  filter: brightness(1.08);
+}
+
+.bo-animated-chart .recharts-bar-rectangle path,
+.bo-animated-chart .recharts-bar-rectangle rect,
+.bo-animated-chart .recharts-sector {
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+
+.bo-bar-chart:hover .recharts-bar-rectangle path,
+.bo-bar-chart:hover .recharts-bar-rectangle rect,
+.bo-pie-chart:hover .recharts-sector {
+  opacity: 0.72;
+}
+
+.bo-bar-chart .recharts-bar-rectangle:hover path,
+.bo-bar-chart .recharts-bar-rectangle:hover rect,
+.bo-bar-chart .recharts-active-bar path,
+.bo-bar-chart .recharts-active-bar rect,
+.bo-pie-chart .recharts-sector:hover {
+  opacity: 1;
+  filter: brightness(1.12) drop-shadow(0 5px 5px rgb(15 23 42 / 0.2));
+}
+
+.bo-animated-chart .recharts-tooltip-wrapper {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease !important;
+}
+
+.bo-animated-chart .recharts-cartesian-grid line {
+  transition: stroke 220ms ease;
+}
+
+.bo-animated-chart:hover .recharts-cartesian-grid line {
+  stroke: #cbd5e1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bo-dashboard-animated-card {
+    animation: none;
+    transition: none;
+  }
+
+  .bo-dashboard-animated-card:hover,
+  .bo-dashboard-animated-card:hover .bo-dashboard-card-icon {
+    transform: none;
+  }
+
+  .bo-dashboard-card-icon,
+  .bo-animated-chart .recharts-bar-rectangle path,
+  .bo-animated-chart .recharts-bar-rectangle rect,
+  .bo-animated-chart .recharts-sector,
+  .bo-animated-chart .recharts-tooltip-wrapper,
+  .bo-animated-chart .recharts-cartesian-grid line {
+    transition: none !important;
+  }
+}

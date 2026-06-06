@@ -1,13 +1,20 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send, History, Download } from 'lucide-react';
+import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send, History, Download, MoreHorizontal } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { ReservaCalendar } from './ReservaCalendar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
 import { ReservaEstadoChangeDialog } from './ReservaEstadoChangeDialog';
 import { ReservaEstadoHistorialModal } from './ReservaEstadoHistorialModal';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 import {
   ReservaExportDialog,
   type ReservaExportFilters,
@@ -1000,8 +1007,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
       {/* Table */}
       <div className="bo-reservas-table bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="bo-reservas-table-scroll overflow-x-auto">
+          <table className="bo-reservas-table-content w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs text-gray-600 uppercase tracking-wider">
@@ -1177,7 +1184,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="bo-reserva-actions-wide flex items-center justify-end gap-2">
                             {hasWarning && (
                               <button
                                 type="button"
@@ -1243,6 +1250,79 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                                 )}
                               </button>
                             )}
+                          </div>
+                          <div className="bo-reserva-actions-compact">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className={`${ACTION_BUTTON_BASE} text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-gray-500`}
+                                  title="Ver acciones"
+                                  aria-label={`Ver acciones de la reserva ${reserva.id}`}
+                                >
+                                  <MoreHorizontal className={ACTION_ICON_BASE} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                {hasWarning && (
+                                  <DropdownMenuItem
+                                    onSelect={() => handleOpenWarningDialog(reserva, warningMessages)}
+                                    className="text-yellow-700"
+                                  >
+                                    <AlertTriangle />
+                                    Ver advertencias
+                                  </DropdownMenuItem>
+                                )}
+                                {reserva.presupuesto_url && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onSelect={() => void handleOpenPresupuesto(reserva)}
+                                      disabled={openingPresupuestoId === reserva.id}
+                                    >
+                                      {openingPresupuestoId === reserva.id ? (
+                                        <Loader2 className="animate-spin" />
+                                      ) : (
+                                        <FileText />
+                                      )}
+                                      {openingPresupuestoId === reserva.id ? 'Abriendo presupuesto...' : 'Ver presupuesto'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onSelect={() => void handleSendPresupuestoEmail(reserva)}
+                                      disabled={!canSendPresupuestoEmail || sendingPresupuestoId === reserva.id}
+                                      title={sendPresupuestoTitle}
+                                    >
+                                      {sendingPresupuestoId === reserva.id ? (
+                                        <Loader2 className="animate-spin" />
+                                      ) : (
+                                        <Send />
+                                      )}
+                                      {sendingPresupuestoId === reserva.id ? 'Enviando presupuesto...' : 'Enviar presupuesto'}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                <DropdownMenuItem onSelect={() => handleEdit(reserva)}>
+                                  <Edit />
+                                  Editar reserva
+                                </DropdownMenuItem>
+                                {isAdmin && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      onSelect={() => void handleDeleteReserva(reserva)}
+                                      disabled={deletingReservaId === reserva.id}
+                                    >
+                                      {deletingReservaId === reserva.id ? (
+                                        <Loader2 className="animate-spin" />
+                                      ) : (
+                                        <Trash2 />
+                                      )}
+                                      {deletingReservaId === reserva.id ? 'Eliminando reserva...' : 'Eliminar reserva'}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
                       </tr>

@@ -4,7 +4,10 @@ import App from "./App.tsx";
 import "./index.css";
 import "./styles/responsive.css";
 import "./styles/interactions.css";
+import "./styles/dark-mode.css";
+import { initializeTheme } from "./utils/theme";
 
+initializeTheme();
 createRoot(document.getElementById("root")!).render(<App />);
 
 const registerReservasPwa = async () => {

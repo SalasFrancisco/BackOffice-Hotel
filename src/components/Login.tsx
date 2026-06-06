@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase/client';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
+import { ThemeToggle } from './ThemeToggle';
 
 type LoginProps = {
   onLoginSuccess: () => void;
@@ -170,7 +171,10 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
 
   if (showRecovery) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-md">
           <div className="bg-white rounded-lg shadow-xl p-8">
             <div className="text-center mb-8">
@@ -242,7 +246,10 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-md">
         <div className="bg-white rounded-lg shadow-xl p-8">
           <div className="text-center mb-8">

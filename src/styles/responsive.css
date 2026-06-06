@@ -1049,3 +1049,96 @@ textarea {
     padding: 1rem;
   }
 }
+
+.bo-reserva-actions-compact {
+  display: none;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .bo-reservas-table {
+    display: none;
+  }
+
+  .bo-reservas-mobile-list {
+    display: block;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .bo-reserva-actions-wide {
+    display: none;
+  }
+
+  .bo-reserva-actions-compact {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .bo-reservas-table-scroll {
+    overflow-x: visible;
+  }
+
+  .bo-reservas-table-content {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .bo-reservas-table-content th,
+  .bo-reservas-table-content td {
+    overflow-wrap: anywhere;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .bo-reservas-table-content th {
+    font-size: 0.625rem;
+    letter-spacing: 0.025em;
+  }
+
+  .bo-reservas-table-content td {
+    font-size: 0.75rem;
+  }
+
+  .bo-reservas-table-content th:nth-child(1) {
+    width: 5%;
+  }
+
+  .bo-reservas-table-content th:nth-child(2) {
+    width: 12%;
+  }
+
+  .bo-reservas-table-content th:nth-child(3) {
+    width: 11%;
+  }
+
+  .bo-reservas-table-content th:nth-child(4) {
+    width: 9%;
+  }
+
+  .bo-reservas-table-content th:nth-child(5),
+  .bo-reservas-table-content th:nth-child(6) {
+    width: 10%;
+  }
+
+  .bo-reservas-table-content th:nth-child(7) {
+    width: 14%;
+  }
+
+  .bo-reservas-table-content th:nth-child(8) {
+    width: 11%;
+  }
+
+  .bo-reservas-table-content th:nth-child(9) {
+    width: 13%;
+  }
+
+  .bo-reservas-table-content th:nth-child(10) {
+    width: 5%;
+  }
+
+  .bo-reservas-table-content select {
+    max-width: 100%;
+    padding-left: 0.375rem;
+    padding-right: 1.25rem;
+  }
+}

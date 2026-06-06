@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Notificacion, Perfil, supabase } from "../utils/supabase/client";
 import { projectId } from "../utils/supabase/info";
+import { ThemeToggle } from "./ThemeToggle";
 import "../styles/notifications.css";
 
 type LayoutProps = {
@@ -572,7 +573,10 @@ export function Layout({
           <h1 className="truncate text-gray-900">Hotel Back-Office</h1>
           <p className="truncate text-xs text-gray-500">Sistema de Reservas</p>
         </div>
-        {renderNotifications(0)}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {renderNotifications(0)}
+        </div>
       </header>
 
       <div
@@ -612,7 +616,10 @@ export function Layout({
               <h1 className="text-gray-900">Hotel Back-Office</h1>
               <p className="text-gray-500 text-sm mt-1">Sistema de Reservas</p>
             </div>
-            {renderNotifications(1)}
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              {renderNotifications(1)}
+            </div>
           </div>
         </div>
         {renderNavigation()}

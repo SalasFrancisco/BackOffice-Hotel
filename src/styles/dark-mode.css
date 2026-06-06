@@ -1,0 +1,335 @@
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body,
+html.dark #root {
+  background: #0b1120;
+  color: #e5e7eb;
+}
+
+html.dark .bg-white,
+html.dark .bg-background {
+  background-color: #111827;
+}
+
+html.dark .bg-gray-50 {
+  background-color: #0f172a;
+}
+
+html.dark .bg-gray-50\/70 {
+  background-color: rgb(15 23 42 / 0.7);
+}
+
+html.dark .bg-gray-100 {
+  background-color: #1f2937;
+}
+
+html.dark .bg-gray-200 {
+  background-color: #374151;
+}
+
+html.dark .text-gray-900 {
+  color: #f8fafc;
+}
+
+html.dark .text-gray-800 {
+  color: #f1f5f9;
+}
+
+html.dark .text-gray-700 {
+  color: #e2e8f0;
+}
+
+html.dark .text-gray-600 {
+  color: #cbd5e1;
+}
+
+html.dark .text-gray-500 {
+  color: #94a3b8;
+}
+
+html.dark .text-gray-400 {
+  color: #64748b;
+}
+
+html.dark .border-gray-100,
+html.dark .divide-gray-100 > :not(:last-child) {
+  border-color: #263244;
+}
+
+html.dark .border-gray-200,
+html.dark .divide-gray-200 > :not(:last-child) {
+  border-color: #334155;
+}
+
+html.dark .border-gray-300 {
+  border-color: #475569;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #0f172a;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b;
+}
+
+html.dark select option {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+html.dark input[type='date']::-webkit-calendar-picker-indicator,
+html.dark input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+html.dark .from-blue-50 {
+  --tw-gradient-from: #0f172a var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(15 23 42 / 0) var(--tw-gradient-to-position);
+}
+
+html.dark .to-indigo-100 {
+  --tw-gradient-to: #172554 var(--tw-gradient-to-position);
+}
+
+html.dark .bg-blue-50,
+html.dark .bg-blue-100 {
+  background-color: #172554;
+}
+
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-100 {
+  background-color: #1e1b4b;
+}
+
+html.dark .bg-purple-100 {
+  background-color: #3b0764;
+}
+
+html.dark .bg-amber-100 {
+  background-color: #451a03;
+}
+
+html.dark .bg-cyan-100 {
+  background-color: #083344;
+}
+
+html.dark .bg-green-50,
+html.dark .bg-green-100,
+html.dark .bg-emerald-50 {
+  background-color: #052e2b;
+}
+
+html.dark .bg-red-50,
+html.dark .bg-red-100 {
+  background-color: #450a0a;
+}
+
+html.dark .bg-yellow-50,
+html.dark .bg-yellow-100,
+html.dark .bg-yellow-200 {
+  background-color: #422006;
+}
+
+html.dark .text-blue-600,
+html.dark .text-blue-700,
+html.dark .text-blue-800 {
+  color: #93c5fd;
+}
+
+html.dark .text-indigo-600,
+html.dark .text-indigo-700 {
+  color: #a5b4fc;
+}
+
+html.dark .text-purple-600,
+html.dark .text-purple-700,
+html.dark .text-purple-800 {
+  color: #d8b4fe;
+}
+
+html.dark .text-amber-600,
+html.dark .text-amber-700,
+html.dark .text-amber-800 {
+  color: #fcd34d;
+}
+
+html.dark .text-cyan-600,
+html.dark .text-cyan-700,
+html.dark .text-teal-700 {
+  color: #67e8f9;
+}
+
+html.dark .text-green-600,
+html.dark .text-green-700,
+html.dark .text-green-800,
+html.dark .text-emerald-600,
+html.dark .text-emerald-700 {
+  color: #6ee7b7;
+}
+
+html.dark .text-red-600,
+html.dark .text-red-700,
+html.dark .text-red-800,
+html.dark .text-red-900 {
+  color: #fca5a5;
+}
+
+html.dark .text-yellow-600,
+html.dark .text-yellow-700,
+html.dark .text-yellow-800 {
+  color: #fde68a;
+}
+
+html.dark .border-blue-100,
+html.dark .border-blue-200 {
+  border-color: #1e40af;
+}
+
+html.dark .border-green-100,
+html.dark .border-green-200,
+html.dark .border-emerald-200 {
+  border-color: #047857;
+}
+
+html.dark .border-red-100,
+html.dark .border-red-200 {
+  border-color: #991b1b;
+}
+
+html.dark .border-yellow-100,
+html.dark .border-yellow-200 {
+  border-color: #a16207;
+}
+
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover {
+  background-color: #1e293b;
+}
+
+html.dark .hover\:bg-blue-50:hover {
+  background-color: #172554;
+}
+
+html.dark .hover\:bg-red-50:hover {
+  background-color: #450a0a;
+}
+
+html.dark .bo-sidebar-footer,
+html.dark .bo-mobile-header,
+html.dark .bo-mobile-drawer,
+html.dark .bo-reserva-services-list,
+html.dark .bo-reserva-service-category,
+html.dark .bo-reserva-service-category-content,
+html.dark .bo-reserva-service-item,
+html.dark .bo-reserva-service-controls,
+html.dark .bo-date-picker-popover,
+html.dark .bo-date-picker-message,
+html.dark .bo-date-picker-summary {
+  background: #111827;
+  border-color: #334155;
+  color: #e5e7eb;
+}
+
+html.dark .bo-reserva-service-category-toggle,
+html.dark .bo-date-picker-nav-button,
+html.dark .bo-date-picker-day {
+  color: #e2e8f0;
+}
+
+html.dark .bo-reserva-service-category-toggle {
+  background: #1f2937;
+}
+
+html.dark .bo-reserva-service-category-toggle:hover,
+html.dark .bo-date-picker-nav-button:hover,
+html.dark .bo-date-picker-day:hover {
+  background: #1e293b;
+}
+
+html.dark .bo-reserva-service-item.is-selected,
+html.dark .bo-date-picker-day.is-previewed,
+html.dark .bo-reserva-card-highlight {
+  background: #172554;
+  border-color: #2563eb;
+}
+
+html.dark .bo-reserva-service-category-title,
+html.dark .bo-reserva-service-name,
+html.dark .bo-date-picker-title,
+html.dark .bo-date-picker-day-number,
+html.dark .bo-date-picker-summary-date {
+  color: #f8fafc;
+}
+
+html.dark .bo-reserva-service-category-description,
+html.dark .bo-reserva-service-category-icon,
+html.dark .bo-reserva-service-description,
+html.dark .bo-date-picker-month,
+html.dark .bo-date-picker-weekdays {
+  color: #94a3b8;
+}
+
+html.dark .bo-reserva-service-category-count,
+html.dark .bo-date-picker-day-status.is-neutral {
+  background: #334155;
+  color: #cbd5e1;
+}
+
+html.dark .bo-reserva-service-category-selected,
+html.dark .bo-date-picker-day-status.is-available {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+
+html.dark .bo-date-picker-day-status.is-pending {
+  background: #451a03;
+  color: #fde68a;
+}
+
+html.dark .bo-date-picker-day-status.is-occupied,
+html.dark .bo-date-picker-message.is-error {
+  background: #450a0a;
+  border-color: #991b1b;
+  color: #fecaca;
+}
+
+html.dark .bo-theme-toggle {
+  background: #111827;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+html.dark .bo-theme-toggle:hover {
+  background: #1e293b;
+}
+
+html.dark .recharts-cartesian-axis-tick-value {
+  fill: #94a3b8;
+}
+
+html.dark .recharts-cartesian-grid line {
+  stroke: #334155;
+}
+
+html.dark .recharts-tooltip-cursor {
+  fill: #1e293b;
+}
+
+html.dark .recharts-default-tooltip {
+  background: #111827 !important;
+  border-color: #334155 !important;
+  color: #e5e7eb !important;
+}
+
+html.dark .recharts-tooltip-label,
+html.dark .recharts-tooltip-item {
+  color: #e5e7eb !important;
+}

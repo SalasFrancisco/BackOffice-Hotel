@@ -11,6 +11,14 @@ import { Usuarios } from './components/Usuarios';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { InfoDialog } from './components/InfoDialog';
 import { PasswordRecovery } from './components/PasswordRecovery';
+import {
+  SESSION_ACTIVITY_STORAGE_KEY,
+  clearSessionActivity,
+  getSessionInactivityRemainingMs,
+  isSessionInactive,
+  recordSessionActivity,
+  validateOrInitializeSessionActivity,
+} from './utils/sessionActivity';
 
 type NavigationRequest = {
   page: string;
@@ -19,6 +27,15 @@ type NavigationRequest = {
 
 const isAdminRole = (rol?: string | null) => String(rol || '').toUpperCase() === 'ADMIN';
 const isAdminOnlyPage = (page: string) => page === 'dashboard' || page === 'usuarios';
+
+const getPasswordRecoveryTokenHash = () => {
+  const searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.get('recovery') !== '1' || searchParams.get('type') !== 'recovery') {
+    return null;
+  }
+
+  return searchParams.get('token_hash');
+};
 
 const isPasswordRecoveryUrl = () => {
   const searchParams = new URLSearchParams(window.location.search);
@@ -35,15 +52,24 @@ const isPasswordRecoveryUrl = () => {
   return hashParams.get('type') === 'recovery';
 };
 
+const clearPasswordRecoveryTokenFromUrl = () => {
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.delete('token_hash');
+  nextUrl.searchParams.delete('type');
+  window.history.replaceState({}, document.title, nextUrl.toString());
+};
+
 const clearPasswordRecoveryUrl = () => {
   const nextUrl = new URL(window.location.href);
   nextUrl.searchParams.delete('recovery');
+  nextUrl.searchParams.delete('token_hash');
+  nextUrl.searchParams.delete('type');
   nextUrl.hash = '';
   window.history.replaceState({}, document.title, nextUrl.toString());
 };
 
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const INACTIVE_USER_MESSAGE = 'Usuario dado de baja. Contacte al administrador.';
+const SESSION_EXPIRED_MESSAGE = 'La sesiÃ³n se cerrÃ³ por inactividad. Inicie sesiÃ³n nuevamente.';
 
 const isPerfilActivo = (perfil?: Perfil | null) => perfil?.activo !== false;
 
@@ -76,15 +102,14 @@ export default function App() {
   const [copySqlFeedbackMessage, setCopySqlFeedbackMessage] = useState('');
   const [showCopySqlFeedbackDialog, setShowCopySqlFeedbackDialog] = useState(false);
   const recoveryFlowActiveRef = useRef(isPasswordRecoveryUrl());
+  const recoveryTokenExchangePendingRef = useRef(Boolean(getPasswordRecoveryTokenHash()));
+  const inactivityLogoutInProgressRef = useRef(false);
 
   useEffect(() => {
-    checkSession();
-
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-
       if (event === 'PASSWORD_RECOVERY') {
         recoveryFlowActiveRef.current = true;
+        setSession(session);
         setAuthMode('password-recovery');
         setAuthFeedbackMessage(null);
         setLoading(false);
@@ -92,10 +117,17 @@ export default function App() {
       }
 
       if (recoveryFlowActiveRef.current) {
+        if (recoveryTokenExchangePendingRef.current && event === 'INITIAL_SESSION') {
+          return;
+        }
+
         if (event === 'SIGNED_OUT') {
           recoveryFlowActiveRef.current = false;
+          clearSessionActivity();
           setAuthMode('login');
           clearPasswordRecoveryUrl();
+        } else {
+          setSession(session);
         }
         setPerfil(null);
         setLoading(false);
@@ -103,31 +135,81 @@ export default function App() {
       }
 
       if (session) {
+        if (!validateOrInitializeSessionActivity(session)) {
+          setLoading(false);
+          window.setTimeout(() => {
+            void expireSessionForInactivity();
+          }, 0);
+          return;
+        }
+
+        setSession(session);
         setAuthMode('login');
         setAuthFeedbackMessage(null);
         void loadPerfil(session.user.id);
       } else {
+        if (event === 'SIGNED_OUT') {
+          clearSessionActivity();
+        }
+        setSession(null);
         setAuthMode('login');
         setPerfil(null);
       }
     });
+
+    void initializeAuthentication();
 
     return () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
 
+  const initializeAuthentication = async () => {
+    const recoveryTokenHash = getPasswordRecoveryTokenHash();
+    if (!recoveryTokenHash) {
+      await checkSession();
+      return;
+    }
+
+    recoveryFlowActiveRef.current = true;
+    setAuthMode('password-recovery');
+    setPerfil(null);
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: recoveryTokenHash,
+        type: 'recovery',
+      });
+
+      if (error) throw error;
+      setSession(data.session);
+    } catch (err) {
+      console.error('Error verifying password recovery link:', err);
+      setSession(null);
+    } finally {
+      recoveryTokenExchangePendingRef.current = false;
+      clearPasswordRecoveryTokenFromUrl();
+      setLoading(false);
+    }
+  };
+
   const checkSession = async () => {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
-      setSession(currentSession);
 
       if (recoveryFlowActiveRef.current) {
+        setSession(currentSession);
         setPerfil(null);
         return;
       }
 
       if (currentSession) {
+        if (!validateOrInitializeSessionActivity(currentSession)) {
+          await expireSessionForInactivity();
+          return;
+        }
+
+        setSession(currentSession);
         try {
           const { data, error } = await supabase
             .from('perfiles')
@@ -162,6 +244,7 @@ export default function App() {
           setPerfil(null);
         }
       } else {
+        setSession(null);
         setPerfil(null);
       }
     } catch (err) {
@@ -213,34 +296,110 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    clearSessionActivity();
+    setAuthFeedbackMessage(null);
     await supabase.auth.signOut();
     setSession(null);
     setPerfil(null);
     setCurrentPage('dashboard');
   };
 
+  const expireSessionForInactivity = async () => {
+    if (inactivityLogoutInProgressRef.current) return;
+
+    inactivityLogoutInProgressRef.current = true;
+    clearSessionActivity();
+    setAuthFeedbackMessage({ type: 'error', text: SESSION_EXPIRED_MESSAGE });
+
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Error signing out inactive session:', err);
+    } finally {
+      setSession(null);
+      setPerfil(null);
+      setCurrentPage('dashboard');
+      inactivityLogoutInProgressRef.current = false;
+    }
+  };
+
   useEffect(() => {
-    if (!session) return;
+    if (!session || authMode === 'password-recovery') return;
 
     let inactivityTimer: ReturnType<typeof window.setTimeout> | null = null;
+    let lastActivityUpdateAt = 0;
+    const userId = session.user.id;
 
-    const resetInactivityTimer = () => {
+    const scheduleInactivityCheck = () => {
       if (inactivityTimer) {
         window.clearTimeout(inactivityTimer);
       }
 
+      const remainingMs = getSessionInactivityRemainingMs(userId);
+      if (remainingMs <= 0) {
+        void expireSessionForInactivity();
+        return;
+      }
+
       inactivityTimer = window.setTimeout(() => {
-        void handleLogout();
-      }, INACTIVITY_TIMEOUT_MS);
+        if (isSessionInactive(userId)) {
+          void expireSessionForInactivity();
+        } else {
+          scheduleInactivityCheck();
+        }
+      }, remainingMs);
+    };
+
+    const registerActivity = (event: Event) => {
+      if (isSessionInactive(userId)) {
+        event.stopImmediatePropagation();
+        void expireSessionForInactivity();
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastActivityUpdateAt < 30_000) return;
+
+      lastActivityUpdateAt = now;
+      recordSessionActivity(userId, now);
+      scheduleInactivityCheck();
+    };
+
+    const verifySessionOnReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+
+      if (isSessionInactive(userId)) {
+        void expireSessionForInactivity();
+        return;
+      }
+
+      recordSessionActivity(userId);
+      lastActivityUpdateAt = Date.now();
+      scheduleInactivityCheck();
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key !== SESSION_ACTIVITY_STORAGE_KEY) return;
+      if (event.newValue === null) return;
+
+      if (isSessionInactive(userId)) {
+        void expireSessionForInactivity();
+        return;
+      }
+
+      scheduleInactivityCheck();
     };
 
     const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
 
-    resetInactivityTimer();
+    scheduleInactivityCheck();
 
     activityEvents.forEach((eventName) => {
-      window.addEventListener(eventName, resetInactivityTimer, true);
+      window.addEventListener(eventName, registerActivity, true);
     });
+    window.addEventListener('focus', verifySessionOnReturn);
+    window.addEventListener('storage', handleStorageChange);
+    document.addEventListener('visibilitychange', verifySessionOnReturn);
 
     return () => {
       if (inactivityTimer) {
@@ -248,10 +407,13 @@ export default function App() {
       }
 
       activityEvents.forEach((eventName) => {
-        window.removeEventListener(eventName, resetInactivityTimer, true);
+        window.removeEventListener(eventName, registerActivity, true);
       });
+      window.removeEventListener('focus', verifySessionOnReturn);
+      window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', verifySessionOnReturn);
     };
-  }, [session]);
+  }, [session, authMode]);
 
   const executeNavigation = ({ page, reservaId }: NavigationRequest) => {
     const authorizedPage = !isAdminRole(perfil?.rol) && isAdminOnlyPage(page) ? 'reservas' : page;

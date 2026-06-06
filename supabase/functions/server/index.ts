@@ -1356,11 +1356,14 @@ function isLocalhostUrl(url: URL) {
   return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
 }
 
+const PASSWORD_RECOVERY_PATH = "/reservas/";
+
 function toPasswordRecoveryUrl(value?: string | null) {
   if (!value) return null;
 
   try {
     const url = new URL(value);
+    url.pathname = PASSWORD_RECOVERY_PATH;
     url.search = "";
     url.hash = "";
     url.searchParams.set("recovery", "1");
@@ -1390,14 +1393,19 @@ function buildPasswordRecoveryRedirectUrl(c: any, requestedRedirectTo: unknown):
   const requestOrigin = getRequestOrigin(c);
 
   if (typeof requestedRedirectTo === "string" && requestedRedirectTo.trim()) {
-    try {
-      const redirectUrl = new URL(requestedRedirectTo);
-      if (!isLocalhostUrl(redirectUrl) && (!requestOrigin || redirectUrl.origin === requestOrigin)) {
-        redirectUrl.searchParams.set("recovery", "1");
-        return redirectUrl.toString();
-      }
-    } catch {
-      // ignore malformed redirect URL and fall back to the request origin
+    const redirectUrl = toPasswordRecoveryUrl(requestedRedirectTo);
+    const requestedOriginIsAllowed = Boolean(
+      redirectUrl
+      && ALLOWED_ORIGINS.includes(redirectUrl.origin)
+      && (!requestOrigin || redirectUrl.origin === requestOrigin),
+    );
+
+    if (
+      redirectUrl
+      && !isLocalhostUrl(redirectUrl)
+      && requestedOriginIsAllowed
+    ) {
+      return redirectUrl.toString();
     }
   }
 
@@ -1410,9 +1418,14 @@ function buildPasswordRecoveryRedirectUrl(c: any, requestedRedirectTo: unknown):
     return null;
   }
 
-  const fallbackUrl = new URL("/", requestOrigin);
-  fallbackUrl.searchParams.set("recovery", "1");
-  return fallbackUrl.toString();
+  return toPasswordRecoveryUrl(requestOrigin)?.toString() || null;
+}
+
+function buildPasswordRecoveryAppLink(redirectTo: string, tokenHash: string) {
+  const recoveryUrl = new URL(redirectTo);
+  recoveryUrl.searchParams.set("token_hash", tokenHash);
+  recoveryUrl.searchParams.set("type", "recovery");
+  return recoveryUrl.toString();
 }
 
 function escapeHtml(value: string) {
@@ -2682,9 +2695,9 @@ app.post("/make-server-484a241a/request-password-reset", async (c) => {
     }
 
     const recoveryUser = linkData.user;
-    const actionLink = linkData.properties?.action_link;
+    const hashedToken = linkData.properties?.hashed_token;
 
-    if (!recoveryUser?.id || !recoveryUser.email || !actionLink) {
+    if (!recoveryUser?.id || !recoveryUser.email || !hashedToken) {
       return c.json({ success: true });
     }
 
@@ -2703,7 +2716,8 @@ app.post("/make-server-484a241a/request-password-reset", async (c) => {
       return c.json({ success: true });
     }
 
-    await sendPasswordRecoveryEmail(smtpConfig, recoveryUser.email, actionLink);
+    const recoveryLink = buildPasswordRecoveryAppLink(redirectTo, hashedToken);
+    await sendPasswordRecoveryEmail(smtpConfig, recoveryUser.email, recoveryLink);
 
     return c.json({ success: true });
   } catch (error: any) {

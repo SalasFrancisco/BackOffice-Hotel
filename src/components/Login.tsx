@@ -32,9 +32,7 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
   };
 
   const requestPasswordResetEmail = async (recoveryEmailTarget: string) => {
-    const redirectUrl = new URL(window.location.href);
-    redirectUrl.search = '';
-    redirectUrl.hash = '';
+    const redirectUrl = new URL('/reservas/', window.location.origin);
     redirectUrl.searchParams.set('recovery', '1');
 
     const urls = [

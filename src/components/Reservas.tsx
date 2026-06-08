@@ -6,8 +6,7 @@ import { ReservaForm } from './ReservaForm';
 import { ReservaCalendar } from './ReservaCalendar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
-import { ReservaEstadoChangeDialog } from './ReservaEstadoChangeDialog';
-import { ReservaEstadoHistorialModal } from './ReservaEstadoHistorialModal';
+import { ReservaEstadoGestionDialog } from './ReservaEstadoGestionDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +30,6 @@ import {
   getReservaStartWarningText,
 } from '../utils/reservaExpiration';
 import {
-  getAllowedReservaEstadoTransitions,
   getReservaEstados,
   RESERVA_ESTADO_COLORS,
   RESERVA_ESTADO_CANCELADO,
@@ -172,13 +170,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
-  const [pendingEstadoChange, setPendingEstadoChange] = useState<{
-    reserva: Reserva;
-    nuevoEstado: Reserva['estado'];
-  } | null>(null);
+  const [estadoDialogReserva, setEstadoDialogReserva] = useState<Reserva | null>(null);
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState<Reserva['estado'] | null>(null);
   const [estadoChangeDetalle, setEstadoChangeDetalle] = useState('');
+  const [estadoHistoryRefreshKey, setEstadoHistoryRefreshKey] = useState(0);
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null);
-  const [historialReserva, setHistorialReserva] = useState<Reserva | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportingReservas, setExportingReservas] = useState(false);
   const [exportError, setExportError] = useState('');
@@ -506,41 +502,53 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     }
   };
 
-  const handleEstadoSelection = (reserva: Reserva, nuevoEstado: Reserva['estado']) => {
-    const allowedEstados = getAllowedReservaEstadoTransitions(reserva.estado);
-    if (nuevoEstado === reserva.estado || !allowedEstados.includes(nuevoEstado)) return;
-
-    setPendingEstadoChange({ reserva, nuevoEstado });
+  const openEstadoDialog = (reserva: Reserva) => {
+    setEstadoDialogReserva(reserva);
+    setEstadoSeleccionado(reserva.estado);
     setEstadoChangeDetalle('');
   };
 
-  const handleEstadoChangeDialogOpenChange = (open: boolean) => {
+  const handleEstadoDialogOpenChange = (open: boolean) => {
     if (open) return;
-    setPendingEstadoChange(null);
+    setEstadoDialogReserva(null);
+    setEstadoSeleccionado(null);
     setEstadoChangeDetalle('');
   };
 
   const confirmEstadoChange = async () => {
-    if (!pendingEstadoChange) return;
-
-    const { reserva, nuevoEstado } = pendingEstadoChange;
+    if (!estadoDialogReserva || !estadoSeleccionado) return;
 
     try {
-      setChangingEstadoId(reserva.id);
+      const estadoAnterior = estadoDialogReserva.estado;
+      const hayCambioEstado = estadoSeleccionado !== estadoAnterior;
+      const detalle = estadoChangeDetalle.trim();
+      if (!hayCambioEstado && !detalle) return;
+
+      setChangingEstadoId(estadoDialogReserva.id);
 
       const { error: changeError } = await supabase.rpc('cambiar_estado_reserva', {
-        p_reserva_id: reserva.id,
-        p_nuevo_estado: nuevoEstado,
-        p_detalle: estadoChangeDetalle.trim() || null,
+        p_reserva_id: estadoDialogReserva.id,
+        p_nuevo_estado: estadoSeleccionado,
+        p_detalle: detalle || null,
       });
 
       if (changeError) throw changeError;
 
-      setPendingEstadoChange(null);
+      setEstadoDialogReserva((current) => (
+        current ? { ...current, estado: estadoSeleccionado } : current
+      ));
       setEstadoChangeDetalle('');
-      setCalendarRefreshKey((key) => key + 1);
+      setEstadoHistoryRefreshKey((key) => key + 1);
+      if (hayCambioEstado) {
+        setCalendarRefreshKey((key) => key + 1);
+      }
       await loadReservas();
-      showTemporaryMessage('success', `Estado actualizado a ${nuevoEstado}.`);
+      showTemporaryMessage(
+        'success',
+        hayCambioEstado
+          ? `Estado actualizado a ${estadoSeleccionado}.`
+          : 'Anotación agregada al historial.',
+      );
     } catch (err: any) {
       console.error('Error updating reserva estado:', err);
       showTemporaryMessage(
@@ -565,44 +573,33 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   };
 
   const renderEstadoControl = (reserva: Reserva, mobile = false) => {
-    const availableEstados = getAllowedReservaEstadoTransitions(reserva.estado)
-      .filter((estado) => estado !== reserva.estado);
     const isChanging = changingEstadoId === reserva.id;
-    const isFinal = availableEstados.length === 0;
 
     return (
-      <div className={`flex items-center gap-2 ${mobile ? 'w-full' : ''}`}>
-        <select
-          value={reserva.estado}
-          onChange={(event) => handleEstadoSelection(
-            reserva,
-            event.target.value as Reserva['estado'],
-          )}
-          disabled={isChanging || isFinal}
-          className={`min-h-10 rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 ${
-            mobile ? 'min-w-0 flex-1' : 'min-w-[190px] max-w-[220px]'
-          }`}
-          style={{ borderColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
-          title={isFinal ? `${reserva.estado} es un estado final` : 'Cambiar estado'}
-          aria-label={`Estado de la reserva ${reserva.id}`}
-        >
-          <option value={reserva.estado}>{reserva.estado}</option>
-          {availableEstados.map((estado) => (
-            <option key={estado} value={estado}>
-              {estado}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => setHistorialReserva(reserva)}
-          className={`${ACTION_BUTTON_BASE} h-10 w-10 flex-shrink-0 border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 focus-visible:ring-gray-500`}
-          title="Ver historial de estados"
-          aria-label={`Ver historial de estados de la reserva ${reserva.id}`}
-        >
-          <History className={ACTION_ICON_BASE} />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => openEstadoDialog(reserva)}
+        disabled={isChanging}
+        className={`group inline-flex min-h-10 items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-70 ${
+          mobile ? 'w-full' : 'min-w-[190px] max-w-[230px]'
+        }`}
+        style={{ borderColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+        title="Gestionar estado, notas e historial"
+        aria-label={`Gestionar estado e historial de la reserva ${reserva.id}`}
+      >
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+            style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+          />
+          <span className="truncate">{reserva.estado}</span>
+        </span>
+        {isChanging ? (
+          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-gray-500" />
+        ) : (
+          <History className="h-4 w-4 flex-shrink-0 text-gray-500 transition-transform group-hover:scale-110" />
+        )}
+      </button>
     );
   };
 
@@ -1586,25 +1583,17 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         actionText="Cerrar"
       />
 
-      <ReservaEstadoChangeDialog
-        open={pendingEstadoChange !== null}
-        reserva={pendingEstadoChange?.reserva || null}
-        nuevoEstado={pendingEstadoChange?.nuevoEstado || null}
+      <ReservaEstadoGestionDialog
+        open={estadoDialogReserva !== null}
+        reserva={estadoDialogReserva}
+        estadoSeleccionado={estadoSeleccionado}
         detalle={estadoChangeDetalle}
         loading={changingEstadoId !== null}
+        historyRefreshKey={estadoHistoryRefreshKey}
+        onEstadoChange={setEstadoSeleccionado}
         onDetalleChange={setEstadoChangeDetalle}
         onConfirm={confirmEstadoChange}
-        onOpenChange={handleEstadoChangeDialogOpenChange}
-      />
-
-      <ReservaEstadoHistorialModal
-        open={historialReserva !== null}
-        reserva={historialReserva}
-        onOpenChange={(open) => {
-          if (!open) {
-            setHistorialReserva(null);
-          }
-        }}
+        onOpenChange={handleEstadoDialogOpenChange}
       />
 
       <ReservaExportDialog

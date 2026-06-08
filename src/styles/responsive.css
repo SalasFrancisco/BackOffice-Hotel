@@ -745,6 +745,11 @@ textarea {
   max-width: min(26rem, calc(100vw - 2rem));
 }
 
+.bo-dialog-content.bo-reserva-state-dialog {
+  width: min(52rem, calc(100vw - 2rem));
+  max-width: min(52rem, calc(100vw - 2rem));
+}
+
 .bo-dialog-content.bo-service-dialog > button {
   top: 2.125rem;
   right: 1.5rem;
@@ -1006,6 +1011,11 @@ textarea {
   .bo-dialog-content.bo-reserva-compact-dialog {
     width: min(26rem, calc(100vw - 1rem));
     max-width: min(26rem, calc(100vw - 1rem));
+  }
+
+  .bo-dialog-content.bo-reserva-state-dialog {
+    width: calc(100vw - 1rem);
+    max-width: calc(100vw - 1rem);
   }
 
   .bo-dialog-content.bo-service-dialog > button {

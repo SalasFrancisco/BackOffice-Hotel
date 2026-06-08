@@ -248,6 +248,16 @@ html.dark .bo-reserva-service-category-toggle {
   background: #1f2937;
 }
 
+html.dark .bo-date-picker-nav-button {
+  background: #0f172a;
+  border-color: #475569;
+}
+
+html.dark .bo-date-picker-day {
+  background: #0f172a;
+  border-color: #334155;
+}
+
 html.dark .bo-reserva-service-category-toggle:hover,
 html.dark .bo-date-picker-nav-button:hover,
 html.dark .bo-date-picker-day:hover {
@@ -259,6 +269,12 @@ html.dark .bo-date-picker-day.is-previewed,
 html.dark .bo-reserva-card-highlight {
   background: #172554;
   border-color: #2563eb;
+}
+
+html.dark .bo-date-picker-day.is-selected {
+  background: #1e3a8a;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgb(96 165 250 / 0.3);
 }
 
 html.dark .bo-reserva-service-category-title,

@@ -29,6 +29,10 @@ type ReservaEstadoGestionDialogProps = {
   reserva: Reserva | null;
   estadoSeleccionado: Reserva['estado'] | null;
   detalle: string;
+  feedback: {
+    type: 'success' | 'error';
+    text: string;
+  } | null;
   loading: boolean;
   historyRefreshKey: number;
   onEstadoChange: (estado: Reserva['estado']) => void;
@@ -52,6 +56,7 @@ export function ReservaEstadoGestionDialog({
   reserva,
   estadoSeleccionado,
   detalle,
+  feedback,
   loading,
   historyRefreshKey,
   onEstadoChange,
@@ -130,6 +135,19 @@ export function ReservaEstadoGestionDialog({
         <div className="min-h-0 overflow-y-auto pr-1">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
             <section className="space-y-4">
+              {feedback && (
+                <div
+                  role={feedback.type === 'error' ? 'alert' : 'status'}
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    feedback.type === 'error'
+                      ? 'border-red-200 bg-red-50 text-red-800'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  }`}
+                >
+                  {feedback.text}
+                </div>
+              )}
+
               <div>
                 <label htmlFor="reserva-estado-seleccion" className="mb-2 block text-sm font-medium text-gray-700">
                   Estado

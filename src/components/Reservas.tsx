@@ -173,6 +173,10 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [estadoDialogReserva, setEstadoDialogReserva] = useState<Reserva | null>(null);
   const [estadoSeleccionado, setEstadoSeleccionado] = useState<Reserva['estado'] | null>(null);
   const [estadoChangeDetalle, setEstadoChangeDetalle] = useState('');
+  const [estadoDialogFeedback, setEstadoDialogFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const [estadoHistoryRefreshKey, setEstadoHistoryRefreshKey] = useState(0);
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -506,6 +510,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     setEstadoDialogReserva(reserva);
     setEstadoSeleccionado(reserva.estado);
     setEstadoChangeDetalle('');
+    setEstadoDialogFeedback(null);
   };
 
   const handleEstadoDialogOpenChange = (open: boolean) => {
@@ -513,6 +518,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     setEstadoDialogReserva(null);
     setEstadoSeleccionado(null);
     setEstadoChangeDetalle('');
+    setEstadoDialogFeedback(null);
   };
 
   const confirmEstadoChange = async () => {
@@ -525,6 +531,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       if (!hayCambioEstado && !detalle) return;
 
       setChangingEstadoId(estadoDialogReserva.id);
+      setEstadoDialogFeedback(null);
 
       const { error: changeError } = await supabase.rpc('cambiar_estado_reserva', {
         p_reserva_id: estadoDialogReserva.id,
@@ -543,18 +550,18 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         setCalendarRefreshKey((key) => key + 1);
       }
       await loadReservas();
-      showTemporaryMessage(
-        'success',
-        hayCambioEstado
+      setEstadoDialogFeedback({
+        type: 'success',
+        text: hayCambioEstado
           ? `Estado actualizado a ${estadoSeleccionado}.`
           : 'Anotación agregada al historial.',
-      );
+      });
     } catch (err: any) {
       console.error('Error updating reserva estado:', err);
-      showTemporaryMessage(
-        'error',
-        err?.message || 'No se pudo actualizar el estado de la reserva.',
-      );
+      setEstadoDialogFeedback({
+        type: 'error',
+        text: err?.message || 'No se pudo actualizar el estado de la reserva.',
+      });
     } finally {
       setChangingEstadoId(null);
     }
@@ -1588,10 +1595,17 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         reserva={estadoDialogReserva}
         estadoSeleccionado={estadoSeleccionado}
         detalle={estadoChangeDetalle}
+        feedback={estadoDialogFeedback}
         loading={changingEstadoId !== null}
         historyRefreshKey={estadoHistoryRefreshKey}
-        onEstadoChange={setEstadoSeleccionado}
-        onDetalleChange={setEstadoChangeDetalle}
+        onEstadoChange={(estado) => {
+          setEstadoSeleccionado(estado);
+          setEstadoDialogFeedback(null);
+        }}
+        onDetalleChange={(detalle) => {
+          setEstadoChangeDetalle(detalle);
+          setEstadoDialogFeedback(null);
+        }}
         onConfirm={confirmEstadoChange}
         onOpenChange={handleEstadoDialogOpenChange}
       />

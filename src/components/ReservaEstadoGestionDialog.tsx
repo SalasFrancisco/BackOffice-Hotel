@@ -258,7 +258,7 @@ export function ReservaEstadoGestionDialog({
                   Esta reserva todavía no tiene cambios ni anotaciones de estado.
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   {items.map((item) => {
                     const isNote = item.estado_anterior === item.estado_nuevo;
 

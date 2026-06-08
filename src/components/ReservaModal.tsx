@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase, Reserva, ReservaServicio } from '../utils/supabase/client';
 import { X, Trash2, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
@@ -129,7 +130,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
     });
   };
 
-  return (
+  return createPortal(
     <div
       className="bo-reserva-detail-overlay fixed inset-0 flex items-center justify-center p-4"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(1px)' }}
@@ -328,7 +329,8 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
         cancelText="Cancelar"
         variant="destructive"
       />
-    </div>
+    </div>,
+    document.body,
   );
 }
 

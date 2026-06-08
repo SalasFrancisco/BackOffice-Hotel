@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Perfil, Reserva, Salon, supabase } from '../utils/supabase/client';
 import { ReservaModal } from './ReservaModal';
@@ -399,7 +400,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         ))}
       </div>
 
-      {selectedSalonDay && (
+      {selectedSalonDay && createPortal(
         <div
           className={`bo-calendar-reservas-overlay${showModal ? ' is-backgrounded' : ''}`}
         >
@@ -421,7 +422,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
               </button>
             </div>
 
-            <div className="space-y-3 p-5">
+            <div className="flex flex-col gap-3 p-5">
               {selectedSalonDay.reservas.map((reserva) => (
                 <button
                   key={`${selectedSalonDay.day}-modal-${reserva.id}`}
@@ -459,7 +460,8 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {showModal && selectedReserva && (

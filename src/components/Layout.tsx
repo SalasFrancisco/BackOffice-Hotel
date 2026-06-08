@@ -626,7 +626,11 @@ export function Layout({
         {renderUserFooter()}
       </aside>
 
-      <main className="bo-main">{children}</main>
+      <main className="bo-main">
+        <div key={currentPage} className="bo-page-transition">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

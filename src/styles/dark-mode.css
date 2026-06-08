@@ -355,6 +355,14 @@ html.dark .bo-dashboard-animated-card:hover {
   box-shadow: 0 18px 38px rgb(0 0 0 / 0.35);
 }
 
+html.dark .bo-page-transition .bo-admin-card:hover,
+html.dark .bo-page-transition .bo-service-card:hover,
+html.dark .bo-page-transition .bo-reserva-card:hover,
+html.dark .bo-page-transition .bo-card-compact:not(.bo-dashboard-animated-card):hover {
+  border-color: #3b82f6;
+  box-shadow: 0 18px 38px rgb(0 0 0 / 0.35);
+}
+
 html.dark .bo-animated-chart:hover .recharts-cartesian-grid line {
   stroke: #475569;
 }

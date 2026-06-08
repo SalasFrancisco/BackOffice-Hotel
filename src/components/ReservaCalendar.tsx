@@ -179,6 +179,17 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
     void loadCalendarData();
   }, [currentDate, filterSalon, filterEstado, refreshKey]);
 
+  useEffect(() => {
+    if (!selectedSalonDay && !selectedReserva) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [selectedSalonDay, selectedReserva]);
+
   const previousMonth = () => {
     setCurrentDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1));
   };

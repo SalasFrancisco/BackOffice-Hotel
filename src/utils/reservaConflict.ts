@@ -1,6 +1,4 @@
-import { isReservaEstadoPendienteGestion } from './reservaEstadoTransitions';
-
-export type ReservaPendingConflictComparable = {
+export type ReservaConflictComparable = {
   id: number;
   id_salon: number;
   estado?: string | null;
@@ -50,9 +48,9 @@ const hasDayOverlap = (a: DayRange, b: DayRange): boolean => (
   a.startKey <= b.endKey && b.startKey <= a.endKey
 );
 
-export const getReservaPendingConflictIds = (
-  reserva: ReservaPendingConflictComparable,
-  reservas: ReservaPendingConflictComparable[],
+export const getReservaConflictIds = (
+  reserva: ReservaConflictComparable,
+  reservas: ReservaConflictComparable[],
 ): number[] => {
   if (!reserva || reserva.estado === CANCELADO_ESTADO || !Number.isFinite(Number(reserva.id_salon))) {
     return [];
@@ -65,7 +63,7 @@ export const getReservaPendingConflictIds = (
   const conflictIds = reservas
     .filter((item) => item.id !== reserva.id)
     .filter((item) => Number(item.id_salon) === targetSalonId)
-    .filter((item) => isReservaEstadoPendienteGestion(item.estado))
+    .filter((item) => item.estado !== CANCELADO_ESTADO)
     .filter((item) => {
       const itemRange = getDayRange(item.fecha_inicio, item.fecha_fin);
       if (!itemRange) return false;
@@ -76,8 +74,8 @@ export const getReservaPendingConflictIds = (
   return Array.from(new Set(conflictIds)).sort((a, b) => a - b);
 };
 
-export const getReservaPendingConflictText = (conflictIds: number[]): string => {
+export const getReservaConflictText = (conflictIds: number[]): string => {
   if (!conflictIds.length) return '';
   const idsText = conflictIds.map((id) => `#${id}`).join(', ');
-  return `Coincide con reserva(s) pendiente(s) del mismo salón y fecha: ${idsText}.`;
+  return `Coincide con otra(s) reserva(s) activa(s) del mismo salón y fecha: ${idsText}.`;
 };

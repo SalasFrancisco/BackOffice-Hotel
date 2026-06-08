@@ -4564,11 +4564,10 @@
             const endDate = new Date(`${fechaFinIso}T${horaFin}`);
 
             const now = new Date();
-            now.setSeconds(0, 0);
 
-            if (startDate < now) {
+            if (startDate <= now) {
 
-                setStatus('La fecha y hora de inicio no pueden ser anteriores al momento actual.', true);
+                setStatus('La fecha y hora de inicio deben ser posteriores al momento actual.', true);
 
                 return;
 

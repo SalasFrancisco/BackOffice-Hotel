@@ -445,66 +445,6 @@ const RESERVA_ESTADOS_PENDIENTES_GESTION = [
   RESERVA_ESTADO_PENDIENTE_VALIDACION,
   RESERVA_ESTADO_VALIDADO,
 ];
-const RESERVA_BLOCKING_ESTADOS = new Set(["Confirmado", "Pagado"]);
-
-type ReservaOverlapComparable = {
-  id: number;
-  id_salon: number;
-  estado?: string | null;
-  fecha_inicio: string;
-  fecha_fin: string;
-};
-
-const toReservaTimeTimestamp = (value?: string | null) => {
-  if (!value) return null;
-  const timestamp = new Date(value).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp;
-};
-
-const hasReservaTimeOverlap = (
-  startA?: string | null,
-  endA?: string | null,
-  startB?: string | null,
-  endB?: string | null,
-) => {
-  const startATimestamp = toReservaTimeTimestamp(startA);
-  const endATimestamp = toReservaTimeTimestamp(endA);
-  const startBTimestamp = toReservaTimeTimestamp(startB);
-  const endBTimestamp = toReservaTimeTimestamp(endB);
-
-  if (
-    startATimestamp === null
-    || endATimestamp === null
-    || startBTimestamp === null
-    || endBTimestamp === null
-  ) {
-    return false;
-  }
-
-  return startATimestamp < endBTimestamp && startBTimestamp < endATimestamp;
-};
-
-const getBlockingReservas = (
-  targetReserva: ReservaOverlapComparable,
-  reservas: ReservaOverlapComparable[],
-) => {
-  if (targetReserva.estado === "Cancelado") {
-    return [];
-  }
-
-  return reservas
-    .filter((item) => item.id !== targetReserva.id)
-    .filter((item) => Number(item.id_salon) === Number(targetReserva.id_salon))
-    .filter((item) => RESERVA_BLOCKING_ESTADOS.has(String(item.estado || "")))
-    .filter((item) => hasReservaTimeOverlap(
-      targetReserva.fecha_inicio,
-      targetReserva.fecha_fin,
-      item.fecha_inicio,
-      item.fecha_fin,
-    ))
-    .sort((a, b) => a.id - b.id);
-};
-
 const PUBLIC_RESERVA_NOTIFICATION_ORIGIN = "salones_form";
 const RESERVA_EXPIRATION_NOTIFICATION_ORIGIN = "reserva_vencimiento_auto";
 const RESERVA_AUTO_CANCEL_DAYS = 7;
@@ -4003,9 +3943,8 @@ const publicReservaHandler = async (c: any) => {
     }
 
     const now = new Date();
-    now.setSeconds(0, 0);
-    if (fechaInicioDate < now) {
-      return c.json({ error: "La fecha de inicio no puede ser anterior al momento actual" }, 400);
+    if (fechaInicioDate <= now) {
+      return c.json({ error: "La fecha de inicio debe ser posterior al momento actual" }, 400);
     }
 
     if (fechaFinDate <= fechaInicioDate) {
@@ -4062,40 +4001,6 @@ const publicReservaHandler = async (c: any) => {
         exceedsSalonCapacity,
         exceedsDistribucionCapacity,
       });
-    }
-
-    const { data: reservasSalonData, error: reservasSalonError } = await supabaseAdmin
-      .from("reservas")
-      .select("id, id_salon, estado, fecha_inicio, fecha_fin")
-      .eq("id_salon", salonData.id);
-
-    if (reservasSalonError) {
-      console.error("Error validando solapamientos del salon:", reservasSalonError);
-      return c.json({ error: "No se pudo validar la disponibilidad del salón" }, 500);
-    }
-
-    const blockingReservas = getBlockingReservas(
-      {
-        id: 0,
-        id_salon: salonData.id,
-        estado: RESERVA_ESTADO_PENDIENTE_VALIDACION,
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-      },
-      (reservasSalonData || []) as ReservaOverlapComparable[],
-    );
-
-    if (blockingReservas.length > 0) {
-      const blockingReservasText = blockingReservas
-        .map((item) => `#${item.id} (${item.estado || "Sin estado"})`)
-        .join(", ");
-
-      return c.json(
-        {
-          error: `El salón ya está bloqueado en ese rango por la(s) reserva(s): ${blockingReservasText}.`,
-        },
-        409,
-      );
     }
 
     const observacionesText = hasNonWhitespaceValue(observaciones) ? observaciones.trim() : null;

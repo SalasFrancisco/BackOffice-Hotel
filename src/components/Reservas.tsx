@@ -22,10 +22,10 @@ import {
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import {
-  getReservaPendingConflictIds,
-  getReservaPendingConflictText,
-  ReservaPendingConflictComparable,
-} from '../utils/reservaPendingConflict';
+  getReservaConflictIds,
+  getReservaConflictText,
+  ReservaConflictComparable,
+} from '../utils/reservaConflict';
 import {
   getReservaExpirationWarningText,
   getReservaStartWarningText,
@@ -34,7 +34,7 @@ import {
   getAllowedReservaEstadoTransitions,
   getReservaEstados,
   RESERVA_ESTADO_COLORS,
-  RESERVA_ESTADOS_PENDIENTES_GESTION,
+  RESERVA_ESTADO_CANCELADO,
 } from '../utils/reservaEstadoTransitions';
 
 type ReservasProps = {
@@ -167,7 +167,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('fechaInicio');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [reservasPendientes, setReservasPendientes] = useState<ReservaPendingConflictComparable[]>([]);
+  const [reservasActivas, setReservasActivas] = useState<ReservaConflictComparable[]>([]);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string[] } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
@@ -242,19 +242,19 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         query = query.eq('estado', filterEstado);
       }
 
-      const [{ data, error: queryError }, { data: pendientesData, error: pendientesError }] = await Promise.all([
+      const [{ data, error: queryError }, { data: reservasActivasData, error: reservasActivasError }] = await Promise.all([
         query,
         supabase
           .from('reservas')
           .select('id, id_salon, estado, fecha_inicio, fecha_fin')
-          .in('estado', RESERVA_ESTADOS_PENDIENTES_GESTION),
+          .neq('estado', RESERVA_ESTADO_CANCELADO),
       ]);
 
       if (queryError) throw queryError;
-      if (pendientesError) throw pendientesError;
+      if (reservasActivasError) throw reservasActivasError;
       const reservasData = data || [];
       setReservas(reservasData);
-      setReservasPendientes((pendientesData || []) as ReservaPendingConflictComparable[]);
+      setReservasActivas((reservasActivasData || []) as ReservaConflictComparable[]);
 
       const creadorIds = Array.from(
         new Set(
@@ -1121,11 +1121,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                 sortedReservas.map(reserva => {
                   const reservaRowId = Number(reserva.id);
                   const capacityWarningText = getReservaCapacityWarningText(reserva);
-                  const pendingConflictIds = getReservaPendingConflictIds(reserva, reservasPendientes);
-                  const pendingConflictText = getReservaPendingConflictText(pendingConflictIds);
+                  const conflictIds = getReservaConflictIds(reserva, reservasActivas);
+                  const conflictText = getReservaConflictText(conflictIds);
                   const expirationWarningText = getReservaExpirationWarningText(reserva);
                   const startWarningText = getReservaStartWarningText(reserva);
-                  const warningMessages = [capacityWarningText, pendingConflictText, expirationWarningText, startWarningText].filter(
+                  const warningMessages = [capacityWarningText, conflictText, expirationWarningText, startWarningText].filter(
                     (message): message is string => Boolean(message),
                   );
                   const warningText = warningMessages.join(' ');
@@ -1373,11 +1373,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           sortedReservas.map((reserva) => {
             const reservaRowId = Number(reserva.id);
             const capacityWarningText = getReservaCapacityWarningText(reserva);
-            const pendingConflictIds = getReservaPendingConflictIds(reserva, reservasPendientes);
-            const pendingConflictText = getReservaPendingConflictText(pendingConflictIds);
+            const conflictIds = getReservaConflictIds(reserva, reservasActivas);
+            const conflictText = getReservaConflictText(conflictIds);
             const expirationWarningText = getReservaExpirationWarningText(reserva);
             const startWarningText = getReservaStartWarningText(reserva);
-            const warningMessages = [capacityWarningText, pendingConflictText, expirationWarningText, startWarningText].filter(
+            const warningMessages = [capacityWarningText, conflictText, expirationWarningText, startWarningText].filter(
               (message): message is string => Boolean(message),
             );
             const warningText = warningMessages.join(' ');

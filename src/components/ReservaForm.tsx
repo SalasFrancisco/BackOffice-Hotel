@@ -382,8 +382,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
   );
   const clienteAutocompleteRef = useRef<HTMLDivElement | null>(null);
   
-  // Selected services: Map<servicioId, cantidad>
-  const [selectedServicios, setSelectedServicios] = useState<Map<number, number>>(new Map());
+  // Keep quantities as strings so the controlled input can be temporarily empty while editing.
+  const [selectedServicios, setSelectedServicios] = useState<Map<number, string>>(new Map());
   const [expandedServicioCategorias, setExpandedServicioCategorias] = useState<Set<number>>(() => new Set());
 
   // Form fields
@@ -829,10 +829,10 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           .eq('id_reserva', reserva.id);
 
         if (!rsError && reservaServiciosData) {
-          const map = new Map<number, number>();
+          const map = new Map<number, string>();
           reservaServiciosData.forEach(rs => {
             if (serviciosActivosIds.has(rs.id_servicio)) {
-              map.set(rs.id_servicio, rs.cantidad);
+              map.set(rs.id_servicio, String(rs.cantidad ?? 1));
             }
           });
           setSelectedServicios(map);
@@ -866,21 +866,15 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     if (newMap.has(servicioId)) {
       newMap.delete(servicioId);
     } else {
-      newMap.set(servicioId, 1);
+      newMap.set(servicioId, '1');
     }
     setSelectedServicios(newMap);
   };
 
-  const updateCantidadServicio = (servicioId: number, cantidad: number) => {
-    if (cantidad <= 0) {
-      const newMap = new Map(selectedServicios);
-      newMap.delete(servicioId);
-      setSelectedServicios(newMap);
-    } else {
-      const newMap = new Map(selectedServicios);
-      newMap.set(servicioId, cantidad);
-      setSelectedServicios(newMap);
-    }
+  const updateCantidadServicio = (servicioId: number, cantidad: string) => {
+    const newMap = new Map(selectedServicios);
+    newMap.set(servicioId, sanitizeIntegerInput(cantidad));
+    setSelectedServicios(newMap);
   };
 
   const toggleServicioCategoria = (categoriaId: number) => {
@@ -1160,6 +1154,12 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     const telefonoClienteSanitizado = sanitizePhoneInput(telefonoCliente);
     const cantidadPersonasSanitizada = sanitizeIntegerInput(cantidadPersonas);
     const observacionesSanitizadas = observaciones.trim();
+    const serviciosSeleccionados = Array.from(selectedServicios.entries()).map(
+      ([id_servicio, cantidad]) => ({
+        id_servicio,
+        cantidad: parseInt(sanitizeIntegerInput(cantidad), 10),
+      }),
+    );
     const fechaInicioIso = fechaInicioIsoFromInput;
     const fechaFinIso = fechaFinIsoFromInput;
     const fechaInicio = (
@@ -1189,6 +1189,11 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     const totalPersonas = parseInt(cantidadPersonasSanitizada, 10);
     if (!totalPersonas || totalPersonas <= 0) {
       showWarningDialog('Ingrese una cantidad de personas válida');
+      return;
+    }
+
+    if (serviciosSeleccionados.some(({ cantidad }) => !Number.isInteger(cantidad) || cantidad <= 0)) {
+      showWarningDialog('Ingrese una cantidad válida para cada servicio adicional');
       return;
     }
 
@@ -1313,8 +1318,8 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         }
 
         // Insertar servicios seleccionados
-        if (selectedServicios.size > 0) {
-          const serviciosToInsert = Array.from(selectedServicios.entries()).map(([id_servicio, cantidad]) => ({
+        if (serviciosSeleccionados.length > 0) {
+          const serviciosToInsert = serviciosSeleccionados.map(({ id_servicio, cantidad }) => ({
             id_reserva: reservaId,
             id_servicio,
             cantidad,
@@ -1801,7 +1806,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                       <div className="bo-reserva-service-category-content">
                         {serviciosCategoria.map(servicio => {
                           const isSelected = selectedServicios.has(servicio.id);
-                          const cantidad = selectedServicios.get(servicio.id) || 1;
+                          const cantidad = selectedServicios.get(servicio.id) ?? '1';
 
                           return (
                             <div
@@ -1834,7 +1839,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                                       type="number"
                                       min="1"
                                       value={cantidad}
-                                      onChange={(e) => updateCantidadServicio(servicio.id, parseInt(sanitizeIntegerInput(e.target.value), 10) || 1)}
+                                      onChange={(e) => updateCantidadServicio(servicio.id, e.target.value)}
                                       onKeyDown={preventInvalidNumberKeys}
                                       inputMode="numeric"
                                       className="bo-reserva-service-quantity-input"

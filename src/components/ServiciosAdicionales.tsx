@@ -14,6 +14,13 @@ import {
   hasServiceDescriptionContent,
   sanitizeServiceDescriptionMarkup,
 } from '../utils/serviceDescriptionRichText';
+import {
+  DEFAULT_SERVICE_INCOME_CATEGORY,
+  getServiceIncomeCategoryLabel,
+  normalizeServiceIncomeCategory,
+  SERVICE_INCOME_CATEGORY_OPTIONS,
+  type ServiceIncomeCategory,
+} from '../utils/serviceIncomeCategories';
 
 type ServiciosAdicionalesProps = {
   perfil: Perfil;
@@ -34,6 +41,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   // Form states - Categoría
   const [categoriaNombre, setCategoriaNombre] = useState('');
   const [categoriaDescripcion, setCategoriaDescripcion] = useState('');
+  const [categoriaSuperior, setCategoriaSuperior] = useState<ServiceIncomeCategory>(
+    DEFAULT_SERVICE_INCOME_CATEGORY,
+  );
   
   // Form states - Servicio
   const [servicioNombre, setServicioNombre] = useState('');
@@ -119,6 +129,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     setEditingCategoria(null);
     setCategoriaNombre('');
     setCategoriaDescripcion('');
+    setCategoriaSuperior(DEFAULT_SERVICE_INCOME_CATEGORY);
     setShowCategoriaDialog(true);
   };
 
@@ -126,6 +137,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     setEditingCategoria(categoria);
     setCategoriaNombre(categoria.nombre);
     setCategoriaDescripcion(categoria.descripcion || '');
+    setCategoriaSuperior(normalizeServiceIncomeCategory(categoria.categoria_superior));
     setShowCategoriaDialog(true);
   };
 
@@ -149,6 +161,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           .update({
             nombre: categoriaNombreSanitizado,
             descripcion: hasNonWhitespaceValue(categoriaDescripcionSanitizada) ? categoriaDescripcionSanitizada : null,
+            categoria_superior: categoriaSuperior,
           })
           .eq('id', editingCategoria.id);
 
@@ -166,6 +179,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         const payloadBase = {
           nombre: categoriaNombreSanitizado,
           descripcion: hasNonWhitespaceValue(categoriaDescripcionSanitizada) ? categoriaDescripcionSanitizada : null,
+          categoria_superior: categoriaSuperior,
         };
 
         const { error: errorConOrden } = await supabase
@@ -541,6 +555,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                     <FolderOpen className="w-5 h-5 text-blue-600" />
                     <div>
                       <h3 className="text-gray-900">{categoria.nombre}</h3>
+                      <p className="mt-1 text-xs font-medium text-blue-700">
+                        {getServiceIncomeCategoryLabel(categoria.categoria_superior)}
+                      </p>
                       {categoria.descripcion && (
                         <p className="text-sm text-gray-600">{categoria.descripcion}</p>
                       )}
@@ -761,6 +778,29 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 placeholder="Descripción opcional"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-700 mb-2">
+                Categoría superior <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={categoriaSuperior}
+                onChange={(event) => {
+                  setCategoriaSuperior(event.target.value as ServiceIncomeCategory);
+                }}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {SERVICE_INCOME_CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Define en qué rubro se sumarán los servicios de esta categoría en el dashboard.
+              </p>
             </div>
 
             <div className="bo-form-actions pt-4 border-t border-gray-200">

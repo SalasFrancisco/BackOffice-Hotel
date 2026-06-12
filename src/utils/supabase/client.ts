@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { projectId, publicAnonKey } from './info';
+import type { ServiceIncomeCategory } from '../serviceIncomeCategories';
 
 const supabaseUrl = `https://${projectId}.supabase.co`;
 
@@ -35,6 +36,7 @@ export type CategoriaServicio = {
   id: number;
   nombre: string;
   descripcion?: string;
+  categoria_superior: ServiceIncomeCategory;
   orden?: number | null;
   creado_en: string;
 };

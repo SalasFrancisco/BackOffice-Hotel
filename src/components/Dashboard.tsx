@@ -10,6 +10,12 @@ import {
   parseDashboardInputDate,
   type DashboardFilterValues,
 } from './DashboardFilters';
+import {
+  normalizeServiceIncomeCategory,
+  SERVICE_INCOME_CATEGORY,
+  SERVICE_INCOME_CATEGORY_OPTIONS,
+  type ServiceIncomeCategory,
+} from '../utils/serviceIncomeCategories';
 
 const DashboardAnalytics = lazy(() =>
   import('./DashboardAnalytics').then((module) => ({
@@ -46,41 +52,6 @@ const countCalendarDaysInclusive = (from: Date, to: Date) => {
 
 const isReservaConfirmadaOPagada = (estado: Reserva['estado']) =>
   estado === 'Confirmado' || estado === 'Pagado';
-
-type ServiceIncomeCategory =
-  | 'alimentosBebidas'
-  | 'equipamientoTecnico'
-  | 'otrosServicios';
-
-const normalizeCategoryName = (value?: string) =>
-  String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-const getServiceIncomeCategory = (categoryName?: string): ServiceIncomeCategory => {
-  const normalizedName = normalizeCategoryName(categoryName);
-
-  if (
-    normalizedName.includes('alimento')
-    || normalizedName.includes('bebida')
-    || normalizedName.includes('gastronom')
-    || normalizedName.includes('catering')
-  ) {
-    return 'alimentosBebidas';
-  }
-
-  if (
-    normalizedName.includes('equip')
-    || normalizedName.includes('tecnic')
-    || normalizedName.includes('audio')
-    || normalizedName.includes('video')
-  ) {
-    return 'equipamientoTecnico';
-  }
-
-  return 'otrosServicios';
-};
 
 export function Dashboard({ perfil: _perfil }: DashboardProps) {
   const [salones, setSalones] = useState<Salon[]>([]);
@@ -156,7 +127,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
               cantidad,
               servicio:servicios(
                 precio,
-                categoria:categorias_servicios(nombre)
+                categoria:categorias_servicios(categoria_superior)
               )
             )
           `)
@@ -225,8 +196,8 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           const cantidad = Number(reservaServicio.cantidad) || 0;
           const precio = Number(reservaServicio.servicio?.precio) || 0;
           const ingreso = cantidad * precio;
-          const category = getServiceIncomeCategory(
-            reservaServicio.servicio?.categoria?.nombre,
+          const category = normalizeServiceIncomeCategory(
+            reservaServicio.servicio?.categoria?.categoria_superior,
           );
 
           totals[category] += ingreso;
@@ -235,15 +206,14 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
         return totals;
       },
       {
-        alimentosBebidas: 0,
-        equipamientoTecnico: 0,
-        otrosServicios: 0,
+        [SERVICE_INCOME_CATEGORY.ALIMENTOS_BEBIDAS]: 0,
+        [SERVICE_INCOME_CATEGORY.EQUIPAMIENTO_TECNICO]: 0,
+        [SERVICE_INCOME_CATEGORY.DECORACION]: 0,
+        [SERVICE_INCOME_CATEGORY.OTROS_SERVICIOS]: 0,
       } satisfies Record<ServiceIncomeCategory, number>,
     );
     const ingresosObtenidos = ingresosSalones
-      + ingresosServicios.alimentosBebidas
-      + ingresosServicios.equipamientoTecnico
-      + ingresosServicios.otrosServicios;
+      + Object.values(ingresosServicios).reduce((acc, ingreso) => acc + ingreso, 0);
     const ticketPromedio = totalConfirmadasOPagadas > 0
       ? ingresosObtenidos / totalConfirmadasOPagadas
       : 0;
@@ -301,9 +271,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       porcentajeConfirmacion,
       ingresosObtenidos,
       ingresosSalones,
-      ingresosAlimentosBebidas: ingresosServicios.alimentosBebidas,
-      ingresosEquipamientoTecnico: ingresosServicios.equipamientoTecnico,
-      ingresosOtrosServicios: ingresosServicios.otrosServicios,
+      ingresosServicios,
       ticketPromedio,
       diasOcupados,
       totalDiasDisponibles,
@@ -392,26 +360,14 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
                 {formatCurrency(metrics.ingresosSalones)}
               </dd>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-gray-600">Alimentos y bebidas</dt>
-              <dd className="font-medium tabular-nums text-gray-900">
-                {formatCurrency(metrics.ingresosAlimentosBebidas)}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-gray-600">Equipamiento técnico</dt>
-              <dd className="font-medium tabular-nums text-gray-900">
-                {formatCurrency(metrics.ingresosEquipamientoTecnico)}
-              </dd>
-            </div>
-            {metrics.ingresosOtrosServicios > 0 && (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-gray-600">Otros servicios</dt>
+            {SERVICE_INCOME_CATEGORY_OPTIONS.map((option) => (
+              <div key={option.value} className="flex items-center justify-between gap-3">
+                <dt className="text-gray-600">{option.label}</dt>
                 <dd className="font-medium tabular-nums text-gray-900">
-                  {formatCurrency(metrics.ingresosOtrosServicios)}
+                  {formatCurrency(metrics.ingresosServicios[option.value])}
                 </dd>
               </div>
-            )}
+            ))}
           </dl>
         </div>
 

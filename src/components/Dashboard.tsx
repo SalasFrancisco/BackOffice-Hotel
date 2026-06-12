@@ -217,6 +217,17 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
     const ticketPromedio = totalConfirmadasOPagadas > 0
       ? ingresosObtenidos / totalConfirmadasOPagadas
       : 0;
+    const ticketPromedioSalones = totalConfirmadasOPagadas > 0
+      ? ingresosSalones / totalConfirmadasOPagadas
+      : 0;
+    const ticketPromedioServicios = Object.fromEntries(
+      SERVICE_INCOME_CATEGORY_OPTIONS.map((option) => [
+        option.value,
+        totalConfirmadasOPagadas > 0
+          ? ingresosServicios[option.value] / totalConfirmadasOPagadas
+          : 0,
+      ]),
+    ) as Record<ServiceIncomeCategory, number>;
 
     const rangeStart = toCalendarDay(parseDashboardInputDate(appliedFilters.from));
     const rangeEnd = toCalendarDay(parseDashboardInputDate(appliedFilters.to));
@@ -273,6 +284,8 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       ingresosSalones,
       ingresosServicios,
       ticketPromedio,
+      ticketPromedioSalones,
+      ticketPromedioServicios,
       diasOcupados,
       totalDiasDisponibles,
       porcentajeOcupacion,
@@ -379,6 +392,22 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           </div>
           <p className="mb-1 text-sm text-gray-600">Ticket promedio</p>
           <p className="text-3xl text-gray-900">{formatCurrency(metrics.ticketPromedio)}</p>
+          <dl className="mt-4 space-y-2 border-t border-gray-100 pt-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-gray-600">Salones</dt>
+              <dd className="font-medium tabular-nums text-gray-900">
+                {formatCurrency(metrics.ticketPromedioSalones)}
+              </dd>
+            </div>
+            {SERVICE_INCOME_CATEGORY_OPTIONS.map((option) => (
+              <div key={option.value} className="flex items-center justify-between gap-3">
+                <dt className="text-gray-600">{option.label}</dt>
+                <dd className="font-medium tabular-nums text-gray-900">
+                  {formatCurrency(metrics.ticketPromedioServicios[option.value])}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
 
         <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">

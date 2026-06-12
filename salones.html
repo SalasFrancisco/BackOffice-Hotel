@@ -4000,6 +4000,39 @@
 
         }
 
+        function compareServiceCatalogNames(nameA, nameB) {
+            return String(nameA || '').localeCompare(
+                String(nameB || ''),
+                'es',
+                { sensitivity: 'base' }
+            );
+        }
+
+        function sortServiceCatalogCategories(categories) {
+            return [...categories].sort((categoryA, categoryB) => {
+                const orderA = Number(categoryA.orden);
+                const orderB = Number(categoryB.orden);
+                const hasOrderA = Number.isFinite(orderA) && orderA > 0;
+                const hasOrderB = Number.isFinite(orderB) && orderB > 0;
+
+                if (hasOrderA && hasOrderB && orderA !== orderB) {
+                    return orderA - orderB;
+                }
+                if (hasOrderA && !hasOrderB) return -1;
+                if (!hasOrderA && hasOrderB) return 1;
+
+                return compareServiceCatalogNames(categoryA.nombre, categoryB.nombre)
+                    || Number(categoryA.id || 0) - Number(categoryB.id || 0);
+            });
+        }
+
+        function sortServiceCatalogServices(services) {
+            return [...services].sort((serviceA, serviceB) => (
+                compareServiceCatalogNames(serviceA.nombre, serviceB.nombre)
+                || Number(serviceA.id || 0) - Number(serviceB.id || 0)
+            ));
+        }
+
         function renderServicios() {
 
             serviciosContainer.innerHTML = '';
@@ -4014,11 +4047,15 @@
 
             }
 
-            const categoriasOrdenadas = catalogCategorias.length ? catalogCategorias : [{ id: 0, nombre: 'Servicios' }];
+            const categoriasOrdenadas = catalogCategorias.length
+                ? sortServiceCatalogCategories(catalogCategorias)
+                : [{ id: 0, nombre: 'Servicios' }];
 
             categoriasOrdenadas.forEach(cat => {
 
-                const items = catalogServicios.filter(s => s.id_categoria === cat.id || cat.id === 0);
+                const items = sortServiceCatalogServices(
+                    catalogServicios.filter(s => s.id_categoria === cat.id || cat.id === 0)
+                );
 
                 if (!items.length) return;
 

@@ -21,6 +21,10 @@ import {
   SERVICE_INCOME_CATEGORY_OPTIONS,
   type ServiceIncomeCategory,
 } from '../utils/serviceIncomeCategories';
+import {
+  sortServiceCategories,
+  sortServicesByName,
+} from '../utils/serviceCatalogOrder';
 
 type ServiciosAdicionalesProps = {
   perfil: Perfil;
@@ -70,22 +74,6 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     loadData();
   }, []);
 
-  const sortCategorias = (categoriasInput: CategoriaServicio[]) =>
-    [...categoriasInput].sort((categoriaA, categoriaB) => {
-      const ordenA = Number(categoriaA.orden);
-      const ordenB = Number(categoriaB.orden);
-      const tieneOrdenA = Number.isFinite(ordenA) && ordenA > 0;
-      const tieneOrdenB = Number.isFinite(ordenB) && ordenB > 0;
-
-      if (tieneOrdenA && tieneOrdenB && ordenA !== ordenB) {
-        return ordenA - ordenB;
-      }
-      if (tieneOrdenA && !tieneOrdenB) return -1;
-      if (!tieneOrdenA && tieneOrdenB) return 1;
-
-      return categoriaA.nombre.localeCompare(categoriaB.nombre, 'es', { sensitivity: 'base' });
-    });
-
   const isOrdenColumnMissingError = (error: unknown) => {
     if (!error || typeof error !== 'object' || !('message' in error)) return false;
     const message = String((error as { message?: string }).message || '').toLowerCase();
@@ -103,7 +91,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         .order('nombre');
 
       if (categoriasError) throw categoriasError;
-      setCategorias(sortCategorias(categoriasData || []));
+      setCategorias(sortServiceCategories(categoriasData || []));
 
       // Load servicios
       const { data: serviciosData, error: serviciosError } = await supabase
@@ -113,7 +101,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         .order('nombre');
 
       if (serviciosError) throw serviciosError;
-      setServicios((serviciosData || []).filter((servicio) => servicio.activo !== false));
+      setServicios(sortServicesByName(
+        (serviciosData || []).filter((servicio) => servicio.activo !== false),
+      ));
 
     } catch (err: any) {
       console.error('Error loading data:', err);

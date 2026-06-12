@@ -15,6 +15,10 @@ import {
   RESERVA_ESTADOS_BLOQUEANTES,
   isReservaEstadoPendienteGestion,
 } from '../utils/reservaEstadoTransitions';
+import {
+  sortServiceCategories,
+  sortServicesByName,
+} from '../utils/serviceCatalogOrder';
 
 type ReservaFormProps = {
   reserva?: Reserva | null;
@@ -798,7 +802,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         .order('nombre');
 
       if (categoriasError) throw categoriasError;
-      setCategorias(categoriasData || []);
+      setCategorias(sortServiceCategories(categoriasData || []));
 
       const { data: serviciosData, error: serviciosError } = await supabase
         .from('servicios')
@@ -807,7 +811,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         .order('nombre');
 
       if (serviciosError) throw serviciosError;
-      const serviciosActivos = (serviciosData || []).filter((servicio) => servicio.activo !== false);
+      const serviciosActivos = sortServicesByName(
+        (serviciosData || []).filter((servicio) => servicio.activo !== false),
+      );
       const serviciosActivosIds = new Set(serviciosActivos.map((servicio) => servicio.id));
       setServicios(serviciosActivos);
 

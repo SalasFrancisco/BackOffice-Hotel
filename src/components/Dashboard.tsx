@@ -47,6 +47,41 @@ const countCalendarDaysInclusive = (from: Date, to: Date) => {
 const isReservaConfirmadaOPagada = (estado: Reserva['estado']) =>
   estado === 'Confirmado' || estado === 'Pagado';
 
+type ServiceIncomeCategory =
+  | 'alimentosBebidas'
+  | 'equipamientoTecnico'
+  | 'otrosServicios';
+
+const normalizeCategoryName = (value?: string) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const getServiceIncomeCategory = (categoryName?: string): ServiceIncomeCategory => {
+  const normalizedName = normalizeCategoryName(categoryName);
+
+  if (
+    normalizedName.includes('alimento')
+    || normalizedName.includes('bebida')
+    || normalizedName.includes('gastronom')
+    || normalizedName.includes('catering')
+  ) {
+    return 'alimentosBebidas';
+  }
+
+  if (
+    normalizedName.includes('equip')
+    || normalizedName.includes('tecnic')
+    || normalizedName.includes('audio')
+    || normalizedName.includes('video')
+  ) {
+    return 'equipamientoTecnico';
+  }
+
+  return 'otrosServicios';
+};
+
 export function Dashboard({ perfil: _perfil }: DashboardProps) {
   const [salones, setSalones] = useState<Salon[]>([]);
   const [reservas, setReservas] = useState<DashboardAnalyticsReserva[]>([]);
@@ -110,7 +145,21 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
 
         let query = supabase
           .from('reservas')
-          .select('id, id_salon, estado, monto, fecha_inicio, fecha_fin')
+          .select(`
+            id,
+            id_salon,
+            estado,
+            monto,
+            fecha_inicio,
+            fecha_fin,
+            reserva_servicios(
+              cantidad,
+              servicio:servicios(
+                precio,
+                categoria:categorias_servicios(nombre)
+              )
+            )
+          `)
           .gte('fecha_inicio', fromDate.toISOString())
           .lte('fecha_inicio', toDate.toISOString())
           .order('fecha_inicio', { ascending: true });
@@ -166,12 +215,37 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
     const porcentajeConfirmacion = totalSolicitudes > 0
       ? (totalConfirmadasOPagadas / totalSolicitudes) * 100
       : 0;
-    const capitalObtenido = reservasConfirmadasOPagadas.reduce(
+    const ingresosSalones = reservasConfirmadasOPagadas.reduce(
       (acc, reserva) => acc + Number(reserva.monto || 0),
       0,
     );
+    const ingresosServicios = reservasConfirmadasOPagadas.reduce(
+      (totals, reserva) => {
+        (reserva.reserva_servicios || []).forEach((reservaServicio) => {
+          const cantidad = Number(reservaServicio.cantidad) || 0;
+          const precio = Number(reservaServicio.servicio?.precio) || 0;
+          const ingreso = cantidad * precio;
+          const category = getServiceIncomeCategory(
+            reservaServicio.servicio?.categoria?.nombre,
+          );
+
+          totals[category] += ingreso;
+        });
+
+        return totals;
+      },
+      {
+        alimentosBebidas: 0,
+        equipamientoTecnico: 0,
+        otrosServicios: 0,
+      } satisfies Record<ServiceIncomeCategory, number>,
+    );
+    const ingresosObtenidos = ingresosSalones
+      + ingresosServicios.alimentosBebidas
+      + ingresosServicios.equipamientoTecnico
+      + ingresosServicios.otrosServicios;
     const ticketPromedio = totalConfirmadasOPagadas > 0
-      ? capitalObtenido / totalConfirmadasOPagadas
+      ? ingresosObtenidos / totalConfirmadasOPagadas
       : 0;
 
     const rangeStart = toCalendarDay(parseDashboardInputDate(appliedFilters.from));
@@ -218,14 +292,18 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       0,
     ) * daysInRange;
     const porcentajeFacturacion = facturacionPotencial > 0
-      ? (capitalObtenido / facturacionPotencial) * 100
+      ? (ingresosSalones / facturacionPotencial) * 100
       : 0;
 
     return {
       totalSolicitudes,
       totalConfirmadasOPagadas,
       porcentajeConfirmacion,
-      capitalObtenido,
+      ingresosObtenidos,
+      ingresosSalones,
+      ingresosAlimentosBebidas: ingresosServicios.alimentosBebidas,
+      ingresosEquipamientoTecnico: ingresosServicios.equipamientoTecnico,
+      ingresosOtrosServicios: ingresosServicios.otrosServicios,
       ticketPromedio,
       diasOcupados,
       totalDiasDisponibles,
@@ -305,8 +383,36 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
               <Wallet className="h-6 w-6 text-purple-600" />
             </div>
           </div>
-          <p className="mb-1 text-sm text-gray-600">Capital obtenido</p>
-          <p className="text-3xl text-gray-900">{formatCurrency(metrics.capitalObtenido)}</p>
+          <p className="mb-1 text-sm text-gray-600">Ingresos obtenidos</p>
+          <p className="text-3xl text-gray-900">{formatCurrency(metrics.ingresosObtenidos)}</p>
+          <dl className="mt-4 space-y-2 border-t border-gray-100 pt-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-gray-600">Salones</dt>
+              <dd className="font-medium tabular-nums text-gray-900">
+                {formatCurrency(metrics.ingresosSalones)}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-gray-600">Alimentos y bebidas</dt>
+              <dd className="font-medium tabular-nums text-gray-900">
+                {formatCurrency(metrics.ingresosAlimentosBebidas)}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-gray-600">Equipamiento técnico</dt>
+              <dd className="font-medium tabular-nums text-gray-900">
+                {formatCurrency(metrics.ingresosEquipamientoTecnico)}
+              </dd>
+            </div>
+            {metrics.ingresosOtrosServicios > 0 && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-gray-600">Otros servicios</dt>
+                <dd className="font-medium tabular-nums text-gray-900">
+                  {formatCurrency(metrics.ingresosOtrosServicios)}
+                </dd>
+              </div>
+            )}
+          </dl>
         </div>
 
         <div className="bo-dashboard-animated-card bo-kpi-card bo-card-compact rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -341,7 +447,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           <p className="mb-1 text-sm text-gray-600">Facturación vs potencial</p>
           <p className="text-3xl text-gray-900">{metrics.porcentajeFacturacion.toFixed(1)}%</p>
           <p className="mt-1 text-sm text-cyan-700">
-            {formatCurrency(metrics.capitalObtenido)} / {formatCurrency(metrics.facturacionPotencial)}
+            Salones: {formatCurrency(metrics.ingresosSalones)} / {formatCurrency(metrics.facturacionPotencial)}
           </p>
         </div>
       </div>

@@ -69,7 +69,6 @@ const clearPasswordRecoveryUrl = () => {
 };
 
 const INACTIVE_USER_MESSAGE = 'Usuario dado de baja. Contacte al administrador.';
-const SESSION_EXPIRED_MESSAGE = 'La sesión se cerró por inactividad. Inicie sesión nuevamente.';
 
 const isPerfilActivo = (perfil?: Perfil | null) => perfil?.activo !== false;
 
@@ -309,7 +308,7 @@ export default function App() {
 
     inactivityLogoutInProgressRef.current = true;
     clearSessionActivity();
-    setAuthFeedbackMessage({ type: 'error', text: SESSION_EXPIRED_MESSAGE });
+    setAuthFeedbackMessage(null);
 
     try {
       await supabase.auth.signOut();

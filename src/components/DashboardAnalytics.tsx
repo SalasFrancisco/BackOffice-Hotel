@@ -22,7 +22,13 @@ import { parseDashboardInputDate } from './DashboardFilters';
 
 export type DashboardAnalyticsReserva = Pick<
   Reserva,
-  'id' | 'id_salon' | 'estado' | 'fecha_inicio' | 'fecha_fin' | 'monto'
+  | 'id'
+  | 'id_salon'
+  | 'estado'
+  | 'fecha_inicio'
+  | 'fecha_fin'
+  | 'monto'
+  | 'reserva_servicios'
 >;
 
 type DashboardAnalyticsProps = {

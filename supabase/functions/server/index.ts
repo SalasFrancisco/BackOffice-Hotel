@@ -4033,7 +4033,7 @@ const publicReservaHandler = async (c: any) => {
 
     if (reservaError || !reservaData) {
       console.error("Error creando reserva:", reservaError);
-      return c.json({ error: reservaError?.message ?? "No se pudo crear la reserva" }, 500);
+      return c.json({ error: "No se pudo registrar la solicitud" }, 500);
     }
 
     await registerPublicReservaNotification(supabaseAdmin, {

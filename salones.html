@@ -3918,7 +3918,7 @@
             if (!personas || personas <= 0) {
                 const t = document.createElement('div');
                 t.className = 'select-group-title';
-                t.innerText = 'SALONES DISPONIBLES';
+                t.innerText = 'SALONES';
                 salonOptionsList.appendChild(t);
 
                 const ordered = [...salonesDB].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
@@ -4712,24 +4712,32 @@
                 };
 
                 for (const endpoint of submitAttempts) {
+                    let response;
+
                     try {
-                        const response = await fetch(endpoint, {
+                        response = await fetch(endpoint, {
                             method: 'POST',
                             headers: submitHeaders,
                             body: JSON.stringify(payload)
                         });
-
-                        const parsed = await parseJsonResponse(response);
-
-                        if (response.ok) {
-                            data = parsed;
-                            break;
-                        }
-
-                        submitErrors.push(parsed?.error || `HTTP ${response.status} en ${endpoint}`);
                     } catch (error) {
-                        submitErrors.push(`${endpoint}: ${error?.message || 'Error de red'}`);
+                        submitErrors.push(error?.message || 'Error de red');
+                        continue;
                     }
+
+                    const parsed = await parseJsonResponse(response);
+
+                    if (response.ok) {
+                        data = parsed;
+                        break;
+                    }
+
+                    if (response.status === 404 || response.status === 405) {
+                        submitErrors.push(`Ruta no disponible (HTTP ${response.status})`);
+                        continue;
+                    }
+
+                    throw new Error(parsed?.error || `No se pudo enviar el formulario (HTTP ${response.status}).`);
                 }
 
                 if (!data) {

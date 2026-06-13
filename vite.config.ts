@@ -3,34 +3,48 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
-const reservasRedirectPlugin = () => ({
-  name: 'reservas-redirect',
+const localRoutingPlugin = () => ({
+  name: 'local-routing',
   configureServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (req?.url === '/reservas') {
+      const pathname = req?.url?.split('?')[0];
+
+      if (pathname === '/reservas') {
         res.statusCode = 301;
         res.setHeader('Location', '/reservas/');
         res.end();
         return;
       }
+
+      if (pathname === '/formulario-reserva.html') {
+        req.url = '/salones.html';
+      }
+
       next();
     });
   },
   configurePreviewServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (req?.url === '/reservas') {
+      const pathname = req?.url?.split('?')[0];
+
+      if (pathname === '/reservas') {
         res.statusCode = 301;
         res.setHeader('Location', '/reservas/');
         res.end();
         return;
       }
+
+      if (pathname === '/formulario-reserva.html') {
+        req.url = '/salones.html';
+      }
+
       next();
     });
   },
 });
 
 export default defineConfig({
-  plugins: [react(), reservasRedirectPlugin()],
+  plugins: [react(), localRoutingPlugin()],
   base: './',
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],

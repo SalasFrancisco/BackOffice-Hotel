@@ -10,6 +10,12 @@
 
     <title>Centro de Convenciones | Hotel Quinto Centenario</title>
 
+    <script>
+        if (window.location.pathname.endsWith('/formulario-reserva.html')) {
+            document.documentElement.classList.add('embed-reservation-form');
+        }
+    </script>
+
     <link rel="icon" type="image/png" sizes="192x192" href="./reservas/icons/icon-192.png">
 
     <link
@@ -2408,6 +2414,60 @@
                 font-size: 26px;
             }
         }
+
+        html.embed-reservation-form,
+        html.embed-reservation-form body {
+            min-height: 0;
+            background: transparent;
+        }
+
+        html.embed-reservation-form body {
+            padding: 58px 16px 16px;
+        }
+
+        html.embed-reservation-form header,
+        html.embed-reservation-form .hero-section,
+        html.embed-reservation-form .section-container:not(.reservation-section),
+        html.embed-reservation-form .gallery-full-width,
+        html.embed-reservation-form footer,
+        html.embed-reservation-form .whatsapp-float {
+            display: none !important;
+        }
+
+        html.embed-reservation-form .reservation-section {
+            width: 100%;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 0;
+        }
+
+        html.embed-reservation-form .reservation-section .split-layout {
+            display: block;
+        }
+
+        html.embed-reservation-form .reservation-section .intro-col {
+            display: none;
+        }
+
+        html.embed-reservation-form #reservationEmbedRoot {
+            width: 100%;
+            max-width: 680px;
+            margin: 0 auto;
+        }
+
+        html.embed-reservation-form .form-card {
+            margin-top: 0;
+        }
+
+        @media (max-width: 640px) {
+            html.embed-reservation-form body {
+                padding: 48px 10px 10px;
+            }
+
+            html.embed-reservation-form .form-card {
+                margin-top: 0;
+            }
+        }
     </style>
 
 </head>
@@ -2478,7 +2538,7 @@
 
     </div>
 
-    <div class="section-container">
+    <div class="section-container reservation-section">
 
         <div class="split-layout">
 
@@ -2501,7 +2561,7 @@
 
             </div>
 
-            <div class="form-col">
+            <div class="form-col" id="reservationEmbedRoot">
 
                 <div class="form-card">
 
@@ -3430,38 +3490,52 @@
 
     <script>
 
-        // Hero
+        const isEmbeddedReservationForm = document.documentElement.classList.contains('embed-reservation-form');
+        const EMBED_PARENT_ORIGIN = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+            ? window.location.origin
+            : 'https://www.quintocentenariohotel.com';
 
-        const mainSwiper = new Swiper('.main-swiper', { loop: true, effect: 'fade', autoplay: { delay: 5000, disableOnInteraction: false } });
+        if (isEmbeddedReservationForm) {
+            document.querySelectorAll(
+                'body > :not(.reservation-section):not(#statusModalOverlay):not(script)'
+            ).forEach((element) => element.remove());
+            document.querySelector('.reservation-section .intro-col')?.remove();
+        }
 
-        // Carrusel Central
+        if (!isEmbeddedReservationForm) {
+            // Hero
 
-        const gallerySwiper = new Swiper('.gallery-swiper', {
+            const mainSwiper = new Swiper('.main-swiper', { loop: true, effect: 'fade', autoplay: { delay: 5000, disableOnInteraction: false } });
 
-            loop: true, effect: 'fade', autoplay: { delay: 4000 },
+            // Carrusel Central
 
-            navigation: { nextEl: '.gallery-full-width .swiper-button-next', prevEl: '.gallery-full-width .swiper-button-prev' }
+            const gallerySwiper = new Swiper('.gallery-swiper', {
 
-        });
+                loop: true, effect: 'fade', autoplay: { delay: 4000 },
 
-        // Salones
+                navigation: { nextEl: '.gallery-full-width .swiper-button-next', prevEl: '.gallery-full-width .swiper-button-prev' }
 
-        const salonSwipers = document.querySelectorAll('.salon-swiper');
-
-        salonSwipers.forEach(slider => {
-
-            const sliderContainer = slider.closest('.salon-slider');
-            const nextButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-next') : null;
-            const prevButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-prev') : null;
-
-            new Swiper(slider, {
-                loop: true,
-                effect: 'fade',
-                fadeEffect: { crossFade: true },
-                navigation: { nextEl: nextButton, prevEl: prevButton }
             });
 
-        });
+            // Salones
+
+            const salonSwipers = document.querySelectorAll('.salon-swiper');
+
+            salonSwipers.forEach(slider => {
+
+                const sliderContainer = slider.closest('.salon-slider');
+                const nextButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-next') : null;
+                const prevButton = sliderContainer ? sliderContainer.querySelector('.swiper-button-prev') : null;
+
+                new Swiper(slider, {
+                    loop: true,
+                    effect: 'fade',
+                    fadeEffect: { crossFade: true },
+                    navigation: { nextEl: nextButton, prevEl: prevButton }
+                });
+
+            });
+        }
 
         // --- LOGICA SELECTOR INTELIGENTE ---
 
@@ -4372,6 +4446,34 @@
         const submitButton = formTesis.querySelector('button[type="submit"]');
 
         const consentimientoPresupuesto = document.getElementById('consentimientoPresupuesto');
+
+        const notifyEmbedHeight = () => {
+            if (!isEmbeddedReservationForm || window.parent === window) return;
+
+            const embedRoot = document.getElementById('reservationEmbedRoot');
+            if (!embedRoot) return;
+
+            const height = Math.ceil(embedRoot.offsetTop + embedRoot.offsetHeight + 16);
+            window.parent.postMessage(
+                {
+                    type: 'quinto-centenario-reserva:resize',
+                    height,
+                },
+                EMBED_PARENT_ORIGIN,
+            );
+        };
+
+        if (isEmbeddedReservationForm) {
+            window.addEventListener('load', notifyEmbedHeight);
+            window.addEventListener('resize', notifyEmbedHeight);
+
+            if ('ResizeObserver' in window) {
+                const embedResizeObserver = new ResizeObserver(notifyEmbedHeight);
+                embedResizeObserver.observe(document.getElementById('reservationEmbedRoot'));
+            }
+
+            window.setTimeout(notifyEmbedHeight, 0);
+        }
 
         const updateSubmitButtonState = () => {
 

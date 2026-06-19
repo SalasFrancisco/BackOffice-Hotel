@@ -684,6 +684,11 @@ type PresupuestoServicio = {
   cantidad: number;
 };
 
+type PresupuestoContacto = {
+  nombre: string;
+  email: string;
+};
+
 type PdfInlineFragment = {
   text: string;
   bold?: boolean;
@@ -845,6 +850,7 @@ const buildPresupuestoPdf = async (
     diasSalon?: number | null;
     cantidadPersonas: number;
     servicios: PresupuestoServicio[];
+    contacto: PresupuestoContacto;
   },
 ) => {
   // Import pdfmake and its fonts lazily so the function can boot when PDF generation
@@ -914,6 +920,46 @@ const buildPresupuestoPdf = async (
   const fechaEmision = new Date();
   const fechaVencimiento = addDays(fechaEmision, 7);
 
+  const presupuestoFooter = (currentPage: number, pageCount: number) => {
+    if (currentPage !== pageCount) return { text: "" };
+
+    return {
+      margin: [40, 6, 40, 0],
+      table: {
+        widths: [70, "*"],
+        body: [[
+          logoDataUrl
+            ? { image: logoDataUrl, fit: [54, 54], alignment: "center" }
+            : { text: "QUINTO\nCENTENARIO", bold: true, fontSize: 8, alignment: "center", margin: [0, 15, 0, 0] },
+          {
+            stack: [
+              { text: input.contacto.nombre, bold: true, fontSize: 12, color: "#1F2937" },
+              { text: "Ejecutivo comercial", fontSize: 9, color: "#4B5563", margin: [0, 3, 0, 0] },
+              {
+                text: input.contacto.email,
+                link: `mailto:${input.contacto.email}`,
+                fontSize: 9,
+                color: "#1D4ED8",
+                decoration: "underline",
+                margin: [0, 6, 0, 0],
+              },
+            ],
+            margin: [14, 2, 0, 0],
+          },
+        ]],
+      },
+      layout: {
+        hLineWidth: () => 0,
+        vLineWidth: (index: number) => index === 1 ? 1 : 0,
+        vLineColor: () => "#6B7280",
+        paddingLeft: () => 0,
+        paddingRight: () => 0,
+        paddingTop: () => 0,
+        paddingBottom: () => 0,
+      },
+    };
+  };
+
   const cardTableLayout = {
     hLineColor: () => "#E5E7EB",
     vLineColor: () => "#E5E7EB",
@@ -964,7 +1010,8 @@ const buildPresupuestoPdf = async (
       ];
 
   const docDefinition = {
-    pageMargins: [40, 50, 40, 60],
+    pageMargins: [40, 50, 40, 100],
+    footer: presupuestoFooter,
     content: [
       ...headerContent,
       {
@@ -2287,6 +2334,61 @@ const deletePresupuestoFromStorage = async (
   return { deleted: false as const };
 };
 
+const resolvePresupuestoContacto = async (
+  supabaseAdmin: SupabaseClient,
+  creadoPor?: string | null,
+): Promise<PresupuestoContacto> => {
+  const loadContactoFromPerfil = async (perfil: { user_id: string; nombre?: string | null }) => {
+    const nombre = String(perfil.nombre || "").trim();
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(perfil.user_id);
+    const email = String(userData?.user?.email || "").trim();
+
+    if (userError || !nombre || !email) return null;
+    return { nombre, email };
+  };
+
+  if (creadoPor) {
+    const { data: perfil, error: perfilError } = await supabaseAdmin
+      .from("perfiles")
+      .select("user_id, nombre")
+      .eq("user_id", creadoPor)
+      .maybeSingle();
+
+    if (perfilError) {
+      throw new Error(`No se pudo obtener el perfil del creador del presupuesto (${perfilError.message}).`);
+    }
+
+    if (!perfil) {
+      throw new Error("No se encontrÃ³ el perfil del usuario que creÃ³ la reserva.");
+    }
+
+    const contacto = await loadContactoFromPerfil(perfil);
+    if (!contacto) {
+      throw new Error("El usuario que creÃ³ la reserva no tiene nombre completo o email disponible.");
+    }
+
+    return contacto;
+  }
+
+  const { data: perfilesAdmin, error: perfilesError } = await supabaseAdmin
+    .from("perfiles")
+    .select("user_id, nombre, activo, creado_en")
+    .eq("rol", "ADMIN")
+    .order("creado_en", { ascending: true });
+
+  if (perfilesError) {
+    throw new Error(`No se pudo obtener un administrador para el presupuesto pÃºblico (${perfilesError.message}).`);
+  }
+
+  for (const perfil of perfilesAdmin || []) {
+    if (perfil.activo === false) continue;
+    const contacto = await loadContactoFromPerfil(perfil);
+    if (contacto) return contacto;
+  }
+
+  throw new Error("No hay un usuario administrador activo con nombre completo y email disponible.");
+};
+
 const loadReservaPresupuestoContext = async (
   supabaseAdmin: SupabaseClient,
   reservaId: number,
@@ -2294,7 +2396,7 @@ const loadReservaPresupuestoContext = async (
   const { data: reservaData, error: reservaError } = await supabaseAdmin
     .from("reservas")
     .select(
-      "id, id_salon, id_distribucion, cliente_nombre, cliente_email, cliente_telefono, fecha_inicio, fecha_fin, cantidad_personas, monto, observaciones, presupuesto_url",
+      "id, id_salon, id_distribucion, cliente_nombre, cliente_email, cliente_telefono, fecha_inicio, fecha_fin, cantidad_personas, monto, observaciones, presupuesto_url, creado_por",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -2367,6 +2469,7 @@ const loadReservaPresupuestoContext = async (
     reservaData.fecha_inicio,
     reservaData.fecha_fin,
   );
+  const contacto = await resolvePresupuestoContacto(supabaseAdmin, reservaData.creado_por);
 
   return {
     reserva: reservaData,
@@ -2385,6 +2488,7 @@ const loadReservaPresupuestoContext = async (
     diasSalon: salonDays,
     cantidadPersonas: Number(reservaData.cantidad_personas) || 0,
     servicios: serviciosDetalle,
+    contacto,
   };
 };
 
@@ -2449,6 +2553,7 @@ const upsertPresupuestoForReserva = async (
     diasSalon: context.diasSalon,
     cantidadPersonas: context.cantidadPersonas,
     servicios: context.servicios,
+    contacto: context.contacto,
   });
 
   const { error: uploadError } = await supabaseAdmin.storage

@@ -926,32 +926,49 @@ const buildPresupuestoPdf = async (
     return {
       margin: [40, 6, 40, 0],
       table: {
-        widths: [70, "*"],
+        widths: ["*", 250, "*"],
         body: [[
-          logoDataUrl
-            ? { image: logoDataUrl, fit: [54, 54], alignment: "center" }
-            : { text: "QUINTO\nCENTENARIO", bold: true, fontSize: 8, alignment: "center", margin: [0, 15, 0, 0] },
+          { text: "" },
           {
-            stack: [
-              { text: input.contacto.nombre, bold: true, fontSize: 12, color: "#1F2937" },
-              { text: "Ejecutivo comercial", fontSize: 9, color: "#4B5563", margin: [0, 3, 0, 0] },
-              {
-                text: input.contacto.email,
-                link: `mailto:${input.contacto.email}`,
-                fontSize: 9,
-                color: "#1D4ED8",
-                decoration: "underline",
-                margin: [0, 6, 0, 0],
-              },
-            ],
-            margin: [14, 2, 0, 0],
+            table: {
+              widths: [70, 180],
+              body: [[
+                logoDataUrl
+                  ? { image: logoDataUrl, fit: [54, 54], alignment: "center" }
+                  : { text: "QUINTO\nCENTENARIO", bold: true, fontSize: 8, alignment: "center", margin: [0, 15, 0, 0] },
+                {
+                  stack: [
+                    { text: input.contacto.nombre, bold: true, fontSize: 12, color: "#1F2937" },
+                    { text: "Ejecutivo comercial", fontSize: 9, color: "#4B5563", margin: [0, 3, 0, 0] },
+                    {
+                      text: input.contacto.email,
+                      link: `mailto:${input.contacto.email}`,
+                      fontSize: 9,
+                      color: "#1D4ED8",
+                      decoration: "underline",
+                      margin: [0, 6, 0, 0],
+                    },
+                  ],
+                  margin: [14, 2, 0, 0],
+                },
+              ]],
+            },
+            layout: {
+              hLineWidth: () => 0,
+              vLineWidth: (index: number) => index === 1 ? 1 : 0,
+              vLineColor: () => "#6B7280",
+              paddingLeft: () => 0,
+              paddingRight: () => 0,
+              paddingTop: () => 0,
+              paddingBottom: () => 0,
+            },
           },
+          { text: "" },
         ]],
       },
       layout: {
         hLineWidth: () => 0,
-        vLineWidth: (index: number) => index === 1 ? 1 : 0,
-        vLineColor: () => "#6B7280",
+        vLineWidth: () => 0,
         paddingLeft: () => 0,
         paddingRight: () => 0,
         paddingTop: () => 0,

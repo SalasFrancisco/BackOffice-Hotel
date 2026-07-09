@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio, Cliente } from '../utils/supabase/client';
+import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio, Cliente, Perfil } from '../utils/supabase/client';
+import { createInternalNotification } from '../utils/notifications';
+import { formatUSD } from '../utils/currency';
 import { AlertCircle, CalendarDays, CheckCircle, ChevronLeft, ChevronRight, Loader2, Package, UserRound, X } from 'lucide-react';
 import { projectId } from '../utils/supabase/info';
 import {
@@ -22,6 +24,7 @@ import {
 
 type ReservaFormProps = {
   reserva?: Reserva | null;
+  perfil: Perfil;
   onClose: (success?: boolean) => void;
   onDirtyChange?: (isDirty: boolean) => void;
 };
@@ -130,7 +133,7 @@ const roundBillableDayUnits = (value: number): number =>
   Math.round(value * 100) / 100;
 
 const formatBillableDayUnits = (value: number): string =>
-  new Intl.NumberFormat('es-AR', {
+  new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value);
@@ -354,7 +357,7 @@ const invokeProtectedFunction = async (path: string, body: Record<string, unknow
   throw lastError || new Error('No se pudo completar la operacion solicitada.');
 };
 
-export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProps) {
+export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: ReservaFormProps) {
   const CAPACITY_WARNING_STYLES = {
     borderColor: '#f5c57a',
     backgroundColor: '#fff8ed',
@@ -546,9 +549,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     [categorias, servicios],
   );
   const formatSalonOptionLabel = (salon: Salon) => (
-    `${salon.nombre} - Cap: ${salon.capacidad} - ${
-      Number(salon.precio_base || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })
-    }`
+    `${salon.nombre} - Cap: ${salon.capacidad} - ${formatUSD(salon.precio_base || 0)}`
   );
   const exceedsSalonCapacity = Boolean(
     currentSalon && totalPersonasNumber > currentSalon.capacidad,
@@ -733,7 +734,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
     onDirtyChange?.(isFormDirty);
   }, [loadingData, isFormDirty, onDirtyChange]);
 
-  const showWarningDialog = (description: string, title = 'Revisá la reserva') => {
+  const showWarningDialog = (description: string, title = 'Revise la reserva') => {
     setWarningDialog({
       title,
       description,
@@ -1342,6 +1343,18 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         }
       }
 
+      if (reservaId) {
+        // Aviso interno de alta / edición (best-effort, no bloquea el guardado).
+        void createInternalNotification({
+          tipo: reserva ? 'RESERVA_EDITADA' : 'RESERVA_NUEVA',
+          titulo: reserva ? 'Reserva editada' : 'Nueva reserva',
+          mensaje: `${perfil.nombre || 'Un usuario'} ${reserva ? 'editó' : 'creó'} la reserva #${reservaId}${nombreCliente ? ` de ${nombreCliente}` : ''}.`,
+          reservaId,
+          audiencia: 'todos',
+          actor: { user_id: perfil.user_id, nombre: perfil.nombre },
+        });
+      }
+
       let presupuestoErrorMessage: string | null = null;
       let emailWarningMessage: string | null = null;
 
@@ -1744,9 +1757,9 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
         {idSalon > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
-              <strong>Monto de la reserva:</strong> ${currentReservaTotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              <strong>Monto de la reserva:</strong> {formatUSD(currentReservaTotal)}
               <span className="text-xs block mt-1">
-                ({currentSalonDailyPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} por día x {formatBillableDayUnits(eventBillableDayUnits)} días facturables)
+                ({formatUSD(currentSalonDailyPrice)} por día x {formatBillableDayUnits(eventBillableDayUnits)} días facturables)
               </span>
               {billingAdjustments.length > 0 && (
                 <span className="text-xs block mt-1">
@@ -1836,7 +1849,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
                               </div>
                               <div className="bo-reserva-service-controls">
                                 <p className="bo-reserva-service-price">
-                                  ${servicio.precio.toLocaleString('es-AR')}
+                                  {formatUSD(servicio.precio)}
                                 </p>
                                 {isSelected && (
                                   <div className="bo-reserva-service-quantity">
@@ -1892,7 +1905,7 @@ export function ReservaForm({ reserva, onClose, onDirtyChange }: ReservaFormProp
           <button
             type="button"
             onClick={() => onClose()}
-            className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-6 py-2 bo-btn-cancel rounded-lg transition-colors"
           >
             Cancelar
           </button>

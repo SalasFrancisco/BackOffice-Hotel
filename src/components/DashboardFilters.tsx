@@ -117,16 +117,16 @@ export function DashboardFilters({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+      className="bo-panel mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
     >
       <div className="bo-dashboard-analytics-filters">
         <div>
-          <label className="mb-2 block text-sm text-gray-700">Período</label>
+          <label className="bo-filter-label">Período</label>
           <select
             aria-label="Período del dashboard"
             value={filters.period}
             onChange={(event) => handlePeriodChange(event.target.value as DashboardPeriod)}
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            className="bo-select h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
           >
             <option value="currentMonth">Mes actual</option>
             <option value="last6Months">Últimos 6 meses</option>
@@ -138,37 +138,37 @@ export function DashboardFilters({
         {filters.period === 'custom' && (
           <>
             <div>
-              <label className="mb-2 block text-sm text-gray-700">Desde</label>
+              <label className="bo-filter-label">Desde</label>
               <input
                 aria-label="Fecha desde"
                 type="date"
                 value={filters.from}
                 onClick={openNativeDatePicker}
                 onChange={(event) => onChange({ ...filters, from: event.target.value })}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                className="bo-select h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm text-gray-700">Hasta</label>
+              <label className="bo-filter-label">Hasta</label>
               <input
                 aria-label="Fecha hasta"
                 type="date"
                 value={filters.to}
                 onClick={openNativeDatePicker}
                 onChange={(event) => onChange({ ...filters, to: event.target.value })}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                className="bo-select h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </>
         )}
 
         <div>
-          <label className="mb-2 block text-sm text-gray-700">Salón</label>
+          <label className="bo-filter-label">Salón</label>
           <select
             aria-label="Filtrar dashboard por salón"
             value={filters.salonId}
             onChange={(event) => onChange({ ...filters, salonId: event.target.value })}
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            className="bo-select h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Todos los salones</option>
             {salones.map((salon) => (
@@ -180,7 +180,7 @@ export function DashboardFilters({
         </div>
 
         <div>
-          <label className="mb-2 block text-sm text-gray-700">Estado</label>
+          <label className="bo-filter-label">Estado</label>
           <select
             aria-label="Filtrar dashboard por estado"
             value={filters.estado}
@@ -190,7 +190,7 @@ export function DashboardFilters({
                 estado: event.target.value as DashboardFilterValues['estado'],
               });
             }}
-            className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            className="bo-select h-12 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">Todos los estados</option>
             {getReservaEstados().map((estado) => (
@@ -202,12 +202,12 @@ export function DashboardFilters({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <div className="bo-filter-actions">
         <button
           type="button"
           onClick={onReset}
           disabled={loading}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+          className="bo-filter-btn bo-filter-btn--ghost"
         >
           <RotateCcw className="h-4 w-4" />
           Restablecer
@@ -215,7 +215,7 @@ export function DashboardFilters({
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+          className="bo-filter-btn bo-filter-btn--primary"
         >
           <Filter className="h-4 w-4" />
           {loading ? 'Cargando...' : 'Aplicar filtros'}

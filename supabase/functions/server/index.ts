@@ -62,18 +62,31 @@ app.get("/server/make-server-484a241a/health", (c) => c.json({ status: "ok" }));
 
 // PDF font loading and pdfmake are performed lazily inside the PDF builder
 
+// Los montos se cotizan en dólares (USD): "US$ 1,234.56" (formato en-US).
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
+  `US$ ${(Number(value) || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 2,
+  })}`;
 
 const formatBillableDayUnits = (value: number) =>
-  new Intl.NumberFormat("es-AR", {
+  new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value);
+
+// Ejecuta una promesa en segundo plano SIN bloquear la respuesta al cliente.
+// Usa EdgeRuntime.waitUntil (mantiene vivo el isolate hasta que termine) si está
+// disponible; si no, cae a fire-and-forget. Ideal para envíos SMTP lentos.
+const runInBackground = (promise: Promise<unknown>, context: string) => {
+  const guarded = Promise.resolve(promise).catch((error) => {
+    console.warn(`[background:${context}]`, error);
+  });
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") {
+    runtime.waitUntil(guarded);
+  }
+};
 
 const PRESUPUESTO_TEXT_REPLACEMENTS: Array<[string, string]> = [
   ["TelÃ©fono", "Teléfono"],
@@ -475,6 +488,12 @@ const PUBLIC_RESERVA_RATE_LIMIT = {
   windowSeconds: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_RESERVA_RATE_LIMIT_WINDOW_SECONDS"), 600),
   blockSeconds: parsePositiveIntegerEnv(Deno.env.get("PUBLIC_RESERVA_RATE_LIMIT_BLOCK_SECONDS"), 600),
 };
+// Anti-bot: tiempo mínimo (ms) entre que carga el formulario y el envío. Un
+// humano tarda varios segundos; los bots suelen enviar al instante.
+const PUBLIC_RESERVA_MIN_SUBMIT_MS = parsePositiveIntegerEnv(
+  Deno.env.get("PUBLIC_RESERVA_MIN_SUBMIT_MS"),
+  3000,
+);
 const PASSWORD_RESET_RATE_LIMIT = {
   maxCount: parsePositiveIntegerEnv(Deno.env.get("PASSWORD_RESET_RATE_LIMIT_MAX"), 3),
   windowSeconds: parsePositiveIntegerEnv(Deno.env.get("PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS"), 900),
@@ -1273,7 +1292,7 @@ const applyRateLimit = async (
   const retryAfterSeconds = Number(result.retry_after_seconds) || config.blockSeconds;
   const response = c.json(
     {
-      error: "Demasiadas solicitudes. Intente nuevamente mas tarde.",
+      error: "Demasiadas solicitudes. Intente nuevamente más tarde.",
       retryAfterSeconds,
     },
     429,
@@ -1432,6 +1451,22 @@ function buildPasswordRecoveryAppLink(redirectTo: string, tokenHash: string) {
   return recoveryUrl.toString();
 }
 
+// Política de contraseña ÚNICA (misma regla que el front en src/utils/passwordPolicy.ts).
+// Devuelve un mensaje de error o null si es válida.
+const PASSWORD_MIN_LENGTH = 8;
+function validatePasswordPolicy(password: unknown): string | null {
+  const pw = typeof password === "string" ? password : "";
+  const ok =
+    pw.length >= PASSWORD_MIN_LENGTH
+    && /[A-Z]/.test(pw)
+    && /[a-z]/.test(pw)
+    && /\d/.test(pw)
+    && /[^A-Za-z0-9\s]/.test(pw);
+  return ok
+    ? null
+    : "La contraseña debe tener al menos 8 caracteres e incluir mayúscula, minúscula, número y un carácter especial.";
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -1447,34 +1482,48 @@ function buildPasswordRecoveryEmail(actionLink: string) {
   return {
     subject: "Recuperación de contraseña - Hotel Back-Office",
     text:
-      "Recibimos una solicitud para cambiar tu contraseña.\n\n"
-      + `Usá este enlace para definir una nueva contraseña:\n${actionLink}\n\n`
-      + "Si no solicitaste este cambio, podés ignorar este correo.",
+      "Recibimos una solicitud para cambiar la contraseña de acceso al back-office.\n\n"
+      + `Use este enlace para definir una nueva contraseña:\n${actionLink}\n\n`
+      + "Si no solicitó este cambio, puede ignorar este correo.",
     html: `
-      <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
-        <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
-          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">Recuperación de contraseña</h1>
-          <p style="margin: 0 0 16px; line-height: 1.6;">
-            Recibimos una solicitud para cambiar tu contraseña de acceso al back-office.
-          </p>
-          <p style="margin: 0 0 24px; line-height: 1.6;">
-            Hacé clic en el siguiente botón para definir una nueva contraseña.
-          </p>
-          <a
-            href="${safeActionLink}"
-            style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;"
-          >
-            Cambiar contraseña
-          </a>
-          <p style="margin: 24px 0 8px; line-height: 1.6;">
-            Si el botón no funciona, copiá y pegá este enlace en tu navegador:
-          </p>
-          <p style="margin: 0; line-height: 1.6; word-break: break-all;">
-            <a href="${safeActionLink}" style="color: #2563eb;">${safeActionLink}</a>
-          </p>
-          <p style="margin: 24px 0 0; line-height: 1.6; color: #475569;">
-            Si no solicitaste este cambio, podés ignorar este correo.
-          </p>
+      <div style="font-family: Arial, Helvetica, sans-serif; background: #eef2f9; padding: 28px 12px; color: #0f172a;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 30px rgba(15,23,42,0.08);">
+          <div style="background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%); padding: 28px 32px;">
+            <p style="margin: 0 0 6px; font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: #c7d2fe;">Hotel Quinto Centenario · Back-Office</p>
+            <h1 style="margin: 0; font-size: 22px; color: #ffffff;">Recuperación de contraseña</h1>
+          </div>
+          <div style="padding: 32px;">
+            <p style="margin: 0 0 16px; line-height: 1.6; font-size: 15px;">
+              Recibimos una solicitud para cambiar la contraseña de acceso al back-office.
+            </p>
+            <p style="margin: 0 0 26px; line-height: 1.6; font-size: 15px;">
+              Haga clic en el siguiente botón para definir una nueva contraseña.
+            </p>
+            <div style="text-align: center; margin: 0 0 28px;">
+              <a
+                href="${safeActionLink}"
+                style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 10px; font-weight: 700; font-size: 15px;"
+              >
+                Cambiar contraseña
+              </a>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px;">
+              <p style="margin: 0 0 6px; font-size: 12px; color: #64748b;">
+                Si el botón no funciona, haga clic en el siguiente enlace:
+              </p>
+              <p style="margin: 0; font-size: 12px; word-break: break-all;">
+                <a href="${safeActionLink}" style="color: #2563eb;">${safeActionLink}</a>
+              </p>
+            </div>
+            <p style="margin: 24px 0 0; line-height: 1.6; font-size: 12px; color: #94a3b8;">
+              Si no solicitó este cambio, puede ignorar este correo de forma segura.
+            </p>
+          </div>
+          <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center;">
+            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+              Hotel Quinto Centenario — Back-Office
+            </p>
+          </div>
         </div>
       </div>
     `.trim(),
@@ -1528,6 +1577,41 @@ async function sendPasswordRecoveryEmail(smtpConfig: SmtpConfig, to: string, act
   });
 }
 
+// Partes de una fecha para dibujar una "tarjeta de calendario" en los emails.
+const getEmailCalendarParts = (isoDate: string) => {
+  const date = new Date(isoDate);
+  const month = date
+    .toLocaleDateString("es-AR", { month: "short", timeZone: HOTEL_TIME_ZONE })
+    .replace(".", "")
+    .toUpperCase();
+  const day = date.toLocaleDateString("es-AR", { day: "2-digit", timeZone: HOTEL_TIME_ZONE });
+  const year = date.toLocaleDateString("es-AR", { year: "numeric", timeZone: HOTEL_TIME_ZONE });
+  const weekday = date.toLocaleDateString("es-AR", { weekday: "long", timeZone: HOTEL_TIME_ZONE });
+  return { month, day, year, weekday, time: formatTime(isoDate) };
+};
+
+// Tarjeta de calendario (HTML seguro para email, basada en tablas).
+const buildEmailCalendarTile = (
+  label: string,
+  parts: { month: string; day: string; year: string; weekday: string; time: string },
+  accent: string,
+) => `
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #94a3b8; text-align: center;">${escapeHtml(label)}</td></tr>
+                <tr><td style="padding: 0;">
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #ffffff;">
+                    <tr><td style="background: ${accent}; padding: 6px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 1px; color: #ffffff;">${escapeHtml(parts.month)} ${escapeHtml(parts.year)}</td></tr>
+                    <tr><td style="padding: 12px 8px; text-align: center;">
+                      <div style="font-size: 34px; font-weight: 800; line-height: 1; color: #0f172a;">${escapeHtml(parts.day)}</div>
+                      <div style="margin-top: 4px; font-size: 12px; color: #64748b; text-transform: capitalize;">${escapeHtml(parts.weekday)}</div>
+                      <div style="margin-top: 8px;">
+                        <span style="display: inline-block; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 9999px;">${escapeHtml(parts.time)} hs</span>
+                      </div>
+                    </td></tr>
+                  </table>
+                </td></tr>
+              </table>`;
+
 function buildPresupuestoReservationEmail(input: {
   reservaId: number;
   clienteNombre?: string | null;
@@ -1546,8 +1630,10 @@ function buildPresupuestoReservationEmail(input: {
     ? "Aquí está el presupuesto de la reserva con los cambios aplicados"
     : "Aquí está el presupuesto de la reserva";
   const description = input.hasChanges
-    ? `Adjuntamos el presupuesto actualizado de tu reserva ${reservaLabel}, con los cambios aplicados.`
-    : `Adjuntamos el presupuesto correspondiente a tu reserva ${reservaLabel}.`;
+    ? `Adjuntamos el presupuesto actualizado de su reserva ${reservaLabel}, con los cambios aplicados.`
+    : `Adjuntamos el presupuesto correspondiente a su reserva ${reservaLabel}.`;
+  const eyebrow = input.hasChanges ? "Presupuesto actualizado" : "Presupuesto";
+  const headerTitle = `Presupuesto de su reserva ${reservaLabel}`;
 
   return {
     subject: `${title} ${reservaLabel} - Quinto Centenario Hotel`,
@@ -1557,39 +1643,57 @@ function buildPresupuestoReservationEmail(input: {
       + `${description}\n`
       + `Inicio: ${fechaInicioLabel}\n`
       + `Fin: ${fechaFinLabel}\n\n`
-      + "También podés descargarlo desde el siguiente enlace, válido por 7 días:\n"
+      + "También puede descargarlo desde el siguiente enlace, válido por 7 días:\n"
       + `${input.downloadUrl}\n\n`
       + "Saludos,\nQuinto Centenario Hotel",
     html: `
-      <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
-        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
-          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">${escapeHtml(title)}</h1>
-          <p style="margin: 0 0 16px; line-height: 1.6;">Hola ${safeClienteNombre},</p>
-          <p style="margin: 0 0 16px; line-height: 1.6;">
-            ${escapeHtml(description)}
-          </p>
-          <div style="margin: 0 0 20px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Inicio:</strong> ${escapeHtml(fechaInicioLabel)}</p>
-            <p style="margin: 0; line-height: 1.5;"><strong>Fin:</strong> ${escapeHtml(fechaFinLabel)}</p>
+      <div style="font-family: Arial, Helvetica, sans-serif; background: #eef2f9; padding: 28px 12px; color: #0f172a;">
+        <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 30px rgba(15,23,42,0.08);">
+          <div style="background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%); padding: 28px 32px;">
+            <span style="display: inline-block; background: #0d9488; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 4px 12px; border-radius: 9999px; margin-bottom: 12px;">${escapeHtml(eyebrow)}</span>
+            <h1 style="margin: 0; font-size: 22px; color: #ffffff;">${escapeHtml(headerTitle)}</h1>
           </div>
-          <p style="margin: 0 0 24px; line-height: 1.6;">
-            También podés abrir el PDF desde el siguiente botón. El enlace estará disponible durante 7 días.
-          </p>
-          <a
-            href="${safeDownloadUrl}"
-            style="display: inline-block; background: #0f766e; color: #ffffff; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: 600;"
-          >
-            Abrir presupuesto
-          </a>
-          <p style="margin: 24px 0 8px; line-height: 1.6;">
-            Si el botón no funciona, accedé desde el siguiente enlace:
-          </p>
-          <p style="margin: 0; line-height: 1.6; word-break: break-all;">
-            <a href="${safeDownloadUrl}" style="color: #0f766e;">${safeDownloadUrl}</a>
-          </p>
-          <p style="margin: 24px 0 0; line-height: 1.6; color: #475569;">
-            También vas a encontrar el presupuesto adjunto en este correo.
-          </p>
+          <div style="padding: 32px;">
+            <p style="margin: 0 0 16px; line-height: 1.6; font-size: 15px;">Hola ${safeClienteNombre},</p>
+            <p style="margin: 0 0 22px; line-height: 1.6; font-size: 15px; color: #334155;">
+              ${escapeHtml(description)}
+            </p>
+            <table role="presentation" style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="width: 44%; vertical-align: top;">
+                  ${buildEmailCalendarTile("Inicio", getEmailCalendarParts(input.fechaInicio), "#2563eb")}
+                </td>
+                <td style="width: 12%; vertical-align: middle; text-align: center; font-size: 24px; color: #94a3b8;">&rarr;</td>
+                <td style="width: 44%; vertical-align: top;">
+                  ${buildEmailCalendarTile("Fin", getEmailCalendarParts(input.fechaFin), "#4f46e5")}
+                </td>
+              </tr>
+            </table>
+            <div style="text-align: center; margin: 28px 0;">
+              <a
+                href="${safeDownloadUrl}"
+                style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%); color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 10px; font-weight: 700; font-size: 15px;"
+              >
+                Abrir presupuesto
+              </a>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px;">
+              <p style="margin: 0 0 6px; font-size: 12px; color: #64748b;">
+                Si el botón no funciona, haga clic en el siguiente enlace (disponible durante 7 días):
+              </p>
+              <p style="margin: 0; font-size: 12px; word-break: break-all;">
+                <a href="${safeDownloadUrl}" style="color: #2563eb;">${safeDownloadUrl}</a>
+              </p>
+            </div>
+            <p style="margin: 22px 0 0; line-height: 1.6; font-size: 13px; color: #475569;">
+              También encontrará el presupuesto adjunto en este correo.
+            </p>
+          </div>
+          <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center;">
+            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+              Hotel Quinto Centenario — Centro de Convenciones
+            </p>
+          </div>
         </div>
       </div>
     `.trim(),
@@ -1720,10 +1824,36 @@ function buildBackofficeReservaNotificationEmail(input: {
   const fechaFinLabel = `${formatDate(input.fechaFin)} ${formatTime(input.fechaFin)}`;
   const title = input.action === "updated"
     ? "Se modificó una reserva"
-    : "Se ha registrado una nueva reserva";
+    : "Se registró una nueva reserva";
   const actionDescription = input.action === "updated"
     ? `Se modificó la reserva ${reservaLabel}.`
-    : `Se ha registrado una nueva reserva ${reservaLabel}.`;
+    : `Se registró una nueva reserva ${reservaLabel}.`;
+  const eyebrow = input.action === "updated" ? "Reserva modificada" : "Nueva reserva";
+  const accent = input.action === "updated" ? "#4f46e5" : "#35B679";
+
+  const rows: Array<[string, string]> = [
+    ["Reserva", reservaLabel],
+    ["Cliente", clienteNombre],
+    ["Email", clienteEmail],
+    ["Teléfono", clienteTelefono],
+    ["Salón", salonNombre],
+    ["Distribución", distribucionNombre],
+    ["Tipo de evento", tipoEvento],
+    ["Cantidad de personas", String(cantidadPersonas)],
+    ["Inicio", fechaInicioLabel],
+    ["Fin", fechaFinLabel],
+  ];
+
+  const rowsHtml = rows
+    .map(([label, value], index) => {
+      const border = index === rows.length - 1 ? "" : "border-bottom: 1px solid #eef2f7;";
+      return `
+            <tr>
+              <td style="padding: 11px 18px; font-size: 13px; color: #64748b; ${border} white-space: nowrap;">${escapeHtml(label)}</td>
+              <td style="padding: 11px 18px; font-size: 14px; color: #0f172a; font-weight: 600; text-align: right; ${border}">${escapeHtml(value)}</td>
+            </tr>`;
+    })
+    .join("");
 
   return {
     subject: `${title} ${reservaLabel} - Quinto Centenario Hotel`,
@@ -1739,29 +1869,32 @@ function buildBackofficeReservaNotificationEmail(input: {
       + `Cantidad de personas: ${cantidadPersonas}\n`
       + `Inicio: ${fechaInicioLabel}\n`
       + `Fin: ${fechaFinLabel}\n\n`
-      + "Ingresá al Back Office para revisar y gestionar la reserva.",
+      + "Ingrese al Back-Office para revisar y gestionar la reserva.",
     html: `
-      <div style="font-family: Arial, sans-serif; background: #f8fafc; padding: 24px; color: #0f172a;">
-        <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px;">
-          <h1 style="margin: 0 0 12px; font-size: 24px; color: #0f172a;">${escapeHtml(title)}</h1>
-          <p style="margin: 0 0 20px; line-height: 1.6;">
-            ${escapeHtml(actionDescription)}
-          </p>
-          <div style="margin: 0 0 16px; padding: 16px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0;">
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Reserva:</strong> ${escapeHtml(reservaLabel)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Cliente:</strong> ${escapeHtml(clienteNombre)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Email cliente:</strong> ${escapeHtml(clienteEmail)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Teléfono cliente:</strong> ${escapeHtml(clienteTelefono)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Salón:</strong> ${escapeHtml(salonNombre)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Distribución:</strong> ${escapeHtml(distribucionNombre)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Tipo de evento:</strong> ${escapeHtml(tipoEvento)}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Cantidad de personas:</strong> ${escapeHtml(String(cantidadPersonas))}</p>
-            <p style="margin: 0 0 8px; line-height: 1.5;"><strong>Inicio:</strong> ${escapeHtml(fechaInicioLabel)}</p>
-            <p style="margin: 0; line-height: 1.5;"><strong>Fin:</strong> ${escapeHtml(fechaFinLabel)}</p>
+      <div style="font-family: Arial, Helvetica, sans-serif; background: #eef2f9; padding: 28px 12px; color: #0f172a;">
+        <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 30px rgba(15,23,42,0.08);">
+          <div style="background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%); padding: 28px 32px;">
+            <span style="display: inline-block; background: ${accent}; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 4px 12px; border-radius: 9999px; margin-bottom: 12px;">${escapeHtml(eyebrow)}</span>
+            <h1 style="margin: 0; font-size: 22px; color: #ffffff;">${escapeHtml(title)}</h1>
           </div>
-          <p style="margin: 0; line-height: 1.6; color: #475569;">
-            Ingresá al Back Office para revisar y gestionar esta reserva.
-          </p>
+          <div style="padding: 28px 32px;">
+            <p style="margin: 0 0 22px; line-height: 1.6; font-size: 15px; color: #334155;">
+              ${escapeHtml(actionDescription)}
+            </p>
+            <table style="width: 100%; border-collapse: collapse; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+              ${rowsHtml}
+            </table>
+            <div style="margin: 24px 0 0; padding: 14px 16px; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 10px;">
+              <p style="margin: 0; line-height: 1.6; font-size: 13px; color: #1d4ed8;">
+                Ingrese al Back-Office para revisar y gestionar esta reserva.
+              </p>
+            </div>
+          </div>
+          <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center;">
+            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+              Hotel Quinto Centenario — Back-Office
+            </p>
+          </div>
         </div>
       </div>
     `.trim(),
@@ -2822,6 +2955,11 @@ app.post("/make-server-484a241a/create-user", async (c) => {
       return c.json({ error: "Invalid role. Must be ADMIN or OPERADOR" }, 400);
     }
 
+    const createPasswordPolicyError = validatePasswordPolicy(password);
+    if (createPasswordPolicyError) {
+      return c.json({ error: createPasswordPolicyError }, 400);
+    }
+
     const existingAuthUser = await findAuthUserByEmail(supabaseAdmin, sanitizedEmail);
 
     if (existingAuthUser) {
@@ -3102,6 +3240,86 @@ app.post("/make-server-484a241a/delete-user", async (c) => {
   }
 });
 
+app.post("/make-server-484a241a/reactivate-user", async (c) => {
+  try {
+    const accessToken = extractAccessToken(c.req.header("Authorization"));
+    if (!accessToken) {
+      return c.json({ error: "No authorization token provided" }, 401);
+    }
+
+    const supabaseAdmin = createServiceClient();
+    const adminCheck = await requireAdmin(supabaseAdmin, accessToken, "reactivate users");
+
+    if ("status" in adminCheck) {
+      return c.json(adminCheck.body, adminCheck.status);
+    }
+
+    const body = await c.req.json();
+    const { userId } = body ?? {};
+
+    if (!userId) {
+      return c.json({ error: "Missing required field: userId" }, 400);
+    }
+
+    const { data: targetPerfil, error: targetPerfilError } = await supabaseAdmin
+      .from("perfiles")
+      .select("user_id, nombre, rol, activo")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (targetPerfilError) {
+      console.error("Error loading perfil to reactivate:", targetPerfilError);
+      return c.json({ error: targetPerfilError.message }, 400);
+    }
+
+    if (!targetPerfil) {
+      return c.json({ error: "User profile not found" }, 404);
+    }
+
+    const targetRole = normalizeRole(targetPerfil.rol);
+
+    if (targetRole !== "OPERADOR") {
+      return c.json({ error: "Solo se pueden reactivar usuarios operadores" }, 403);
+    }
+
+    if (targetPerfil.activo === false) {
+      const { error: updatePerfilError } = await supabaseAdmin
+        .from("perfiles")
+        .update({ activo: true })
+        .eq("user_id", userId)
+        .eq("rol", "OPERADOR");
+
+      if (updatePerfilError) {
+        console.error("Error reactivating perfil:", updatePerfilError);
+        return c.json({ error: updatePerfilError.message }, 400);
+      }
+    }
+
+    const { data: authUserData, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+    if (getUserError) {
+      console.warn("Perfil was reactivated, but auth user metadata could not be loaded:", getUserError);
+    } else if (authUserData?.user) {
+      const { error: updateUserError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        app_metadata: {
+          ...authUserData.user.app_metadata,
+          role: targetRole,
+          active: true,
+        },
+      });
+
+      if (updateUserError) {
+        console.warn("Perfil was reactivated, but auth user metadata could not be updated:", updateUserError);
+      }
+    }
+
+    return c.json({ success: true, userId, activo: true });
+  } catch (error) {
+    console.error("Error in reactivate-user endpoint:", error);
+    return c.json({ error: getErrorMessage(error) }, 500);
+  }
+});
+
 app.post("/make-server-484a241a/reset-user-password", async (c) => {
   try {
     const accessToken = extractAccessToken(c.req.header("Authorization"));
@@ -3123,8 +3341,9 @@ app.post("/make-server-484a241a/reset-user-password", async (c) => {
       return c.json({ error: "Missing required fields: userId, newPassword" }, 400);
     }
 
-    if (String(newPassword).length < 6) {
-      return c.json({ error: "Password must be at least 6 characters long" }, 400);
+    const passwordPolicyError = validatePasswordPolicy(newPassword);
+    if (passwordPolicyError) {
+      return c.json({ error: passwordPolicyError }, 400);
     }
 
     const { error: updatePasswordError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -3135,6 +3354,15 @@ app.post("/make-server-484a241a/reset-user-password", async (c) => {
     if (updatePasswordError) {
       console.error("Error resetting user password:", updatePasswordError);
       return c.json({ error: updatePasswordError.message }, 400);
+    }
+
+    // La contraseña definida por el admin cumple la política → ya no se exige cambio.
+    const { error: clearFlagError } = await supabaseAdmin
+      .from("perfiles")
+      .update({ requiere_cambio_password: false, cambio_password_limite: null })
+      .eq("user_id", userId);
+    if (clearFlagError) {
+      console.warn("Password reset OK, but could not clear requiere_cambio_password:", clearFlagError);
     }
 
     return c.json({ success: true });
@@ -3576,20 +3804,31 @@ app.post("/server/make-server-484a241a/delete-reserva", deleteReservaHandler);
 
 const processReservaVencimientoHandler = async (c: any) => {
   try {
-    const accessToken = extractAccessToken(c.req.header("Authorization"));
-    if (!accessToken) {
-      return c.json({ error: "No authorization token provided" }, 401);
-    }
-
     const supabaseAdmin = createServiceClient();
-    const accessCheck = await requireBackofficeUser(
-      supabaseAdmin,
-      accessToken,
-      "process reservation expirations",
-    );
 
-    if ("status" in accessCheck) {
-      return c.json(accessCheck.body, accessCheck.status);
+    // Un cron del servidor (Supabase Scheduled Function / pg_cron) puede invocar
+    // este endpoint sin un JWT de usuario, enviando el header "x-cron-secret" con
+    // el valor de la variable de entorno CRON_SECRET. Si el secreto no está
+    // configurado, se mantiene el comportamiento anterior (requiere usuario).
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const isCronCall =
+      Boolean(cronSecret) && c.req.header("x-cron-secret") === cronSecret;
+
+    if (!isCronCall) {
+      const accessToken = extractAccessToken(c.req.header("Authorization"));
+      if (!accessToken) {
+        return c.json({ error: "No authorization token provided" }, 401);
+      }
+
+      const accessCheck = await requireBackofficeUser(
+        supabaseAdmin,
+        accessToken,
+        "process reservation expirations",
+      );
+
+      if ("status" in accessCheck) {
+        return c.json(accessCheck.body, accessCheck.status);
+      }
     }
 
     const now = new Date();
@@ -4032,6 +4271,25 @@ const publicReservaHandler = async (c: any) => {
       servicios,
     } = body ?? {};
 
+    // --- Anti-bot (antes de tocar la base) ---
+    // 1) Honeypot: campo oculto que un humano nunca completa. Si viene con algo,
+    //    es un bot → cortamos de forma silenciosa (sin crear nada).
+    const honeypot = String((body as any)?.hp ?? "").trim();
+    if (honeypot.length > 0) {
+      console.warn("public-reserva: honeypot completado, descartando solicitud.");
+      return c.json({ error: "No se pudo procesar la solicitud." }, 400);
+    }
+    // 2) Tiempo mínimo desde que cargó el formulario (los bots envían al instante).
+    //    Si el cliente no lo envía (versión vieja), no bloqueamos.
+    const elapsedMs = Number((body as any)?.elapsed_ms);
+    if (Number.isFinite(elapsedMs) && elapsedMs >= 0 && elapsedMs < PUBLIC_RESERVA_MIN_SUBMIT_MS) {
+      console.warn(`public-reserva: envío demasiado rápido (${elapsedMs}ms), descartando.`);
+      return c.json(
+        { error: "El formulario se envió demasiado rápido. Aguarde un momento e intente nuevamente." },
+        400,
+      );
+    }
+
     const supabaseAdmin = createServiceClient();
     const rateLimitResponse = await applyRateLimit(
       c,
@@ -4165,34 +4423,35 @@ const publicReservaHandler = async (c: any) => {
       salonId: salonData.id,
     });
 
-    try {
-      const smtpConfig = getSmtpConfig();
-      const notificationEmailResult = await sendBackofficeReservaNotificationEmails(
-        smtpConfig,
-        supabaseAdmin,
-        {
-          action: "created",
-          reservaId: reservaData.id,
-          clienteNombre: formatOptionalText(nombre, "Sin nombre"),
-          clienteEmail: formatOptionalText(email, "No informado"),
-          clienteTelefono: formatOptionalText(telefono, "No informado"),
-          salonNombre: formatOptionalText(salonData.nombre, "No informado"),
-          distribucionNombre: distribucionData?.nombre ?? null,
-          tipoEvento: tipoEventoReserva,
-          cantidadPersonas: totalPersonas,
-          fechaInicio,
-          fechaFin,
-        },
-      );
-
-      if (notificationEmailResult.sent) {
-        console.info(
-          `Notificación por email de reserva pública enviada a ${notificationEmailResult.recipientsCount} destinatario(s).`,
+    // Email al personal en segundo plano: no bloquea la respuesta al cliente.
+    runInBackground(
+      (async () => {
+        const smtpConfig = getSmtpConfig();
+        const notificationEmailResult = await sendBackofficeReservaNotificationEmails(
+          smtpConfig,
+          supabaseAdmin,
+          {
+            action: "created",
+            reservaId: reservaData.id,
+            clienteNombre: formatOptionalText(nombre, "Sin nombre"),
+            clienteEmail: formatOptionalText(email, "No informado"),
+            clienteTelefono: formatOptionalText(telefono, "No informado"),
+            salonNombre: formatOptionalText(salonData.nombre, "No informado"),
+            distribucionNombre: distribucionData?.nombre ?? null,
+            tipoEvento: tipoEventoReserva,
+            cantidadPersonas: totalPersonas,
+            fechaInicio,
+            fechaFin,
+          },
         );
-      }
-    } catch (emailNotificationError) {
-      console.warn("No se pudo enviar la notificación por email de reserva pública:", emailNotificationError);
-    }
+        if (notificationEmailResult.sent) {
+          console.info(
+            `Notificación por email de reserva pública enviada a ${notificationEmailResult.recipientsCount} destinatario(s).`,
+          );
+        }
+      })(),
+      "public-reserva:staff-email",
+    );
 
     const selectedServicios = Array.isArray(servicios) ? servicios : [];
     const selectedServiciosNormalizados: Array<{ id_servicio: number; cantidad: number }> = [];
@@ -4273,8 +4532,7 @@ const publicReservaHandler = async (c: any) => {
     let shortDownloadUrl: string | undefined = undefined;
     let storagePath: string | undefined = undefined;
     let fileName: string | undefined = undefined;
-    let clientEmailSent = false;
-    let clientEmailError: string | undefined = undefined;
+    let clientEmailQueued = false;
 
     try {
       const upsertResult = await upsertPresupuestoForReserva(supabaseAdmin, reservaData.id);
@@ -4309,34 +4567,30 @@ const publicReservaHandler = async (c: any) => {
 
       pdfGenerated = true;
 
-      try {
-        const smtpConfig = getSmtpConfig();
-        const clientEmailResult = await sendGeneratedPresupuestoToClient(
-          smtpConfig,
-          supabaseAdmin,
-          {
-            action: "created",
-            reservaId: reservaData.id,
-            storagePath: upsertResult.storagePath,
-            fileName: upsertResult.fileName,
-            pdfBuffer: upsertResult.pdfBuffer,
-            clienteNombre: upsertResult.context.cliente.nombre,
-            clienteEmail: upsertResult.context.cliente.email,
-            fechaInicio: upsertResult.context.fechaInicio,
-            fechaFin: upsertResult.context.fechaFin,
-          },
-        );
-        clientEmailSent = clientEmailResult.sent;
-      } catch (clientEmailSendError) {
-        clientEmailError = getErrorMessage(
-          clientEmailSendError,
-          "No se pudo enviar el presupuesto al cliente.",
-        );
-        console.warn(
-          "No se pudo enviar por email el presupuesto de la reserva pública:",
-          clientEmailSendError,
-        );
-      }
+      // Email del presupuesto al cliente en segundo plano: el PDF ya está listo
+      // y se responde con el link de descarga sin esperar al envío SMTP.
+      clientEmailQueued = true;
+      runInBackground(
+        (async () => {
+          const smtpConfig = getSmtpConfig();
+          await sendGeneratedPresupuestoToClient(
+            smtpConfig,
+            supabaseAdmin,
+            {
+              action: "created",
+              reservaId: reservaData.id,
+              storagePath: upsertResult.storagePath,
+              fileName: upsertResult.fileName,
+              pdfBuffer: upsertResult.pdfBuffer,
+              clienteNombre: upsertResult.context.cliente.nombre,
+              clienteEmail: upsertResult.context.cliente.email,
+              fechaInicio: upsertResult.context.fechaInicio,
+              fechaFin: upsertResult.context.fechaFin,
+            },
+          );
+        })(),
+        "public-reserva:client-email",
+      );
     } catch (err) {
       pdfError = getErrorMessage(err, String(err));
       uploadErrorMsg = pdfError;
@@ -4354,7 +4608,7 @@ const publicReservaHandler = async (c: any) => {
       pdfGenerated,
       uploaded,
       signed,
-      clientEmailSent,
+      clientEmailQueued,
       capacityWarning: exceedsSalonCapacity || exceedsDistribucionCapacity,
       capacityWarningDetail: {
         exceedsSalonCapacity,
@@ -4365,7 +4619,6 @@ const publicReservaHandler = async (c: any) => {
     if (pdfError) responseBody.pdfError = pdfError;
     if (uploadErrorMsg) responseBody.uploadError = uploadErrorMsg;
     if (signedErrorMsg) responseBody.signedError = signedErrorMsg;
-    if (clientEmailError) responseBody.clientEmailError = clientEmailError;
 
     return c.json(responseBody);
   } catch (error) {
@@ -4388,6 +4641,7 @@ app.post("/create-user", proxyTo("/make-server-484a241a/create-user"));
 app.post("/update-user-email", proxyTo("/make-server-484a241a/update-user-email"));
 app.post("/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/delete-user", proxyTo("/make-server-484a241a/delete-user"));
+app.post("/reactivate-user", proxyTo("/make-server-484a241a/reactivate-user"));
 app.post("/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
 app.post("/send-presupuesto-email", proxyTo("/make-server-484a241a/send-presupuesto-email"));
@@ -4403,6 +4657,7 @@ app.post("/server/create-user", proxyTo("/make-server-484a241a/create-user"));
 app.post("/server/update-user-email", proxyTo("/make-server-484a241a/update-user-email"));
 app.post("/server/get-user-email", proxyTo("/make-server-484a241a/get-user-email"));
 app.post("/server/delete-user", proxyTo("/make-server-484a241a/delete-user"));
+app.post("/server/reactivate-user", proxyTo("/make-server-484a241a/reactivate-user"));
 app.post("/server/reset-user-password", proxyTo("/make-server-484a241a/reset-user-password"));
 app.post("/server/get-presupuesto-url", proxyTo("/make-server-484a241a/get-presupuesto-url"));
 app.post("/server/send-presupuesto-email", proxyTo("/make-server-484a241a/send-presupuesto-email"));

@@ -41,12 +41,12 @@ export const getReservaCapacityWarningText = (reserva: Reserva): string => {
 
   const details: string[] = [];
   if (warning.exceedsSalonCapacity && warning.salonCapacidad) {
-    details.push(`excede la capacidad del salon (${warning.salonCapacidad})`);
+    details.push(`la del salón (${warning.salonCapacidad})`);
   }
   if (warning.exceedsDistribucionCapacity && warning.distribucionCapacidad) {
-    details.push(`excede la capacidad de la distribucion (${warning.distribucionCapacidad})`);
+    details.push(`la de la distribución (${warning.distribucionCapacidad})`);
   }
 
-  const suffix = details.length ? `: ${details.join(' y ')}` : '';
-  return `Advertencia de capacidad${suffix}.`;
+  const suffix = details.length ? `supera ${details.join(' y ')}` : 'supera la capacidad configurada';
+  return `La cantidad de personas (${warning.cantidadPersonas}) ${suffix}. Verifique la capacidad antes de confirmar la reserva.`;
 };

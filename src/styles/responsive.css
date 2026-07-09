@@ -141,6 +141,59 @@ textarea {
   flex: 1;
   margin-left: 16rem;
   overflow: visible;
+  transition: margin-left 220ms ease;
+}
+
+/* Sidebar de escritorio colapsable: se desliza fuera y el contenido ocupa todo. */
+.bo-sidebar-desktop {
+  transition: transform 220ms ease;
+}
+
+.bo-shell.is-sidebar-collapsed .bo-sidebar-desktop {
+  transform: translateX(-100%);
+}
+
+.bo-shell.is-sidebar-collapsed .bo-main {
+  margin-left: 0;
+}
+
+/* Deja lugar arriba a la izquierda para el botón flotante, sin taparlo. */
+.bo-shell.is-sidebar-collapsed .bo-page {
+  padding-left: 3.9rem;
+}
+
+/* Manija flotante fija al borde derecho del sidebar. Siempre visible como
+   control externo; se desliza junto con el sidebar al ocultarse/mostrarse. */
+.bo-sidebar-toggle {
+  position: fixed;
+  top: 50%;
+  left: 14.75rem; /* pegada al borde derecho del sidebar (16rem) */
+  transform: translateY(-50%);
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.5rem;
+  width: 2.5rem;
+  border-radius: 0.6rem;
+  transition: left 220ms ease;
+}
+
+.bo-shell.is-sidebar-collapsed .bo-sidebar-toggle {
+  left: 0.6rem; /* al colapsar queda en el borde izquierdo de la pantalla */
+}
+
+/* Flechas de navegación flotantes cuando el sidebar está colapsado (justo
+   debajo de la manija, en el margen izquierdo). */
+.bo-collapsed-nav {
+  position: fixed;
+  left: 0.6rem;
+  top: 50%;
+  transform: translateY(1.5rem); /* justo debajo de la manija */
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .bo-mobile-header,
@@ -413,8 +466,8 @@ textarea {
 
 .bo-dashboard-analytics-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 1.25rem 1.5rem;
 }
 
 .bo-dashboard-analytics-grid {
@@ -472,6 +525,178 @@ textarea {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
+}
+
+/* Calendario con barras continuas que atraviesan los días de cada reserva. */
+.bo-cal {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.bo-cal-head {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.bo-cal-head-cell {
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #475569;
+}
+
+.bo-cal-week {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  min-height: 10.5rem;
+  --bo-cal-head-h: 1.95rem;
+  --bo-cal-lane-h: 1.85rem;
+}
+
+.bo-cal-day {
+  position: relative;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+  padding: 0.4rem 0.55rem;
+  overflow: hidden;
+  transition: background-color 160ms ease;
+}
+
+.bo-cal-day:last-child {
+  border-right: none;
+}
+
+.bo-cal-week:last-child .bo-cal-day {
+  border-bottom: none;
+}
+
+.bo-cal-day--empty {
+  background: #fafbfc;
+}
+
+.bo-cal-day-num {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.bo-cal-more {
+  position: absolute;
+  left: 0.55rem;
+  bottom: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #2563eb;
+  transition: color 150ms ease;
+}
+
+.bo-cal-more:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.bo-cal-bars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bo-cal-bar {
+  position: absolute;
+  height: 1.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.7rem;
+  border-radius: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: auto;
+  /* Oscurecido uniforme sobre el color del estado (fijado inline) para que el
+     texto blanco se lea igual de bien en todos los colores, incluido el ámbar. */
+  background-image: linear-gradient(rgb(0 0 0 / 0.16), rgb(0 0 0 / 0.16));
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.18);
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+.bo-cal-bar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgb(15 23 42 / 0.28);
+  filter: brightness(1.06);
+  z-index: 6;
+}
+
+.bo-cal-bar:not(.is-start) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.bo-cal-bar:not(.is-end) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.bo-cal-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bo-cal-bar-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bo-cal-bar {
+    transition: none;
+  }
+
+  .bo-cal-bar:hover {
+    transform: none;
+  }
+}
+
+/* Refinamiento visual de la tabla de reservas. */
+/* Scroll vertical con encabezado fijo para que la tabla no crezca sin
+   límite cuando haya muchas reservas. */
+.bo-reservas-table-scroll {
+  max-height: 65vh;
+  overflow: auto;
+}
+
+.bo-reservas-table-content thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.bo-reservas-table-content tbody td {
+  font-variant-numeric: tabular-nums;
+}
+
+.bo-reservas-table-content tbody tr {
+  transition: background-color 160ms ease;
 }
 
 .bo-calendar-reservas-overlay,
@@ -729,6 +954,288 @@ textarea {
   background: #fef9c3;
 }
 
+/* ===== Tarjeta de reserva compacta (mobile) ===== */
+.bo-reserva-card-estado {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.bo-reserva-card-estado-label {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.bo-reserva-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Cada dato en UNA sola línea: etiqueta a la izquierda, valor a la derecha. */
+.bo-reserva-card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.bo-reserva-card-row:last-child {
+  border-bottom: none;
+}
+
+.bo-reserva-card-row dt {
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.bo-reserva-card-row dd {
+  min-width: 0;
+  text-align: right;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+.bo-reserva-card-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.bo-reserva-card-total-value {
+  font-weight: 600;
+}
+
+.bo-reserva-card-note {
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+
+/* ===== Calendario mensual en mobile (grilla real con puntos por estado) ===== */
+.bo-cal-m-head {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 5px;
+}
+
+.bo-cal-m-head-cell {
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 2px 0;
+}
+
+.bo-cal-m-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.bo-cal-m-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px 3px;
+  border-radius: 9px;
+  background: #f8fafc;
+  border: 1.5px solid transparent;
+}
+
+.bo-cal-m-cell--empty {
+  background: transparent;
+}
+
+.bo-cal-m-cell.has-res {
+  background: #eef2ff;
+  cursor: pointer;
+}
+
+.bo-cal-m-cell.is-today {
+  border-color: #2563eb;
+}
+
+.bo-cal-m-num {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.1;
+}
+
+.bo-cal-m-cell.is-today .bo-cal-m-num {
+  color: #2563eb;
+}
+
+.bo-cal-m-dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-top: auto;
+}
+
+.bo-cal-m-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+}
+
+.bo-cal-m-dot-more {
+  font-size: 0.6rem;
+  line-height: 1;
+  color: #94a3b8;
+}
+
+.bo-cal-m-empty {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Días pasados: número tachado y atenuado (mobile + escritorio). */
+.bo-cal-m-cell.is-past .bo-cal-m-num,
+.bo-cal-day.is-past .bo-cal-day-num {
+  text-decoration: line-through;
+  color: #cbd5e1;
+}
+
+.bo-cal-m-cell.is-past {
+  opacity: 0.72;
+}
+
+/* Día de hoy resaltado en el calendario de barras. */
+.bo-cal-day.is-today {
+  background: #eff6ff;
+}
+
+.bo-cal-day.is-today .bo-cal-day-num {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+/* ===== Reservas como filas compactas (acordeón) en mobile ===== */
+.bo-reserva-row-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.65rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+.bo-reserva-row-card.bo-reserva-card-highlight {
+  border-color: #facc15;
+  background: #fef9c3;
+}
+
+.bo-reserva-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.6rem 0.7rem 0.6rem 0;
+  text-align: left;
+}
+
+.bo-reserva-row-strip {
+  align-self: stretch;
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 0 3px 3px 0;
+}
+
+.bo-reserva-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.bo-reserva-row-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.bo-reserva-row-id {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.bo-reserva-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.bo-reserva-row-warn {
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  color: #d97706;
+}
+
+.bo-reserva-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.73rem;
+  color: #6b7280;
+}
+
+.bo-reserva-row-badge {
+  flex-shrink: 0;
+  max-width: 6.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.bo-reserva-row-chevron {
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: #9ca3af;
+  transition: transform 180ms ease;
+}
+
+.bo-reserva-row-card.is-expanded .bo-reserva-row-chevron {
+  transform: rotate(180deg);
+}
+
+.bo-reserva-row-detail {
+  padding: 0 0.8rem 0.8rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.bo-reserva-row-detail .bo-reserva-card-estado {
+  margin-top: 0.75rem;
+}
+
 .bo-page-actions {
   flex-wrap: wrap;
 }
@@ -831,6 +1338,17 @@ textarea {
     display: none;
   }
 
+  /* En mobile el colapso del sidebar no aplica: se usa el cajón. Reseteamos por
+     si quedó activo el estado colapsado desde escritorio. */
+  .bo-sidebar-toggle,
+  .bo-collapsed-nav {
+    display: none;
+  }
+
+  .bo-shell.is-sidebar-collapsed .bo-page {
+    padding-left: 1rem;
+  }
+
   .bo-mobile-header {
     position: sticky;
     top: 0;
@@ -907,12 +1425,42 @@ textarea {
     justify-content: center;
   }
 
+  /* Acciones del encabezado como botones compactos solo-icono en mobile.
+     Doble clase para ganarle al `.bo-page-actions { flex-direction: column }`
+     que aparece en otra media query más abajo. */
+  .bo-page-actions.bo-page-actions--pair {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .bo-page-actions--pair > button {
+    flex: 0 0 auto;
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .bo-btn-label {
+    display: none;
+  }
+
   .bo-filter-bar {
     flex-direction: column;
   }
 
   .bo-filter-bar > * {
     width: 100%;
+  }
+
+  /* Placeholder del buscador más chico en mobile (el texto del input queda a
+     tamaño normal para no disparar el zoom automático de iOS). */
+  .bo-search-input::placeholder {
+    font-size: 0.8rem;
   }
 
   .bo-calendar-desktop,
@@ -965,6 +1513,11 @@ textarea {
 
   .bo-reserva-actions {
     justify-content: flex-start;
+  }
+
+  /* En la tarjeta/acordeón mobile los iconos de acción van centrados. */
+  .bo-reserva-row-detail .bo-reserva-actions {
+    justify-content: center;
   }
 
   .bo-service-category-header,
@@ -1150,5 +1703,49 @@ textarea {
     max-width: 100%;
     padding-left: 0.375rem;
     padding-right: 1.25rem;
+  }
+}
+
+/* ===== Calendario de reservas con barras: versión compacta para mobile ===== */
+@media (max-width: 767px) {
+  .bo-cal-head-cell {
+    padding: 0.4rem 0.1rem;
+    font-size: 0.6rem;
+    letter-spacing: 0;
+  }
+
+  .bo-cal-week {
+    min-height: 5.6rem;
+    --bo-cal-head-h: 1.3rem;
+    --bo-cal-lane-h: 0.85rem;
+  }
+
+  .bo-cal-day {
+    padding: 0.25rem 0.2rem;
+  }
+
+  .bo-cal-day-num {
+    font-size: 0.72rem;
+  }
+
+  /* Barras finas sin texto: solo la línea de color que cruza los días. */
+  .bo-cal-bar {
+    height: 0.7rem;
+    padding: 0;
+    gap: 0;
+    border-radius: 0.28rem;
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  .bo-cal-bar-label,
+  .bo-cal-bar-sub {
+    display: none;
+  }
+
+  .bo-cal-more {
+    left: 0.2rem;
+    bottom: 0.15rem;
+    font-size: 0.56rem;
   }
 }

@@ -210,15 +210,15 @@ const loadLogoDataUrl = async (): Promise<string | null> => {
   return null;
 };
 
+// Los montos se cotizan en dólares (USD): "US$ 1,234.56" (formato en-US).
 const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
+  `US$ ${(Number(value) || 0).toLocaleString('en-US', {
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 2,
+  })}`;
 
 const formatBillableDayUnits = (value: number) =>
-  new Intl.NumberFormat('es-AR', {
+  new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value);

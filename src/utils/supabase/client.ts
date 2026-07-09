@@ -12,6 +12,8 @@ export type Perfil = {
   rol: 'ADMIN' | 'OPERADOR';
   activo?: boolean | null;
   creado_en: string;
+  requiere_cambio_password?: boolean | null;
+  cambio_password_limite?: string | null;
 };
 
 export type Salon = {

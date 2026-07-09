@@ -1,17 +1,13 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase, Perfil } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { AlertCircle, CheckCircle, Shield, User, Plus, Edit, Loader2, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Shield, User, Users, Plus, Edit, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ModuleInfoBanner } from './ModuleInfoBanner';
+import { PasswordStrengthMeter } from './PasswordStrengthMeter';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
-
-const hasUppercase = (value: string) => /[A-Z]/.test(value);
-const hasLowercase = (value: string) => /[a-z]/.test(value);
-const hasNumber = (value: string) => /\d/.test(value);
-
-const isSecurePassword = (value: string) =>
-  hasUppercase(value) && hasLowercase(value) && hasNumber(value);
+import { isValidPassword, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy';
 
 export function Usuarios() {
   const [perfiles, setPerfiles] = useState<Perfil[]>([]);
@@ -24,10 +20,16 @@ export function Usuarios() {
   const [editing, setEditing] = useState(false);
   const [loadingEditUserId, setLoadingEditUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [reactivatingUserId, setReactivatingUserId] = useState<string | null>(null);
   const [confirmDeletePerfil, setConfirmDeletePerfil] = useState<{ open: boolean; perfil: Perfil | null }>({
     open: false,
     perfil: null,
   });
+  const [confirmReactivatePerfil, setConfirmReactivatePerfil] = useState<{ open: boolean; perfil: Perfil | null }>({
+    open: false,
+    perfil: null,
+  });
+  const [statusFilter, setStatusFilter] = useState<'activos' | 'inactivos'>('activos');
   const [editingPerfil, setEditingPerfil] = useState<Perfil | null>(null);
   
   // Campos del formulario de alta
@@ -35,27 +37,20 @@ export function Usuarios() {
   const [newPassword, setNewPassword] = useState('');
   const [newNombre, setNewNombre] = useState('');
   const [newRol, setNewRol] = useState<'ADMIN' | 'OPERADOR'>('OPERADOR');
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Campos del formulario de edición
   const [editNombre, setEditNombre] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRol, setEditRol] = useState<'ADMIN' | 'OPERADOR'>('OPERADOR');
   const [editPassword, setEditPassword] = useState('');
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  // Estado de la carga del email actual (vive en Supabase Auth, se trae del server).
+  const [editEmailLoading, setEditEmailLoading] = useState(false);
+  const [editEmailError, setEditEmailError] = useState(false);
 
-  const newPasswordChecks = useMemo(() => [
-    { label: 'Al menos una mayúscula', ok: hasUppercase(newPassword) },
-    { label: 'Al menos una minúscula', ok: hasLowercase(newPassword) },
-    { label: 'Al menos un número', ok: hasNumber(newPassword) },
-  ], [newPassword]);
-
-  const editPasswordChecks = useMemo(() => [
-    { label: 'Al menos una mayúscula', ok: hasUppercase(editPassword) },
-    { label: 'Al menos una minúscula', ok: hasLowercase(editPassword) },
-    { label: 'Al menos un número', ok: hasNumber(editPassword) },
-  ], [editPassword]);
-
-  const canCreateUser = isSecurePassword(newPassword) && hasNonWhitespaceValue(newEmail) && hasNonWhitespaceValue(newNombre);
-  const canUpdatePassword = editPassword.trim().length === 0 || isSecurePassword(editPassword);
+  const canCreateUser = isValidPassword(newPassword) && hasNonWhitespaceValue(newEmail) && hasNonWhitespaceValue(newNombre);
+  const canUpdatePassword = editPassword.trim().length === 0 || isValidPassword(editPassword);
 
   useEffect(() => {
     loadPerfiles();
@@ -151,11 +146,8 @@ export function Usuarios() {
       return;
     }
 
-    if (!isSecurePassword(newPassword)) {
-      setMessage({
-        type: 'error',
-        text: 'La contraseña debe incluir al menos una mayúscula, una minúscula y un número.',
-      });
+    if (!isValidPassword(newPassword)) {
+      setMessage({ type: 'error', text: PASSWORD_POLICY_MESSAGE });
       return;
     }
 
@@ -213,8 +205,13 @@ export function Usuarios() {
     setEditNombre(perfil.nombre);
     setEditRol(perfil.rol);
     setEditPassword('');
-    
-    // Get user email from server
+    // Abrimos el modal de inmediato y mostramos "Cargando email…" mientras se
+    // trae el email actual (que vive en Auth, no en la tabla perfiles).
+    setEditEmail('');
+    setEditEmailError(false);
+    setEditEmailLoading(true);
+    setShowEditDialog(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
@@ -225,17 +222,18 @@ export function Usuarios() {
         { userId: perfil.user_id }
       );
 
-      if (response.ok) {
-        setEditEmail(payload.email || '');
+      if (response.ok && payload?.email) {
+        setEditEmail(payload.email);
       } else {
-        setEditEmail('');
+        // Respondió pero sin email, o falló: avisamos en vez de dejarlo vacío en silencio.
+        setEditEmailError(true);
       }
     } catch (err) {
       console.error('Error loading user email:', err);
-      setEditEmail('');
+      setEditEmailError(true);
     } finally {
+      setEditEmailLoading(false);
       setLoadingEditUserId(null);
-      setShowEditDialog(true);
     }
   };
 
@@ -287,8 +285,8 @@ export function Usuarios() {
       }
 
       if (editPassword.trim().length > 0) {
-        if (!isSecurePassword(editPassword.trim())) {
-          throw new Error('La nueva contraseña debe incluir al menos una mayúscula, una minúscula y un número.');
+        if (!isValidPassword(editPassword.trim())) {
+          throw new Error(PASSWORD_POLICY_MESSAGE);
         }
 
         const { response: resetResponse, payload: resetPayload } = await callServerEndpoint(
@@ -383,19 +381,84 @@ export function Usuarios() {
     }
   };
 
+  const handleReactivateClick = (perfil: Perfil) => {
+    setMessage(null);
+    if (perfil.rol !== 'OPERADOR') return;
+    setConfirmReactivatePerfil({ open: true, perfil });
+  };
+
+  const confirmReactivateUser = async () => {
+    const perfil = confirmReactivatePerfil.perfil;
+    if (!perfil) return;
+
+    try {
+      setReactivatingUserId(perfil.user_id);
+      setMessage(null);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No hay sesión activa');
+      }
+
+      const { response, payload } = await callServerEndpoint(
+        'reactivate-user',
+        session.access_token,
+        { userId: perfil.user_id },
+      );
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'No se pudo reactivar el usuario');
+      }
+
+      setMessage({ type: 'success', text: `Usuario ${perfil.nombre} reactivado correctamente` });
+      setConfirmReactivatePerfil({ open: false, perfil: null });
+      loadPerfiles();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error reactivating user:', err);
+      setMessage({ type: 'error', text: err.message });
+      setConfirmReactivatePerfil({ open: false, perfil: null });
+    } finally {
+      setReactivatingUserId(null);
+    }
+  };
+
   const perfilesActivos = perfiles.filter((perfil) => perfil.activo !== false);
+  const perfilesInactivos = perfiles.filter((perfil) => perfil.activo === false);
+  const visiblePerfiles = statusFilter === 'activos' ? perfilesActivos : perfilesInactivos;
 
   return (
     <div className="bo-page">
-      <div className="bo-page-header mb-6">
-        <h2 className="text-gray-900">Gestión de Usuarios</h2>
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Crear Usuario
-        </button>
+      <div className="bo-page-header mb-4">
+        <div className="bo-module-heading">
+          <h2 className="bo-module-title text-gray-900">
+            <span className="bo-module-title-icon">
+              <Users className="h-6 w-6" />
+            </span>
+            Gestión de Usuarios
+          </h2>
+          <p className="bo-module-subtitle">Gestión de los usuarios y accesos del back-office</p>
+        </div>
+        <div className="bo-page-actions bo-page-actions--pair flex items-center justify-end gap-2">
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="bo-action-button flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title="Crear usuario"
+            aria-label="Crear usuario"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="bo-btn-label">Crear Usuario</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <ModuleInfoBanner>
+          Cree usuarios del sistema y asigne su rol (administrador u operador). Con el badge de
+          estado puede dar de baja o reactivar a un operador (use el filtro Activos / Inactivos para
+          verlos); los administradores no se pueden desactivar. Solo los administradores gestionan
+          usuarios.
+        </ModuleInfoBanner>
       </div>
 
       {message && (
@@ -424,20 +487,47 @@ export function Usuarios() {
         </div>
       )}
 
+      <div className="mb-6">
+        <div className="bo-status-segment" role="tablist" aria-label="Filtrar usuarios por estado">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === 'activos'}
+            onClick={() => setStatusFilter('activos')}
+            className={`bo-status-segment-btn${statusFilter === 'activos' ? ' is-active' : ''}`}
+          >
+            Activos
+            <span className="bo-status-segment-count">{perfilesActivos.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === 'inactivos'}
+            onClick={() => setStatusFilter('inactivos')}
+            className={`bo-status-segment-btn${statusFilter === 'inactivos' ? ' is-active' : ''}`}
+          >
+            Inactivos
+            <span className="bo-status-segment-count">{perfilesInactivos.length}</span>
+          </button>
+        </div>
+      </div>
+
       <div className="bo-card-grid gap-6">
         {loading ? (
           <div className="bo-grid-empty text-center py-8 text-gray-500">
             Cargando usuarios...
           </div>
-        ) : perfilesActivos.length === 0 ? (
+        ) : visiblePerfiles.length === 0 ? (
           <div className="bo-grid-empty text-center py-8 text-gray-500">
-            No hay usuarios registrados
+            {statusFilter === 'activos'
+              ? 'No hay usuarios activos'
+              : 'No hay usuarios dados de baja'}
           </div>
         ) : (
-          perfilesActivos.map(perfil => (
+          visiblePerfiles.map(perfil => (
             <div key={perfil.user_id} className="bo-admin-card bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+              <div className="flex items-start justify-between gap-2 mb-4">
+                <div className={`w-12 h-12 flex-shrink-0 rounded-lg flex items-center justify-center ${
                   perfil.rol === 'ADMIN' ? 'bg-purple-100' : 'bg-blue-100'
                 }`}>
                   {perfil.rol === 'ADMIN' ? (
@@ -446,7 +536,7 @@ export function Usuarios() {
                     <User className={`w-6 h-6 text-blue-600`} />
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <span className={`px-3 py-1 rounded-full text-xs ${
                     perfil.rol === 'ADMIN'
                       ? 'bg-purple-100 text-purple-800'
@@ -466,19 +556,44 @@ export function Usuarios() {
                       <Edit className="w-4 h-4" />
                     )}
                   </button>
-                  {perfil.rol === 'OPERADOR' && (
+                  {perfil.rol === 'OPERADOR' ? (
                     <button
-                      onClick={() => handleDeleteClick(perfil)}
-                      disabled={loadingEditUserId !== null || deletingUserId !== null}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:cursor-wait disabled:opacity-70"
-                      title={deletingUserId === perfil.user_id ? 'Eliminando usuario...' : 'Eliminar usuario'}
+                      type="button"
+                      role="switch"
+                      aria-checked={perfil.activo !== false}
+                      onClick={() =>
+                        perfil.activo !== false
+                          ? handleDeleteClick(perfil)
+                          : handleReactivateClick(perfil)
+                      }
+                      disabled={deletingUserId !== null || reactivatingUserId !== null}
+                      className={`bo-status-toggle disabled:cursor-wait ${
+                        perfil.activo !== false ? 'is-activo' : 'is-inactivo'
+                      }`}
+                      title={perfil.activo !== false ? 'Dar de baja usuario' : 'Reactivar usuario'}
                     >
-                      {deletingUserId === perfil.user_id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
+                      <span className="bo-status-toggle-track">
+                        <span className="bo-status-toggle-knob">
+                          {(deletingUserId === perfil.user_id ||
+                            reactivatingUserId === perfil.user_id) && (
+                            <Loader2 className="w-3 h-3 animate-spin text-gray-500" />
+                          )}
+                        </span>
+                      </span>
+                      <span className="bo-status-toggle-label">
+                        {perfil.activo !== false ? 'Activo' : 'Inactivo'}
+                      </span>
                     </button>
+                  ) : (
+                    <span
+                      className="bo-status-toggle bo-status-toggle--static is-activo"
+                      title="Los administradores no se pueden desactivar"
+                    >
+                      <span className="bo-status-toggle-track">
+                        <span className="bo-status-toggle-knob" />
+                      </span>
+                      <span className="bo-status-toggle-label">Activo</span>
+                    </span>
                   )}
                 </div>
               </div>
@@ -535,21 +650,25 @@ export function Usuarios() {
                 <label className="block text-sm text-gray-700 mb-2">
                   Contraseña <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="••••••••"
-                />
-                <ul className="mt-2 space-y-1 text-xs">
-                  {newPasswordChecks.map((item) => (
-                    <li key={item.label} className={item.ok ? 'text-green-700' : 'text-gray-500'}>
-                      {item.ok ? '✓' : '•'} {item.label}
-                    </li>
-                  ))}
-                </ul>
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <PasswordStrengthMeter password={newPassword} />
               </div>
 
               <div>
@@ -578,7 +697,7 @@ export function Usuarios() {
                   setNewNombre('');
                   setNewRol('OPERADOR');
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bo-btn-cancel rounded-lg transition-colors"
               >
                 Cancelar
               </button>
@@ -620,17 +739,33 @@ export function Usuarios() {
               <label className="block text-sm text-gray-700 mb-2">
                 Email <span className="text-red-500">*</span>
               </label>
-              <input
-                type="email"
-                value={editEmail}
-                onChange={(e) => setEditEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="usuario@hotel.com"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Este será el email que el usuario use para iniciar sesión
-              </p>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => {
+                    setEditEmail(e.target.value);
+                    if (editEmailError) setEditEmailError(false);
+                  }}
+                  required
+                  disabled={editEmailLoading}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-wait"
+                  placeholder={editEmailLoading ? 'Cargando email…' : 'usuario@hotel.com'}
+                />
+                {editEmailLoading && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />
+                )}
+              </div>
+              {editEmailError ? (
+                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  No se pudo cargar el email actual. Verifíquelo antes de guardar.
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">
+                  Este será el email que el usuario use para iniciar sesión
+                </p>
+              )}
             </div>
 
             <div>
@@ -652,20 +787,24 @@ export function Usuarios() {
               <label className="block text-sm text-gray-700 mb-2">
                 Nueva contraseña (opcional)
               </label>
-              <input
-                type="password"
-                value={editPassword}
-                onChange={(e) => setEditPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Completa solo si quieres cambiarla"
-              />
-              <ul className="mt-2 space-y-1 text-xs">
-                {editPasswordChecks.map((item) => (
-                  <li key={item.label} className={item.ok ? 'text-green-700' : 'text-gray-500'}>
-                    {item.ok ? '✓' : '•'} {item.label}
-                  </li>
-                ))}
-              </ul>
+              <div className="relative">
+                <input
+                  type={showEditPassword ? 'text' : 'password'}
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Complete solo si desea cambiarla"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEditPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showEditPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <PasswordStrengthMeter password={editPassword} />
             </div>
 
             <div className="bo-form-actions pt-4 border-t border-gray-200">
@@ -676,13 +815,13 @@ export function Usuarios() {
                   setEditingPerfil(null);
                   setEditPassword('');
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bo-btn-cancel rounded-lg transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={editing || !canUpdatePassword}
+                disabled={editing || editEmailLoading || !canUpdatePassword}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {editing ? 'Guardando...' : 'Actualizar'}
@@ -696,15 +835,30 @@ export function Usuarios() {
         open={confirmDeletePerfil.open}
         onOpenChange={handleDeleteDialogOpenChange}
         onConfirm={confirmDeleteUser}
-        title="Eliminar Usuario"
+        title="Dar de baja usuario"
         description={
           confirmDeletePerfil.perfil
-            ? `¿Estás seguro de que deseas eliminar al usuario "${confirmDeletePerfil.perfil.nombre}"?`
+            ? `¿Está seguro de dar de baja al usuario "${confirmDeletePerfil.perfil.nombre}"? Perderá el acceso al sistema, pero podrá reactivarlo más adelante desde la pestaña Inactivos.`
             : ''
         }
-        confirmText={deletingUserId ? 'Eliminando...' : 'Eliminar'}
+        confirmText={deletingUserId ? 'Dando de baja...' : 'Dar de baja'}
         cancelText="Cancelar"
         variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={confirmReactivatePerfil.open}
+        onOpenChange={(open) => setConfirmReactivatePerfil({ open, perfil: open ? confirmReactivatePerfil.perfil : null })}
+        onConfirm={confirmReactivateUser}
+        title="Reactivar usuario"
+        description={
+          confirmReactivatePerfil.perfil
+            ? `¿Desea reactivar al usuario "${confirmReactivatePerfil.perfil.nombre}"? Volverá a tener acceso al sistema con su rol de operador.`
+            : ''
+        }
+        confirmText={reactivatingUserId ? 'Reactivando...' : 'Reactivar'}
+        cancelText="Cancelar"
+        variant="default"
       />
     </div>
   );

@@ -160,8 +160,8 @@ export function DashboardAnalytics({
   const monthChartMinWidth = Math.max(520, reservasPorMes.length * 64);
 
   return (
-    <section className="mt-8" aria-labelledby="dashboard-analytics-title">
-      <div className="bo-section-header mb-4">
+    <section className="mt-12" aria-labelledby="dashboard-analytics-title">
+      <div className="bo-section-header mb-6">
         <div>
           <h3 id="dashboard-analytics-title" className="text-lg font-medium text-gray-900">
             Análisis de reservas

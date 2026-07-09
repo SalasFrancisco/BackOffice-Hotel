@@ -347,6 +347,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 onKeyDown={preventInvalidNumberKeys}
                 inputMode="numeric"
                 required
+                placeholder="0"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -364,6 +365,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 onKeyDown={preventInvalidNumberKeys}
                 inputMode="decimal"
                 required
+                placeholder="0.00"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -506,6 +508,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                 onKeyDown={preventInvalidNumberKeys}
                 inputMode="numeric"
                 required
+                placeholder="0"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -520,7 +523,7 @@ export function SalonEdit({ salonId, onBack }: SalonEditProps) {
                   setShowDistDialog(false);
                   setDistMessage(null);
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bo-btn-cancel rounded-lg transition-colors"
               >
                 Cancelar
               </button>

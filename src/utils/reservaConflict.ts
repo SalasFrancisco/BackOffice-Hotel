@@ -77,5 +77,8 @@ export const getReservaConflictIds = (
 export const getReservaConflictText = (conflictIds: number[]): string => {
   if (!conflictIds.length) return '';
   const idsText = conflictIds.map((id) => `#${id}`).join(', ');
-  return `Coincide con otra(s) reserva(s) activa(s) del mismo salón y fecha: ${idsText}.`;
+  if (conflictIds.length === 1) {
+    return `Se superpone con la reserva ${idsText}, en el mismo salón y con fechas que se solapan. Revise la agenda para evitar una doble asignación.`;
+  }
+  return `Se superpone con las reservas ${idsText}, en el mismo salón y con fechas que se solapan. Revise la agenda para evitar una doble asignación.`;
 };

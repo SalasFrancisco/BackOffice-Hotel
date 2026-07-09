@@ -1,4 +1,14 @@
-export const SESSION_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+// Minutos de inactividad antes de cerrar la sesión. Configurable por entorno
+// (VITE_SESSION_TIMEOUT_MINUTES); si no se define o es inválido, se usan 15 min.
+const parsedTimeoutMinutes = Number(import.meta.env?.VITE_SESSION_TIMEOUT_MINUTES);
+const SESSION_INACTIVITY_TIMEOUT_MINUTES =
+  Number.isFinite(parsedTimeoutMinutes) && parsedTimeoutMinutes > 0
+    ? parsedTimeoutMinutes
+    : 15;
+
+export const SESSION_INACTIVITY_TIMEOUT_MS = SESSION_INACTIVITY_TIMEOUT_MINUTES * 60 * 1000;
+// Cuánto antes de expirar se muestra el aviso previo de cierre por inactividad.
+export const SESSION_INACTIVITY_WARNING_MS = Math.min(60 * 1000, SESSION_INACTIVITY_TIMEOUT_MS / 2);
 export const SESSION_ACTIVITY_STORAGE_KEY = 'backoffice.session-activity';
 
 const RECENT_SIGN_IN_GRACE_MS = 2 * 60 * 1000;

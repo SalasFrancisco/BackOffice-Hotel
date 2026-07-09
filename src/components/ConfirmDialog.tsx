@@ -46,7 +46,7 @@ export function ConfirmDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{cancelText}</AlertDialogCancel>
+          <AlertDialogCancel className="bo-btn-cancel">{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className={

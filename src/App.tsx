@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ShieldAlert, X } from 'lucide-react';
 import { supabase, Perfil } from './utils/supabase/client';
 import { Login } from './components/Login';
 import { Layout } from './components/Layout';
@@ -8,17 +9,23 @@ import { Salones } from './components/Salones';
 import { SalonEdit } from './components/SalonEdit';
 import { ServiciosAdicionales } from './components/ServiciosAdicionales';
 import { Usuarios } from './components/Usuarios';
+import { Notificaciones } from './components/Notificaciones';
+import { Perfil as PerfilPage } from './components/Perfil';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { InfoDialog } from './components/InfoDialog';
 import { PasswordRecovery } from './components/PasswordRecovery';
+import { ForcedPasswordChange } from './components/ForcedPasswordChange';
+import { SessionPortalTransition } from './components/SessionPortalTransition';
 import {
   SESSION_ACTIVITY_STORAGE_KEY,
+  SESSION_INACTIVITY_WARNING_MS,
   clearSessionActivity,
   getSessionInactivityRemainingMs,
   isSessionInactive,
   recordSessionActivity,
   validateOrInitializeSessionActivity,
 } from './utils/sessionActivity';
+import { InactivityWarningDialog } from './components/InactivityWarningDialog';
 
 type NavigationRequest = {
   page: string;
@@ -69,6 +76,11 @@ const clearPasswordRecoveryUrl = () => {
 };
 
 const INACTIVE_USER_MESSAGE = 'Usuario dado de baja. Contacte al administrador.';
+// Mensaje único para cualquier fin de sesión involuntario (inactividad de 15 min
+// o expiración/refresh fallido del token de Supabase), para no confundir al usuario
+// con dos textos distintos según el camino por el que cae.
+const SESSION_ENDED_MESSAGE = 'Su sesión expiró. Inicie sesión nuevamente.';
+const PERFIL_LOAD_ERROR_MESSAGE = 'No se pudo cargar su perfil. Vuelva a iniciar sesión.';
 
 const isPerfilActivo = (perfil?: Perfil | null) => perfil?.activo !== false;
 
@@ -84,25 +96,62 @@ export default function App() {
     text: string;
   } | null>(null);
   const [currentPage, setCurrentPage] = useState(() => {
-    const win = window as any;
-    const initial = typeof win.__INITIAL_PAGE__ === 'string' ? win.__INITIAL_PAGE__ : '';
-    if (initial) {
-      return initial;
-    }
+    // La home natural es el Dashboard. Un deep-link por hash (#salones, etc.) tiene
+    // prioridad. Los OPERADOR se redirigen a 'reservas' por el guard de rol
+    // (isAdminOnlyPage), tanto en el render como en el efecto, así que igual
+    // aterrizan en su pantalla correcta.
     const hashPage = window.location.hash.replace('#', '');
     return hashPage || 'dashboard';
+  });
+  // Historial de navegación interno (para las flechas atrás/adelante del sistema).
+  const [navState, setNavState] = useState<{ stack: string[]; index: number }>(() => {
+    const hashPage = window.location.hash.replace('#', '');
+    return { stack: [hashPage || 'dashboard'], index: 0 };
   });
   const [editingSalonId, setEditingSalonId] = useState<number | null>(null);
   const [rlsError, setRlsError] = useState(false);
   const [hasUnsavedFormChanges, setHasUnsavedFormChanges] = useState(false);
-  const [pendingNavigationRequest, setPendingNavigationRequest] = useState<NavigationRequest | null>(null);
+  // Acción de navegación en espera de confirmar (cuando hay cambios sin guardar).
+  const [pendingNavAction, setPendingNavAction] = useState<{ run: () => void } | null>(null);
   const [reservaHighlightRequest, setReservaHighlightRequest] = useState<{ reservaId: number; nonce: number } | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [copySqlFeedbackMessage, setCopySqlFeedbackMessage] = useState('');
   const [showCopySqlFeedbackDialog, setShowCopySqlFeedbackDialog] = useState(false);
+  const [sessionPortal, setSessionPortal] = useState<
+    { variant: 'enter' | 'exit'; message: string } | null
+  >(null);
+  // Segundos restantes mostrados en el aviso previo de inactividad (null = oculto).
+  const [inactivityCountdown, setInactivityCountdown] = useState<number | null>(null);
+  // Al volver de un logout, la pantalla de login arranca en el formulario (no en la
+  // portada "Comenzar"), para que el portal de despedida revele una pantalla distinta
+  // y no otra portada casi idéntica (evita el parpadeo por superposición).
+  const [loginStartsOnForm, setLoginStartsOnForm] = useState(false);
+  // Cambio de contraseña por política de seguridad.
+  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
+  const [passwordWarningDismissed, setPasswordWarningDismissed] = useState(false);
+  // Cambio de contraseña voluntario (cualquier rol, desde el menú).
+  const [voluntaryChangeOpen, setVoluntaryChangeOpen] = useState(false);
+  // Recordatorio (modal) que aparece una vez por sesión para contraseñas viejas.
+  const [passwordReminderDismissed, setPasswordReminderDismissed] = useState(false);
   const recoveryFlowActiveRef = useRef(isPasswordRecoveryUrl());
   const recoveryTokenExchangePendingRef = useRef(Boolean(getPasswordRecoveryTokenHash()));
   const inactivityLogoutInProgressRef = useRef(false);
+  const manualLogoutInProgressRef = useRef(false);
+  // El portal de salida sólo se descarta cuando (a) terminó su animación mínima y
+  // (b) el signOut realmente completó, para que no se descubra la app en redes lentas.
+  const exitAnimDoneRef = useRef(false);
+  const logoutSettledRef = useRef(false);
+  // Se arma al recibir SIGNED_IN interactivo; el portal de bienvenida se dispara
+  // recién cuando el perfil cargó, para mostrar el nombre sin parpadeo.
+  const pendingWelcomePortalRef = useRef(false);
+  // Lo reasigna el efecto de inactividad para que el diálogo de aviso pueda
+  // "seguir conectado" reiniciando el contador.
+  const stayConnectedRef = useRef<() => void>(() => {});
+  // Solo se arma cuando el usuario inicia sesión de forma interactiva (click en
+  // "Iniciar Sesión"). Supabase re-emite SIGNED_IN al volver el foco a la
+  // pestaña o al refrescar el token; sin esta bandera el portal de bienvenida
+  // aparecería cada vez que el usuario cambia de pestaña y vuelve.
+  const interactiveLoginRef = useRef(false);
 
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -142,6 +191,12 @@ export default function App() {
           return;
         }
 
+        if (event === 'SIGNED_IN' && interactiveLoginRef.current) {
+          interactiveLoginRef.current = false;
+          // El portal se dispara desde loadPerfil (una vez que hay nombre).
+          pendingWelcomePortalRef.current = true;
+        }
+
         setSession(session);
         setAuthMode('login');
         setAuthFeedbackMessage(null);
@@ -149,7 +204,15 @@ export default function App() {
       } else {
         if (event === 'SIGNED_OUT') {
           clearSessionActivity();
+          // SIGNED_OUT que no proviene de un logout manual ni del cierre por
+          // inactividad = la sesión caducó sola (token/refresh de Supabase).
+          // Mostramos el mismo mensaje que el cierre por inactividad.
+          if (!manualLogoutInProgressRef.current && !inactivityLogoutInProgressRef.current) {
+            setAuthFeedbackMessage({ type: 'error', text: SESSION_ENDED_MESSAGE });
+          }
         }
+        interactiveLoginRef.current = false;
+        pendingWelcomePortalRef.current = false;
         setSession(null);
         setAuthMode('login');
         setPerfil(null);
@@ -240,7 +303,16 @@ export default function App() {
           setPerfil(data);
         } catch (err: any) {
           console.error('Error in checkSession:', err);
+          // Fallo transitorio al cargar el perfil: cerramos sesión con aviso en
+          // lugar de dejar una sesión "a medias" que muestra el Login.
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutErr) {
+            console.error('Error signing out after perfil load failure:', signOutErr);
+          }
+          setSession(null);
           setPerfil(null);
+          setAuthFeedbackMessage({ type: 'error', text: PERFIL_LOAD_ERROR_MESSAGE });
         }
       } else {
         setSession(null);
@@ -272,6 +344,7 @@ export default function App() {
         throw error;
       }
       if (!isPerfilActivo(data)) {
+        pendingWelcomePortalRef.current = false;
         await supabase.auth.signOut();
         setSession(null);
         setPerfil(null);
@@ -280,35 +353,109 @@ export default function App() {
       }
 
       setPerfil(data);
+
+      // Recién ahora, con el nombre disponible, disparamos el portal de bienvenida
+      // (evita el parpadeo de "Bienvenido" sin nombre mientras cargaba el perfil).
+      if (pendingWelcomePortalRef.current) {
+        pendingWelcomePortalRef.current = false;
+        const firstName = data?.nombre?.trim().split(/\s+/)[0];
+        setSessionPortal({
+          variant: 'enter',
+          message: firstName ? `Bienvenido, ${firstName}` : 'Bienvenido',
+        });
+      }
     } catch (err: any) {
       console.error('Error loading perfil:', err);
-      
+      pendingWelcomePortalRef.current = false;
+
       // Store the error type for display
       if (err.message === 'RLS_RECURSION_ERROR') {
         setLoading(false);
         await supabase.auth.signOut();
         return;
       }
-      
+
+      // Fallo transitorio (p. ej. red): cerramos sesión limpiamente con aviso en
+      // vez de dejar al usuario atascado en el Login con una sesión "a medias".
+      try {
+        await supabase.auth.signOut();
+      } catch (signOutErr) {
+        console.error('Error signing out after perfil load failure:', signOutErr);
+      }
+      setSession(null);
       setPerfil(null);
+      setAuthFeedbackMessage({ type: 'error', text: PERFIL_LOAD_ERROR_MESSAGE });
+    }
+  };
+
+  const handleLoginStart = () => {
+    // El usuario disparó un login real: habilitamos el portal de bienvenida
+    // para el próximo evento SIGNED_IN.
+    interactiveLoginRef.current = true;
+    setLoginStartsOnForm(false);
+  };
+
+  const handleInteractiveLoginSuccess = () => {
+    // La sesión y el perfil ya se cargan vía onAuthStateChange (SIGNED_IN),
+    // que además dispara el portal de bienvenida. No re-consultamos el perfil
+    // acá para evitar queries redundantes.
+  };
+
+  const handleLoginError = () => {
+    // El intento de login falló: desarmamos el portal de bienvenida que había
+    // quedado preparado por handleLoginStart.
+    interactiveLoginRef.current = false;
+    pendingWelcomePortalRef.current = false;
+  };
+
+  // El portal de salida se descarta sólo cuando su animación mínima terminó y el
+  // signOut realmente completó (evita descubrir la app en redes lentas).
+  const maybeDismissExitPortal = () => {
+    if (exitAnimDoneRef.current && logoutSettledRef.current) {
+      exitAnimDoneRef.current = false;
+      logoutSettledRef.current = false;
+      setSessionPortal(null);
     }
   };
 
   const handleLogout = async () => {
+    manualLogoutInProgressRef.current = true;
+    exitAnimDoneRef.current = false;
+    logoutSettledRef.current = false;
+    const firstName = perfil?.nombre?.trim().split(/\s+/)[0];
+    setSessionPortal({
+      variant: 'exit',
+      message: firstName ? `¡Hasta pronto, ${firstName}!` : '¡Hasta pronto!',
+    });
+    setLoginStartsOnForm(true);
+    setInactivityCountdown(null);
     clearSessionActivity();
     setAuthFeedbackMessage(null);
-    await supabase.auth.signOut();
-    setSession(null);
-    setPerfil(null);
-    setCurrentPage('dashboard');
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Error signing out:', err);
+    } finally {
+      setSession(null);
+      setPerfil(null);
+      setCurrentPage('dashboard');
+      manualLogoutInProgressRef.current = false;
+      logoutSettledRef.current = true;
+      maybeDismissExitPortal();
+    }
   };
 
   const expireSessionForInactivity = async () => {
-    if (inactivityLogoutInProgressRef.current) return;
+    if (inactivityLogoutInProgressRef.current || manualLogoutInProgressRef.current) return;
 
     inactivityLogoutInProgressRef.current = true;
+    exitAnimDoneRef.current = false;
+    logoutSettledRef.current = false;
+    setSessionPortal({ variant: 'exit', message: 'Su sesión se cerró por inactividad...' });
+    setLoginStartsOnForm(true);
+    setInactivityCountdown(null);
     clearSessionActivity();
-    setAuthFeedbackMessage(null);
+    setAuthFeedbackMessage({ type: 'error', text: SESSION_ENDED_MESSAGE });
 
     try {
       await supabase.auth.signOut();
@@ -319,6 +466,8 @@ export default function App() {
       setPerfil(null);
       setCurrentPage('dashboard');
       inactivityLogoutInProgressRef.current = false;
+      logoutSettledRef.current = true;
+      maybeDismissExitPortal();
     }
   };
 
@@ -326,8 +475,40 @@ export default function App() {
     if (!session || authMode === 'password-recovery') return;
 
     let inactivityTimer: ReturnType<typeof window.setTimeout> | null = null;
+    let warningInterval: ReturnType<typeof window.setInterval> | null = null;
     let lastActivityUpdateAt = 0;
     const userId = session.user.id;
+
+    const hideWarning = () => {
+      if (warningInterval) {
+        window.clearInterval(warningInterval);
+        warningInterval = null;
+      }
+      setInactivityCountdown(null);
+    };
+
+    const startWarning = () => {
+      if (warningInterval) return;
+
+      const tick = () => {
+        const remainingMs = getSessionInactivityRemainingMs(userId);
+        if (remainingMs <= 0) {
+          hideWarning();
+          void expireSessionForInactivity();
+          return;
+        }
+        // Otra pestaña registró actividad: ya no hace falta avisar.
+        if (remainingMs > SESSION_INACTIVITY_WARNING_MS) {
+          hideWarning();
+          scheduleInactivityCheck();
+          return;
+        }
+        setInactivityCountdown(Math.ceil(remainingMs / 1000));
+      };
+
+      tick();
+      warningInterval = window.setInterval(tick, 1000);
+    };
 
     const scheduleInactivityCheck = () => {
       if (inactivityTimer) {
@@ -336,21 +517,44 @@ export default function App() {
 
       const remainingMs = getSessionInactivityRemainingMs(userId);
       if (remainingMs <= 0) {
+        hideWarning();
         void expireSessionForInactivity();
         return;
       }
 
+      // Dentro de la ventana de aviso: mostramos la cuenta regresiva.
+      if (remainingMs <= SESSION_INACTIVITY_WARNING_MS) {
+        startWarning();
+        return;
+      }
+
+      hideWarning();
       inactivityTimer = window.setTimeout(() => {
         if (isSessionInactive(userId)) {
           void expireSessionForInactivity();
         } else {
           scheduleInactivityCheck();
         }
-      }, remainingMs);
+      }, remainingMs - SESSION_INACTIVITY_WARNING_MS);
+    };
+
+    // Permite que el botón "Seguir conectado" del aviso reinicie el contador.
+    stayConnectedRef.current = () => {
+      recordSessionActivity(userId);
+      lastActivityUpdateAt = Date.now();
+      scheduleInactivityCheck();
     };
 
     const registerActivity = (event: Event) => {
       if (isSessionInactive(userId)) {
+        // Si el usuario está cerrando sesión a propósito, no secuestramos el
+        // clic: dejamos que el botón dispare el logout manual (con su despedida)
+        // en lugar de mostrar el aviso de inactividad.
+        const target = event.target as Element | null;
+        if (target?.closest?.('[data-logout-trigger]')) {
+          return;
+        }
+
         event.stopImmediatePropagation();
         void expireSessionForInactivity();
         return;
@@ -404,6 +608,11 @@ export default function App() {
       if (inactivityTimer) {
         window.clearTimeout(inactivityTimer);
       }
+      if (warningInterval) {
+        window.clearInterval(warningInterval);
+        warningInterval = null;
+      }
+      setInactivityCountdown(null);
 
       activityEvents.forEach((eventName) => {
         window.removeEventListener(eventName, registerActivity, true);
@@ -414,7 +623,8 @@ export default function App() {
     };
   }, [session, authMode]);
 
-  const executeNavigation = ({ page, reservaId }: NavigationRequest) => {
+  // Cambia de página (con remapeo por rol) sin tocar el historial.
+  const applyPage = (page: string, reservaId?: number | null) => {
     const authorizedPage = !isAdminRole(perfil?.rol) && isAdminOnlyPage(page) ? 'reservas' : page;
     setCurrentPage(authorizedPage);
     setEditingSalonId(null);
@@ -424,6 +634,49 @@ export default function App() {
     } else if (authorizedPage !== 'reservas') {
       setReservaHighlightRequest(null);
     }
+    return authorizedPage;
+  };
+
+  const executeNavigation = ({ page, reservaId }: NavigationRequest) => {
+    const authorizedPage = applyPage(page, reservaId);
+    // Apila en el historial (descartando el "adelante" si veníamos de un atrás).
+    setNavState((prev) => {
+      if (prev.stack[prev.index] === authorizedPage) return prev;
+      const stack = prev.stack.slice(0, prev.index + 1);
+      stack.push(authorizedPage);
+      return { stack, index: stack.length - 1 };
+    });
+  };
+
+  const performHistoryNav = (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= navState.stack.length) return;
+    applyPage(navState.stack[targetIndex], null);
+    setNavState((prev) => ({ ...prev, index: targetIndex }));
+  };
+
+  const canGoBack = navState.index > 0;
+  const canGoForward = navState.index < navState.stack.length - 1;
+
+  const handleGoBack = () => {
+    if (!canGoBack) return;
+    const target = navState.index - 1;
+    if (hasUnsavedFormChanges) {
+      setPendingNavAction({ run: () => performHistoryNav(target) });
+      setShowUnsavedChangesDialog(true);
+      return;
+    }
+    performHistoryNav(target);
+  };
+
+  const handleGoForward = () => {
+    if (!canGoForward) return;
+    const target = navState.index + 1;
+    if (hasUnsavedFormChanges) {
+      setPendingNavAction({ run: () => performHistoryNav(target) });
+      setShowUnsavedChangesDialog(true);
+      return;
+    }
+    performHistoryNav(target);
   };
 
   const handleNavigate = (page: string, options?: { reservaId?: number | null }) => {
@@ -434,7 +687,7 @@ export default function App() {
     if (!isPageChange && !hasReservaTarget) return;
 
     if (isPageChange && hasUnsavedFormChanges) {
-      setPendingNavigationRequest(request);
+      setPendingNavAction({ run: () => executeNavigation(request) });
       setShowUnsavedChangesDialog(true);
       return;
     }
@@ -443,17 +696,17 @@ export default function App() {
   };
 
   const confirmNavigationWithoutSaving = () => {
-    if (!pendingNavigationRequest) return;
-    executeNavigation(pendingNavigationRequest);
+    if (!pendingNavAction) return;
+    pendingNavAction.run();
     setHasUnsavedFormChanges(false);
-    setPendingNavigationRequest(null);
+    setPendingNavAction(null);
     setShowUnsavedChangesDialog(false);
   };
 
   const handleUnsavedDialogOpenChange = (open: boolean) => {
     setShowUnsavedChangesDialog(open);
     if (!open) {
-      setPendingNavigationRequest(null);
+      setPendingNavAction(null);
     }
   };
 
@@ -546,7 +799,7 @@ export default function App() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-yellow-700">
-                  <strong>Acción requerida:</strong> Debes ejecutar el siguiente SQL en Supabase para corregir las políticas.
+                  <strong>Acción requerida:</strong> Debe ejecutar el siguiente SQL en Supabase para corregir las políticas.
                 </p>
               </div>
             </div>
@@ -556,10 +809,10 @@ export default function App() {
             <div>
               <h3 className="text-gray-900 mb-2">Pasos para solucionar:</h3>
               <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
-                <li>Ve a <strong>Supabase Dashboard</strong> → <strong>SQL Editor</strong></li>
-                <li>Copia el SQL de abajo y pégalo en el editor</li>
-                <li>Haz clic en <strong>Run</strong> (Ejecutar)</li>
-                <li>Recarga esta página (F5)</li>
+                <li>Vaya a <strong>Supabase Dashboard</strong> → <strong>SQL Editor</strong></li>
+                <li>Copie el SQL de abajo y péguelo en el editor</li>
+                <li>Haga clic en <strong>Run</strong> (Ejecutar)</li>
+                <li>Recargue esta página (F5)</li>
               </ol>
             </div>
 
@@ -574,7 +827,7 @@ export default function App() {
                       setCopySqlFeedbackMessage('SQL copiado al portapapeles.');
                     } catch (clipboardError) {
                       console.error('Error copying SQL to clipboard:', clipboardError);
-                      setCopySqlFeedbackMessage('No se pudo copiar el SQL. Copialo manualmente.');
+                      setCopySqlFeedbackMessage('No se pudo copiar el SQL. Cópielo manualmente.');
                     }
                     setShowCopySqlFeedbackDialog(true);
                   }}
@@ -685,9 +938,95 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
     );
   }
 
+  const sessionPortalElement = sessionPortal && (
+    <SessionPortalTransition
+      variant={sessionPortal.variant}
+      message={sessionPortal.message}
+      onComplete={() => {
+        // El portal de salida sólo se descarta cuando además el signOut completó.
+        if (sessionPortal.variant === 'exit') {
+          exitAnimDoneRef.current = true;
+          maybeDismissExitPortal();
+        } else {
+          setSessionPortal(null);
+        }
+      }}
+    />
+  );
+
   if (!session || !perfil) {
-    return <Login onLoginSuccess={checkSession} authMessage={authFeedbackMessage} />;
+    return (
+      <>
+        <Login
+          onLoginSuccess={handleInteractiveLoginSuccess}
+          onLoginStart={handleLoginStart}
+          onLoginError={handleLoginError}
+          authMessage={authFeedbackMessage}
+          initialShowCover={!loginStartsOnForm}
+        />
+        {sessionPortalElement}
+      </>
+    );
   }
+
+  // ----- Cambio de contraseña por política de seguridad -----
+  const passwordChangeRequired = perfil.requiere_cambio_password === true;
+  const passwordDeadline = perfil.cambio_password_limite ? new Date(perfil.cambio_password_limite) : null;
+  const passwordChangeOverdue =
+    passwordChangeRequired && passwordDeadline !== null && Date.now() > passwordDeadline.getTime();
+  const passwordDaysRemaining =
+    passwordDeadline && !passwordChangeOverdue
+      ? Math.max(0, Math.ceil((passwordDeadline.getTime() - Date.now()) / 86_400_000))
+      : null;
+
+  const handlePasswordChangeCompleted = () => {
+    setPerfil((prev) =>
+      prev ? { ...prev, requiere_cambio_password: false, cambio_password_limite: null } : prev,
+    );
+    setPasswordChangeOpen(false);
+    setVoluntaryChangeOpen(false);
+  };
+
+  // Prioridad: plazo vencido (obligatorio) > aviso de seguridad > cambio voluntario.
+  const passwordChangeMode = passwordChangeOverdue
+    ? 'forced'
+    : passwordChangeOpen
+      ? 'pending'
+      : voluntaryChangeOpen
+        ? 'voluntary'
+        : null;
+
+  if (passwordChangeMode) {
+    return (
+      <ForcedPasswordChange
+        perfil={perfil}
+        mode={passwordChangeMode}
+        daysRemaining={passwordChangeMode === 'pending' ? passwordDaysRemaining : null}
+        onCancel={
+          passwordChangeMode === 'forced'
+            ? undefined
+            : () => {
+                setPasswordChangeOpen(false);
+                setVoluntaryChangeOpen(false);
+              }
+        }
+        onCompleted={handlePasswordChangeCompleted}
+      />
+    );
+  }
+
+  const passwordDeadlineText = passwordDeadline
+    ? passwordDeadline.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '';
+  const passwordRemainingText =
+    passwordDaysRemaining != null
+      ? passwordDaysRemaining <= 0
+        ? ' (vence hoy)'
+        : ` (le ${passwordDaysRemaining === 1 ? 'queda 1 día' : `quedan ${passwordDaysRemaining} días`})`
+      : '';
+  const showPasswordWarning = passwordChangeRequired && !passwordChangeOverdue && !passwordWarningDismissed;
+  const showPasswordReminder =
+    passwordChangeRequired && !passwordChangeOverdue && !passwordReminderDismissed;
 
   const isAdmin = isAdminRole(perfil.rol);
   const effectiveCurrentPage = !isAdmin && isAdminOnlyPage(currentPage) ? 'reservas' : currentPage;
@@ -714,6 +1053,10 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
         return <Salones perfil={perfil} onEditSalon={handleEditSalon} />;
       case 'servicios':
         return <ServiciosAdicionales perfil={perfil} />;
+      case 'notificaciones':
+        return <Notificaciones perfil={perfil} onNavigate={handleNavigate} />;
+      case 'perfil':
+        return <PerfilPage perfil={perfil} onChangePassword={() => setVoluntaryChangeOpen(true)} />;
       case 'usuarios':
         return isAdmin ? <Usuarios /> : renderReservasPage();
       default:
@@ -726,9 +1069,39 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
       <Layout
         currentPage={effectiveCurrentPage}
         onNavigate={handleNavigate}
+        onBack={handleGoBack}
+        onForward={handleGoForward}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
         perfil={perfil}
         onLogout={handleLogout}
+        onChangePassword={() => setVoluntaryChangeOpen(true)}
       >
+        {showPasswordWarning && (
+          <div className="bo-pw-security-banner" role="status">
+            <ShieldAlert className="bo-pw-security-banner-icon h-5 w-5" aria-hidden="true" />
+            <p className="bo-pw-security-banner-text">
+              Por seguridad debe cambiar su contraseña
+              {passwordDeadlineText ? ` antes del ${passwordDeadlineText}` : ''}
+              {passwordRemainingText}.
+            </p>
+            <button
+              type="button"
+              className="bo-pw-security-banner-cta"
+              onClick={() => setPasswordChangeOpen(true)}
+            >
+              Cambiar ahora
+            </button>
+            <button
+              type="button"
+              className="bo-pw-security-banner-close"
+              onClick={() => setPasswordWarningDismissed(true)}
+              aria-label="Descartar aviso"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         {renderPage()}
       </Layout>
 
@@ -742,6 +1115,32 @@ CREATE POLICY "service_role_all_perfiles" ON public.perfiles
         cancelText="Continuar editando"
         variant="default"
       />
+
+      <InactivityWarningDialog
+        open={inactivityCountdown !== null}
+        secondsLeft={inactivityCountdown ?? 0}
+        onStay={() => stayConnectedRef.current()}
+      />
+
+      <ConfirmDialog
+        open={showPasswordReminder}
+        onOpenChange={(open) => {
+          if (!open) setPasswordReminderDismissed(true);
+        }}
+        onConfirm={() => {
+          setPasswordReminderDismissed(true);
+          setPasswordChangeOpen(true);
+        }}
+        title="Actualice su contraseña"
+        description={`Su contraseña actual es anterior a la nueva política de seguridad. Le recomendamos cambiarla${
+          passwordDeadlineText ? ` antes del ${passwordDeadlineText}` : ''
+        }${passwordRemainingText}.`}
+        confirmText="Cambiar ahora"
+        cancelText="Más tarde"
+        variant="default"
+      />
+
+      {sessionPortalElement}
 
       <InfoDialog
         open={showCopySqlFeedbackDialog}

@@ -6,6 +6,7 @@ import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
 import { RESERVA_ESTADO_COLORS } from '../utils/reservaEstadoTransitions';
+import { formatUSD } from '../utils/currency';
 
 type ReservaModalProps = {
   reserva: Reserva;
@@ -13,8 +14,7 @@ type ReservaModalProps = {
   onClose: () => void;
 };
 
-const formatCurrency = (value: number) =>
-  `$${value.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatCurrency = (value: number) => formatUSD(value);
 
 const hasStoredMontoInicial = (value: Reserva['monto_inicial']) =>
   value !== null && value !== undefined && Number.isFinite(Number(value));
@@ -278,17 +278,17 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
                     <div className="text-right">
                       <p className="text-sm text-gray-600">Cantidad: {rs.cantidad}</p>
                       <p className="text-green-600">
-                        ${(rs.servicio?.precio || 0).toLocaleString('es-AR')} c/u
+                        {formatUSD(rs.servicio?.precio || 0)} c/u
                       </p>
                       <p className="text-gray-900">
-                        Total: ${((rs.servicio?.precio || 0) * rs.cantidad).toLocaleString('es-AR')}
+                        Total: {formatUSD((rs.servicio?.precio || 0) * rs.cantidad)}
                       </p>
                     </div>
                   </div>
                 ))}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
                   <p className="text-sm text-blue-800">
-                    <strong>Total Servicios:</strong> ${reservaServicios.reduce((sum, rs) => sum + ((rs.servicio?.precio || 0) * rs.cantidad), 0).toLocaleString('es-AR')}
+                    <strong>Total Servicios:</strong> {formatUSD(reservaServicios.reduce((sum, rs) => sum + ((rs.servicio?.precio || 0) * rs.cantidad), 0))}
                   </p>
                 </div>
               </div>

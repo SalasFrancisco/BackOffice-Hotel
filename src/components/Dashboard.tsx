@@ -2,6 +2,9 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, BarChart3, Building2, CheckCircle2, ReceiptText, Wallet } from 'lucide-react';
 import type { Perfil, Reserva, Salon } from '../utils/supabase/client';
 import { supabase } from '../utils/supabase/client';
+import { formatUSD } from '../utils/currency';
+import { WelcomeBanner } from './WelcomeBanner';
+import { ModuleInfoBanner } from './ModuleInfoBanner';
 import type { DashboardAnalyticsReserva } from './DashboardAnalytics';
 import {
   createDefaultDashboardFilters,
@@ -27,12 +30,7 @@ type DashboardProps = {
   perfil: Perfil;
 };
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 2,
-  }).format(value);
+const formatCurrency = (value: number) => formatUSD(value);
 
 const buildDayKey = (date: Date) => {
   const year = date.getFullYear();
@@ -325,7 +323,15 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
 
   return (
     <div className="bo-page">
-      
+      <WelcomeBanner nombre={_perfil?.nombre} />
+
+      <div className="mb-6">
+        <ModuleInfoBanner>
+          Panel de indicadores de las reservas: ingresos, ocupación por salón y distribución por
+          estado. Ajuste el período y los filtros para analizar distintos rangos de tiempo.
+        </ModuleInfoBanner>
+      </div>
+
       <DashboardFilters
         filters={draftFilters}
         salones={salones}

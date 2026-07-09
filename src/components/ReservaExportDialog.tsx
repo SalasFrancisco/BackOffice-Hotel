@@ -247,7 +247,7 @@ export function ReservaExportDialog({
             type="button"
             onClick={() => onOpenChange(false)}
             disabled={loading}
-            className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+            className="w-full rounded-lg border px-4 py-2 text-sm transition-colors bo-btn-cancel disabled:cursor-wait disabled:opacity-60 sm:w-auto"
           >
             Cancelar
           </button>

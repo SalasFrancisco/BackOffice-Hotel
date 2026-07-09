@@ -1,0 +1,42 @@
+-- ============================================================================
+-- Cron del servidor para procesar vencimientos / auto-cancelación de reservas.
+--
+-- Reemplaza al disparo desde el navegador (que sólo corría si alguien tenía la
+-- app abierta). Programa una llamada periódica al Edge Function
+-- `process-reserva-vencimiento`, que corre aunque nadie esté conectado.
+--
+-- REQUISITOS (hacer una sola vez en el proyecto de Supabase):
+--   1) Extensiones (SQL editor):   create extension if not exists pg_cron;
+--                                   create extension if not exists pg_net;
+--   2) En el Edge Function, definir el secreto:
+--        supabase secrets set CRON_SECRET=<un-valor-largo-y-secreto>
+--      (el handler ya acepta el header x-cron-secret con ese valor).
+--   3) Reemplazar abajo <PROJECT_REF>, <ANON_KEY> y <CRON_SECRET> por los reales
+--      y ejecutar este bloque en el SQL editor. (No lo commitees con los valores
+--      reales; corrélo manualmente.)
+--
+-- Para ver / borrar el job:  select * from cron.job;
+--                            select cron.unschedule('reserva-vencimiento');
+-- ============================================================================
+
+-- create extension if not exists pg_cron;
+-- create extension if not exists pg_net;
+
+-- select cron.unschedule('reserva-vencimiento');  -- descomentar si ya existía
+
+-- select
+--   cron.schedule(
+--     'reserva-vencimiento',
+--     '*/10 * * * *',  -- cada 10 minutos
+--     $$
+--       select net.http_post(
+--         url     := 'https://<PROJECT_REF>.supabase.co/functions/v1/process-reserva-vencimiento',
+--         headers := jsonb_build_object(
+--           'Content-Type',  'application/json',
+--           'Authorization', 'Bearer <ANON_KEY>',
+--           'x-cron-secret', '<CRON_SECRET>'
+--         ),
+--         body    := '{}'::jsonb
+--       );
+--     $$
+--   );

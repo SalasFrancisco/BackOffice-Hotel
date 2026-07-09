@@ -18,6 +18,20 @@ const registerReservasPwa = async () => {
     return;
   }
 
+  // En desarrollo no registramos el service worker: cachea los assets (cache-first)
+  // y hace que los cambios no se vean hasta un hard refresh. Además desregistramos
+  // cualquiera que haya quedado instalado de sesiones previas, para que `npm run dev`
+  // muestre siempre lo último. En producción la PWA sigue funcionando igual.
+  if (import.meta.env.DEV) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    } catch (error) {
+      console.error("Error unregistering dev service worker:", error);
+    }
+    return;
+  }
+
   try {
     const serviceWorkerUrl = new URL("./sw.js", window.location.href);
     const serviceWorkerScope = new URL("./", window.location.href);

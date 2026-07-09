@@ -326,7 +326,7 @@
 
             background: #fff;
 
-            padding: 50px 40px 40px;
+            padding: 52px 40px 30px;
 
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 
@@ -380,7 +380,7 @@
 
             font-weight: 700;
 
-            margin-bottom: 25px;
+            margin-bottom: 16px;
 
             color: #000;
 
@@ -392,7 +392,7 @@
 
             gap: 15px;
 
-            margin-bottom: 15px;
+            margin-bottom: 10px;
 
             text-align: left;
 
@@ -400,7 +400,7 @@
 
         .form-group {
 
-            margin-bottom: 15px;
+            margin-bottom: 10px;
 
             text-align: left;
 
@@ -422,7 +422,7 @@
 
             width: 100%;
 
-            padding: 10px 0;
+            padding: 7px 0;
 
             border: none;
 
@@ -456,8 +456,51 @@
 
             display: block;
 
-            margin-bottom: 5px;
+            margin-bottom: 3px;
 
+        }
+
+        /* Títulos de sección dentro del formulario (Contacto / Evento / Servicios). */
+        .form-section-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--primary);
+            margin: 14px 0 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .form-section-title:first-of-type {
+            margin-top: 2px;
+        }
+
+        /* Ayuda y errores por campo (validación en línea). */
+        .field-hint {
+            display: block;
+            font-size: 10.5px;
+            color: #999;
+            margin-top: 4px;
+        }
+
+        .field-error {
+            display: none;
+            font-size: 10.5px;
+            color: #c0392b;
+            margin-top: 4px;
+        }
+
+        .field-error.is-visible {
+            display: block;
+        }
+
+        .form-group.has-error input,
+        .form-group.has-error select,
+        .form-group.has-error .custom-select-trigger {
+            border-bottom-color: #c0392b;
         }
 
         .btn-submit {
@@ -724,6 +767,34 @@
 
         }
 
+        .status-modal-ref {
+            font-family: 'Poppins', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary);
+            margin: 12px 0 0;
+        }
+
+        .status-modal-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            background-color: var(--primary);
+            color: #fff;
+            font-family: 'Poppins', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .status-modal-action:hover {
+            opacity: 0.9;
+        }
+
         .status-modal-card[data-state="loading"] .status-modal-icon {
 
             color: #8a4b08;
@@ -770,7 +841,7 @@
 
             padding: 10px;
 
-            max-height: 260px;
+            max-height: 190px;
 
             overflow-y: auto;
 
@@ -2575,23 +2646,50 @@
 
                     <div class="form-title">Cuidamos los detalles y desarrollamos tu evento a medida</div>
 
-                                        <form id="formTesis">
+                                        <form id="formTesis" novalidate>
+
+                    <!-- Honeypot anti-bot: oculto para humanos; si se completa, el servidor descarta la solicitud. -->
+                    <div class="hp-field" aria-hidden="true" style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;">
+                        <label for="empresa_web">No completar este campo</label>
+                        <input type="text" id="empresa_web" name="empresa_web" tabindex="-1" autocomplete="off">
+                    </div>
+
+                    <h3 class="form-section-title">Datos de contacto</h3>
 
                     <div class="form-row">
 
-                        <div class="form-group half"><label>Nombre / Empresa</label><input type="text" id="nombre" required></div>
+                        <div class="form-group half">
+                            <label for="nombre">Nombre / Empresa</label>
+                            <input type="text" id="nombre" required>
+                            <span class="field-error" id="err_nombre"></span>
+                        </div>
 
-                        <div class="form-group half"><label>Email</label><input type="email" id="email" required></div>
+                        <div class="form-group half">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" required>
+                            <span class="field-error" id="err_email"></span>
+                        </div>
 
                     </div>
 
                     <div class="form-row">
 
-                        <div class="form-group half"><label>Teléfono</label><input type="tel" id="telefono" inputmode="numeric" required></div>
+                        <div class="form-group half">
+                            <label for="telefono">Teléfono</label>
+                            <input type="tel" id="telefono" inputmode="numeric" required>
+                            <span class="field-error" id="err_telefono"></span>
+                        </div>
 
-                        <div class="form-group half"><label>Cantidad de Personas</label><input type="number" id="cantidad" min="10" inputmode="numeric" required></div>
+                        <div class="form-group half">
+                            <label for="cantidad">Cantidad de Personas</label>
+                            <input type="number" id="cantidad" min="10" inputmode="numeric" required>
+                            <span class="field-hint">Mínimo 10 personas.</span>
+                            <span class="field-error" id="err_cantidad"></span>
+                        </div>
 
                     </div>
+
+                    <h3 class="form-section-title">Detalles del evento</h3>
 
                     <div class="form-row">
 
@@ -2615,11 +2713,13 @@
 
                             </div>
 
+                            <span class="field-error" id="err_salon"></span>
+
                         </div>
 
                         <div class="form-group half">
 
-                            <label>Distribución</label>
+                            <label for="distribucion">Distribución</label>
 
                             <select id="distribucion"></select>
 
@@ -2632,16 +2732,17 @@
                     <div class="form-row">
 
                         <div class="form-group half">
-                            <label>Fecha Inicio</label>
+                            <label for="fecha_inicio">Fecha Inicio</label>
                             <div class="date-input-with-picker">
-                                <input type="text" id="fecha_inicio" class="datetime-field" inputmode="numeric" maxlength="8" placeholder="dd/mm/aa" required>
+                                <input type="text" id="fecha_inicio" class="datetime-field" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" required>
                                 <button type="button" id="fecha_inicio_btn" class="date-picker-btn" aria-label="Seleccionar fecha de inicio"><i class="far fa-calendar-alt"></i></button>
                                 <input type="date" id="fecha_inicio_picker" class="native-date-picker" tabindex="-1" aria-hidden="true">
                             </div>
+                            <span class="field-error" id="err_fecha_inicio"></span>
                         </div>
 
                         <div class="form-group half">
-                            <label>Hora Inicio</label>
+                            <label for="hora_inicio">Hora Inicio</label>
                             <select id="hora_inicio" class="datetime-field" required>
                                 <option value="">Seleccione horario</option>
                             </select>
@@ -2652,22 +2753,25 @@
                     <div class="form-row">
 
                         <div class="form-group half">
-                            <label>Fecha Fin</label>
+                            <label for="fecha_fin">Fecha Fin</label>
                             <div class="date-input-with-picker">
-                                <input type="text" id="fecha_fin" class="datetime-field" inputmode="numeric" maxlength="8" placeholder="dd/mm/aa" required>
+                                <input type="text" id="fecha_fin" class="datetime-field" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" required>
                                 <button type="button" id="fecha_fin_btn" class="date-picker-btn" aria-label="Seleccionar fecha de fin"><i class="far fa-calendar-alt"></i></button>
                                 <input type="date" id="fecha_fin_picker" class="native-date-picker" tabindex="-1" aria-hidden="true">
                             </div>
+                            <span class="field-error" id="err_fecha_fin"></span>
                         </div>
 
                         <div class="form-group half">
-                            <label>Hora Fin</label>
+                            <label for="hora_fin">Hora Fin</label>
                             <select id="hora_fin" class="datetime-field" required>
                                 <option value="">Seleccione horario</option>
                             </select>
                         </div>
 
                     </div>
+
+                    <h3 class="form-section-title">Servicios y observaciones</h3>
 
                     <div class="form-group">
 
@@ -2679,7 +2783,7 @@
 
                     </div>
 
-                    <div class="form-group"><label>Observaciones</label><textarea id="observaciones"
+                    <div class="form-group"><label for="observaciones">Observaciones</label><textarea id="observaciones"
 
                             rows="3"></textarea></div>
 
@@ -3483,6 +3587,10 @@
             </div>
             <h4 id="statusModalTitle" class="status-modal-title">Informacion</h4>
             <p id="statusModalMessage" class="status-modal-message"></p>
+            <p id="statusModalRef" class="status-modal-ref" style="display:none;"></p>
+            <a id="statusModalAction" class="status-modal-action" href="#" target="_blank" rel="noopener" style="display:none;">
+                <i class="fas fa-file-pdf"></i> Ver presupuesto
+            </a>
         </div>
     </div>
 
@@ -3607,6 +3715,27 @@
 
         const sanitizePhoneInput = (value) => value.replace(/\D/g, '');
 
+        // Validación en línea: muestra/limpia el error debajo de cada campo.
+        const setFieldError = (fieldKey, message) => {
+            const errEl = document.getElementById('err_' + fieldKey);
+            if (!errEl) return;
+            errEl.textContent = message || '';
+            errEl.classList.toggle('is-visible', Boolean(message));
+            const group = errEl.closest('.form-group');
+            if (group) group.classList.toggle('has-error', Boolean(message));
+        };
+
+        const clearFieldErrors = () => {
+            ['nombre', 'email', 'telefono', 'cantidad', 'salon', 'fecha_inicio', 'fecha_fin']
+                .forEach((key) => setFieldError(key, ''));
+        };
+
+        const failField = (fieldKey, message, focusId) => {
+            setFieldError(fieldKey, message);
+            const target = document.getElementById(focusId || fieldKey);
+            if (target && typeof target.focus === 'function') target.focus();
+        };
+
         const getServiceDescriptionPlainText = (value) => {
             const source = String(value || '').trim();
             if (!source) return '';
@@ -3627,20 +3756,20 @@
         };
 
         const formatShortDateInput = (value) => {
-            const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
+            const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
             if (digits.length <= 2) return digits;
             if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-            return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 6)}`;
+            return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
         };
 
         const parseShortDateToIso = (value) => {
             const normalized = String(value || '').trim();
-            const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+            const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
             if (!match) return null;
 
             const day = Number(match[1]);
             const month = Number(match[2]);
-            const year = 2000 + Number(match[3]);
+            const year = Number(match[3]);
 
             if (!Number.isInteger(day) || !Number.isInteger(month) || month < 1 || month > 12 || day < 1 || day > 31) {
                 return null;
@@ -3738,7 +3867,7 @@
         const isoDateToShortDate = (value) => {
             const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
             if (!match) return '';
-            return `${match[3]}/${match[2]}/${match[1].slice(-2)}`;
+            return `${match[3]}/${match[2]}/${match[1]}`;
         };
 
         const syncDatePickerValue = (textInput, pickerInput) => {
@@ -4047,6 +4176,8 @@
                 hiddenInput.value = salon.id;
 
                 hiddenSalonNombre.value = salon.nombre;
+
+                setFieldError('salon', '');
 
                 updateDistribucionesForSalon(Number(salon.id));
 
@@ -4447,6 +4578,21 @@
 
         const consentimientoPresupuesto = document.getElementById('consentimientoPresupuesto');
 
+        const honeypotInput = document.getElementById('empresa_web');
+
+        // Momento en que quedó disponible el formulario (para el control anti-bot de tiempo mínimo).
+        const formRenderedAt = Date.now();
+
+        // Limpiar el error de un campo cuando el usuario lo corrige.
+        ['nombre', 'email', 'telefono', 'cantidad', 'fecha_inicio', 'fecha_fin'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => setFieldError(id, ''));
+        });
+        const horaInicioEl = document.getElementById('hora_inicio');
+        if (horaInicioEl) horaInicioEl.addEventListener('change', () => setFieldError('fecha_inicio', ''));
+        const horaFinEl = document.getElementById('hora_fin');
+        if (horaFinEl) horaFinEl.addEventListener('change', () => setFieldError('fecha_fin', ''));
+
         const notifyEmbedHeight = () => {
             if (!isEmbeddedReservationForm || window.parent === window) return;
 
@@ -4509,6 +4655,10 @@
 
         const statusModalMessage = document.getElementById('statusModalMessage');
 
+        const statusModalRef = document.getElementById('statusModalRef');
+
+        const statusModalAction = document.getElementById('statusModalAction');
+
         let statusModalLocked = false;
 
         let statusModalAutoCloseTimer = null;
@@ -4552,7 +4702,7 @@
             document.body.classList.remove('status-modal-open');
         };
 
-        const openStatusModal = ({ statusType, text, title, lock, autoCloseMs }) => {
+        const openStatusModal = ({ statusType, text, title, lock, autoCloseMs, refText, actionUrl, actionLabel }) => {
             const normalizedType = STATUS_CONFIG[statusType] ? statusType : 'info';
             const config = STATUS_CONFIG[normalizedType];
 
@@ -4564,6 +4714,24 @@
             statusModalTitle.textContent = title || config.title;
             statusModalMessage.textContent = text || '';
             statusModalClose.style.display = statusModalLocked ? 'none' : 'inline-flex';
+
+            // Referencia de reserva (opcional).
+            if (statusModalRef) {
+                statusModalRef.textContent = refText || '';
+                statusModalRef.style.display = refText ? 'block' : 'none';
+            }
+            // Botón de acción (ej.: ver presupuesto), opcional.
+            if (statusModalAction) {
+                if (actionUrl) {
+                    statusModalAction.href = actionUrl;
+                    if (actionLabel) {
+                        statusModalAction.innerHTML = `<i class="fas fa-file-pdf"></i> ${actionLabel}`;
+                    }
+                    statusModalAction.style.display = 'inline-flex';
+                } else {
+                    statusModalAction.style.display = 'none';
+                }
+            }
 
             statusModalOverlay.classList.add('is-open');
             statusModalOverlay.setAttribute('aria-hidden', 'false');
@@ -4597,6 +4765,9 @@
                 title: options.title,
                 lock: shouldLock,
                 autoCloseMs,
+                refText: options.refText,
+                actionUrl: options.actionUrl,
+                actionLabel: options.actionLabel,
             });
         };
 
@@ -4650,75 +4821,39 @@
 
             const observaciones = document.getElementById('observaciones').value.trim();
 
+            clearFieldErrors();
+
             if (!consentimientoPresupuesto || !consentimientoPresupuesto.checked) {
-
                 setStatus('Debe aceptar el uso de la información para elaborar el presupuesto antes de enviar el formulario.', true);
-
                 return;
-
             }
 
-            if (!hasNonWhitespaceValue(nombre) || !hasNonWhitespaceValue(email) || !telefono) {
+            if (!hasNonWhitespaceValue(nombre)) { failField('nombre', 'Ingrese su nombre o empresa.'); return; }
+            if (!hasNonWhitespaceValue(email)) { failField('email', 'Ingrese un email.'); return; }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { failField('email', 'Ingrese un email válido.'); return; }
+            if (!telefono) { failField('telefono', 'Ingrese un teléfono.'); return; }
+            if (!salonId) { setFieldError('salon', 'Seleccione un salón.'); return; }
 
-                setStatus('Complete nombre, email y telefono del cliente.', true);
-
-                return;
-
-            }
-
-            if (!salonId) {
-
-                setStatus('Seleccione un salon antes de enviar el formulario.', true);
-
-                return;
-
-            }
-
-            if (!fechaInicioRaw || !horaInicio || !fechaFinRaw || !horaFin) {
-
-                setStatus('Complete fecha y horario del evento.', true);
-
-                return;
-
-            }
+            if (!fechaInicioRaw) { failField('fecha_inicio', 'Complete la fecha de inicio.'); return; }
+            if (!horaInicio) { setFieldError('fecha_inicio', 'Seleccione el horario de inicio.'); document.getElementById('hora_inicio').focus(); return; }
+            if (!fechaFinRaw) { failField('fecha_fin', 'Complete la fecha de fin.'); return; }
+            if (!horaFin) { setFieldError('fecha_fin', 'Seleccione el horario de fin.'); document.getElementById('hora_fin').focus(); return; }
 
             const fechaInicioIso = parseShortDateToIso(fechaInicioRaw);
             const fechaFinIso = parseShortDateToIso(fechaFinRaw);
 
-            if (!fechaInicioIso || !fechaFinIso) {
-                setStatus('Use formato de fecha dd/mm/aa para inicio y fin.', true);
-                return;
-            }
+            if (!fechaInicioIso) { failField('fecha_inicio', 'Fecha inválida. Use dd/mm/aaaa.'); return; }
+            if (!fechaFinIso) { failField('fecha_fin', 'Fecha inválida. Use dd/mm/aaaa.'); return; }
 
-            if (!cantidad || cantidad <= 0) {
-
-                setStatus('Ingrese una cantidad valida de personas.', true);
-
-                return;
-
-            }
+            if (!cantidad || cantidad <= 0) { failField('cantidad', 'Ingrese una cantidad válida de personas.'); return; }
+            if (cantidad < 10) { failField('cantidad', 'La cantidad mínima es de 10 personas.'); return; }
 
             const startDate = new Date(`${fechaInicioIso}T${horaInicio}`);
-
             const endDate = new Date(`${fechaFinIso}T${horaFin}`);
-
             const now = new Date();
 
-            if (startDate <= now) {
-
-                setStatus('La fecha y hora de inicio deben ser posteriores al momento actual.', true);
-
-                return;
-
-            }
-
-            if (endDate <= startDate) {
-
-                setStatus('La fecha y hora de fin deben ser posteriores al inicio.', true);
-
-                return;
-
-            }
+            if (startDate <= now) { failField('fecha_inicio', 'La fecha y hora de inicio deben ser futuras.'); return; }
+            if (endDate <= startDate) { failField('fecha_fin', 'La fecha y hora de fin deben ser posteriores al inicio.'); return; }
 
             const serviciosSeleccionados = [];
             const selectedServicioCheckboxes = Array.from(serviciosContainer.querySelectorAll('input[type="checkbox"]:checked'));
@@ -4786,7 +4921,12 @@
 
                 observaciones: observaciones || null,
 
-                servicios: serviciosSeleccionados
+                servicios: serviciosSeleccionados,
+
+                // Anti-bot: honeypot (debe ir vacío) + tiempo transcurrido desde que cargó el form.
+                hp: honeypotInput ? honeypotInput.value : '',
+
+                elapsed_ms: Date.now() - formRenderedAt
 
             };
 
@@ -4848,16 +4988,27 @@
 
                 const downloadStarted = await downloadGeneratedPresupuesto(data);
 
+                const reservaRef = data?.reservaId ? `Reserva N.º ${data.reservaId}` : '';
+                const presupuestoUrl = [data?.accessUrl, data?.shortUrl, data?.downloadUrl]
+                    .find((value) => typeof value === 'string' && value.trim());
+
                 if (downloadStarted) {
-                    setStatus(`${PUBLIC_RESERVA_SUCCESS_MESSAGE} El presupuesto se esta descargando.`, 'success', {
+                    setStatus(`${PUBLIC_RESERVA_SUCCESS_MESSAGE} El presupuesto se está descargando y también le llegará por email.`, 'success', {
                         title: 'Consulta enviada',
                         autoCloseMs: 0,
+                        refText: reservaRef,
+                        actionUrl: presupuestoUrl,
+                        actionLabel: 'Ver presupuesto',
                     });
                 } else {
                     const detalleBackend = data?.pdfError || data?.uploadError || data?.signedError || '';
                     const detalle = detalleBackend ? ` Detalle: ${detalleBackend}` : '';
-                    setStatus(`${PUBLIC_RESERVA_SUCCESS_MESSAGE} No se pudo descargar el presupuesto automaticamente.${detalle}`, 'error', {
-                        title: 'Consulta enviada con incidencia',
+                    setStatus(`${PUBLIC_RESERVA_SUCCESS_MESSAGE} No se pudo descargar el presupuesto automáticamente, pero puede abrirlo con el botón o revisarlo en su email.${detalle}`, presupuestoUrl ? 'success' : 'error', {
+                        title: 'Consulta enviada',
+                        autoCloseMs: 0,
+                        refText: reservaRef,
+                        actionUrl: presupuestoUrl,
+                        actionLabel: 'Ver presupuesto',
                     });
                     console.warn('Respuesta de public-reserva sin archivo descargable:', data);
                 }

@@ -12,6 +12,23 @@ import {
 const getEstadoColor = (estado: Reserva['estado']) =>
   RESERVA_ESTADO_COLORS[estado] || '#B0B7C3';
 
+// Elige texto claro u oscuro según la luminancia del color del estado, para
+// que la etiqueta de la barra sea legible tanto sobre el amarillo como sobre
+// los tonos oscuros.
+const getReadableTextColor = (hexColor: string) => {
+  const hex = hexColor.replace('#', '');
+  if (hex.length !== 6) return '#ffffff';
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.6 ? '#1f2937' : '#ffffff';
+};
+
+// Cantidad máxima de reservas (carriles) que se dibujan como barra en cada
+// celda del día; el resto se agrupa en un contador "+N" que abre el detalle.
+const MAX_VISIBLE_LANES = 4;
+
 type ReservaCalendarProps = {
   perfil: Perfil;
   refreshKey?: number;
@@ -47,6 +64,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   const [selectedSalonDay, setSelectedSalonDay] = useState<SelectedSalonDay | null>(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
 
   const calendarDays = useMemo(() => {
@@ -124,6 +142,118 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
       .filter((item) => item.salonGroups.length > 0)
   ), [calendarDays, reservas, salones, currentDate]);
 
+  const yearOptions = useMemo(() => {
+    const base = new Date().getFullYear();
+    const years: number[] = [];
+    for (let year = base - 5; year <= base + 5; year += 1) {
+      years.push(year);
+    }
+    // Aseguramos que el año navegado siempre esté disponible como opción.
+    const selected = currentDate.getFullYear();
+    if (!years.includes(selected)) {
+      years.push(selected);
+      years.sort((a, b) => a - b);
+    }
+    return years;
+  }, [currentDate]);
+
+  const resolveSalonName = (reserva: Reserva) =>
+    reserva.salon?.nombre
+    || salones.find((salon) => Number(salon.id) === Number(reserva.id_salon))?.nombre
+    || 'Sin salón';
+
+  // Semanas del mes (filas de 7 días, con relleno al inicio/fin).
+  const weeks = useMemo(() => {
+    const chunks: Array<Array<number | null>> = [];
+    for (let i = 0; i < calendarDays.length; i += 7) {
+      chunks.push(calendarDays.slice(i, i + 7));
+    }
+    const last = chunks[chunks.length - 1];
+    if (last) {
+      while (last.length < 7) last.push(null);
+    }
+    return chunks;
+  }, [calendarDays]);
+
+  // Posición (semana/columna) de cada día del mes para ubicar las barras.
+  const dayPositions = useMemo(() => {
+    const map = new Map<number, { week: number; col: number }>();
+    calendarDays.forEach((day, index) => {
+      if (day !== null) {
+        map.set(day, { week: Math.floor(index / 7), col: index % 7 });
+      }
+    });
+    return map;
+  }, [calendarDays]);
+
+  // Convierte cada reserva del mes en una "barra" continua con su carril
+  // (lane) para que las reservas superpuestas se apilen sin pisarse.
+  const monthBars = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthStart = new Date(year, month, 1, 0, 0, 0).getTime();
+    const monthEndExclusive = new Date(year, month + 1, 1, 0, 0, 0).getTime();
+
+    const ranges = reservas
+      .map((reserva) => {
+        const inicio = new Date(reserva.fecha_inicio).getTime();
+        const fin = new Date(reserva.fecha_fin).getTime();
+        if (Number.isNaN(inicio) || Number.isNaN(fin)) return null;
+        if (!(inicio < monthEndExclusive && fin > monthStart)) return null;
+
+        const continuesLeft = inicio < monthStart;
+        const continuesRight = fin > monthEndExclusive;
+        const startDay = continuesLeft ? 1 : new Date(inicio).getDate();
+        const endDay = fin >= monthEndExclusive
+          ? daysInMonth
+          : Math.max(startDay, new Date(fin - 1).getDate());
+
+        return { reserva, startDay, endDay, continuesLeft, continuesRight };
+      })
+      .filter((range): range is NonNullable<typeof range> => range !== null)
+      .sort(
+        (a, b) =>
+          a.startDay - b.startDay
+          || b.endDay - a.endDay
+          || Number(a.reserva.id) - Number(b.reserva.id),
+      );
+
+    const laneEnds: number[] = [];
+    return ranges.map((range) => {
+      let lane = laneEnds.findIndex((end) => end < range.startDay);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(range.endDay);
+      } else {
+        laneEnds[lane] = range.endDay;
+      }
+      const color = getEstadoColor(range.reserva.estado);
+      return {
+        ...range,
+        lane,
+        // Texto blanco uniforme en todas las barras (antes variaba entre blanco y
+        // negro según el color): la legibilidad se asegura con un leve oscurecido
+        // del fondo y una sombra de texto, definidos en CSS (.bo-cal-bar).
+        color,
+        textColor: '#ffffff',
+        salonName: resolveSalonName(range.reserva),
+      };
+    });
+  }, [reservas, salones, currentDate]);
+
+  // Reservas que quedan fuera de los carriles visibles, por día, para el "+N".
+  const hiddenCountByDay = useMemo(() => {
+    const map = new Map<number, number>();
+    monthBars.forEach((bar) => {
+      if (bar.lane < MAX_VISIBLE_LANES) return;
+      for (let day = bar.startDay; day <= bar.endDay; day += 1) {
+        map.set(day, (map.get(day) || 0) + 1);
+      }
+    });
+    return map;
+  }, [monthBars]);
+
   const loadCalendarData = async () => {
     try {
       setLoading(true);
@@ -180,7 +310,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   }, [currentDate, filterSalon, filterEstado, refreshKey]);
 
   useEffect(() => {
-    if (!selectedSalonDay && !selectedReserva) return;
+    if (!selectedSalonDay && !selectedReserva && selectedDay === null) return;
 
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -188,7 +318,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
     return () => {
       document.body.style.overflow = originalOverflow;
     };
-  }, [selectedSalonDay, selectedReserva]);
+  }, [selectedSalonDay, selectedReserva, selectedDay]);
 
   const previousMonth = () => {
     setCurrentDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1));
@@ -210,15 +340,24 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
     });
   };
 
+  const handleDayClick = (day: number) => {
+    setSelectedDay(day);
+  };
+
   const handleModalClose = () => {
     setShowModal(false);
     setSelectedReserva(null);
     setSelectedSalonDay(null);
+    setSelectedDay(null);
     void loadCalendarData();
   };
 
   const handleSalonDayModalClose = () => {
     setSelectedSalonDay(null);
+  };
+
+  const handleDayModalClose = () => {
+    setSelectedDay(null);
   };
 
   const formatAgendaDate = (day: number) =>
@@ -236,18 +375,48 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
       year: 'numeric',
     }).format(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
 
+  const todayRef = new Date();
+  const isCurrentMonth =
+    todayRef.getFullYear() === currentDate.getFullYear() &&
+    todayRef.getMonth() === currentDate.getMonth();
+  const todayDayNumber = todayRef.getDate();
+  const startOfToday = new Date(todayRef.getFullYear(), todayRef.getMonth(), todayRef.getDate());
+  const isPastDay = (day: number) =>
+    new Date(currentDate.getFullYear(), currentDate.getMonth(), day) < startOfToday;
+
   return (
     <div className="bo-card-compact bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
       <div className="bo-section-header mb-6">
         <h3 className="text-gray-900">Calendario de Reservas</h3>
-        <div className="flex gap-2">
-          <button type="button" onClick={previousMonth} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Mes anterior">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={previousMonth} className="bo-cal-nav-btn p-2 rounded-lg" aria-label="Mes anterior">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-            <span>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
-          </div>
-          <button type="button" onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg" aria-label="Mes siguiente">
+          <select
+            value={currentDate.getMonth()}
+            onChange={(event) =>
+              setCurrentDate((date) => new Date(date.getFullYear(), Number(event.target.value), 1))
+            }
+            className="bo-select px-3 py-2 border border-gray-300 rounded-lg bg-white"
+            aria-label="Mes"
+          >
+            {monthNames.map((name, index) => (
+              <option key={name} value={index}>{name}</option>
+            ))}
+          </select>
+          <select
+            value={currentDate.getFullYear()}
+            onChange={(event) =>
+              setCurrentDate((date) => new Date(Number(event.target.value), date.getMonth(), 1))
+            }
+            className="bo-select px-3 py-2 border border-gray-300 rounded-lg bg-white"
+            aria-label="Año"
+          >
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          <button type="button" onClick={nextMonth} className="bo-cal-nav-btn p-2 rounded-lg" aria-label="Mes siguiente">
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
@@ -257,7 +426,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         <select
           value={filterSalon || ''}
           onChange={(event) => setFilterSalon(event.target.value ? Number(event.target.value) : null)}
-          className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
+          className="bo-select px-4 py-2 border border-gray-300 rounded-lg bg-white"
         >
           <option value="">Todos los salones</option>
           {salones.map((salon) => (
@@ -268,7 +437,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         <select
           value={filterEstado || ''}
           onChange={(event) => setFilterEstado(event.target.value || null)}
-          className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
+          className="bo-select px-4 py-2 border border-gray-300 rounded-lg bg-white"
         >
           <option value="">Todos los estados</option>
           {getReservaEstados()
@@ -300,104 +469,87 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         </div>
       )}
 
-      <div className="bo-calendar-desktop border border-gray-200 rounded-lg overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-gray-200">
+      <div className="bo-cal">
+        <div className="bo-cal-head">
           {dayNames.map((day) => (
-            <div key={day} className="p-3 text-center text-gray-700 bg-gray-50">
+            <div key={day} className="bo-cal-head-cell">
               {day}
             </div>
           ))}
         </div>
 
-        <div className="bo-calendar-month-grid grid grid-cols-7 relative">
-          {calendarDays.map((day, index) => {
-            const salonGroups = day ? getSalonGroupsForDay(day) : [];
-            return (
-              <div
-                key={`${day || 'empty'}-${index}`}
-                className={`bo-calendar-month-day p-2 border-b border-r border-gray-200 ${
-                  !day ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
-                }`}
-              >
-                {day && (
-                  <>
-                    <div className="text-sm text-gray-900 mb-2">{day}</div>
-                    <div className="bo-calendar-month-day-content space-y-1 pr-1">
-                      {salonGroups.map((group) => (
-                        <button
-                          key={`${group.salonId}-${day}`}
-                          type="button"
-                          onClick={() => handleSalonDayClick(day, group)}
-                          className="w-full text-left px-3 py-2 rounded border border-gray-200 bg-gray-100 hover:bg-gray-200 transition-colors"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs text-gray-700 font-medium truncate">
-                              {group.salonName}
-                            </span>
-                            <span className="flex-shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
-                              {group.reservas.length} res.
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="bo-calendar-mobile">
-        {agendaDays.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-600">
-            {loading ? 'Cargando reservas...' : 'No hay reservas para los filtros seleccionados.'}
-          </div>
-        ) : (
-          <div className="bo-stack">
-            {agendaDays.map(({ day, salonGroups }) => {
-              const totalReservas = salonGroups.reduce((total, group) => total + group.reservas.length, 0);
-
-              return (
-                <div key={day} className="rounded-lg border border-gray-200 bg-white p-3">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h4 className="text-sm text-gray-900" style={{ textTransform: 'capitalize' }}>
-                      {formatAgendaDate(day)}
-                    </h4>
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">
-                      {totalReservas} reserva(s)
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {salonGroups.map((group) => (
-                      <button
-                        key={`${group.salonId}-agenda-${day}`}
-                        type="button"
-                        onClick={() => handleSalonDayClick(day, group)}
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm text-gray-900">
-                              {group.salonName}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-600">
-                              {group.reservas.length} reserva(s) asignada(s)
-                            </p>
-                          </div>
-                          <span className="mt-1 flex-shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">
-                            {group.reservas.length} res.
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+        {weeks.map((week, weekIndex) => {
+          const weekDayNumbers = week.filter((day): day is number => day !== null);
+          const firstDay = weekDayNumbers[0];
+          const lastDay = weekDayNumbers[weekDayNumbers.length - 1];
+          const weekBars = (firstDay === undefined || lastDay === undefined)
+            ? []
+            : monthBars.filter(
+                (bar) =>
+                  bar.lane < MAX_VISIBLE_LANES
+                  && bar.startDay <= lastDay
+                  && bar.endDay >= firstDay,
               );
-            })}
-          </div>
-        )}
+
+          return (
+            <div key={`week-${weekIndex}`} className="bo-cal-week">
+              {week.map((day, colIndex) => {
+                const hidden = day ? hiddenCountByDay.get(day) || 0 : 0;
+                return (
+                  <div
+                    key={`${day || 'empty'}-${weekIndex}-${colIndex}`}
+                    className={`bo-cal-day${day ? '' : ' bo-cal-day--empty'}${day && isPastDay(day) ? ' is-past' : ''}${day && isCurrentMonth && day === todayDayNumber ? ' is-today' : ''}`}
+                  >
+                    {day && <span className="bo-cal-day-num">{day}</span>}
+                    {hidden > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDayClick(day as number)}
+                        className="bo-cal-more"
+                      >
+                        +{hidden} más
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div className="bo-cal-bars">
+                {weekBars.map((bar) => {
+                  const segStartDay = Math.max(bar.startDay, firstDay as number);
+                  const segEndDay = Math.min(bar.endDay, lastDay as number);
+                  const startCol = dayPositions.get(segStartDay)?.col ?? 0;
+                  const endCol = dayPositions.get(segEndDay)?.col ?? startCol;
+                  const span = Math.max(1, endCol - startCol + 1);
+                  const roundLeft = segStartDay === bar.startDay && !bar.continuesLeft;
+                  const roundRight = segEndDay === bar.endDay && !bar.continuesRight;
+
+                  return (
+                    <button
+                      key={`bar-${bar.reserva.id}-w${weekIndex}`}
+                      type="button"
+                      onClick={() => handleReservaClick(bar.reserva)}
+                      title={`#${bar.reserva.id} · ${bar.reserva.cliente_nombre || 'Sin nombre'} · ${bar.reserva.estado}`}
+                      className={`bo-cal-bar${roundLeft ? ' is-start' : ''}${roundRight ? ' is-end' : ''}`}
+                      style={{
+                        left: `calc(${startCol} / 7 * 100% + 4px)`,
+                        width: `calc(${span} / 7 * 100% - 8px)`,
+                        top: `calc(var(--bo-cal-head-h) + ${bar.lane} * var(--bo-cal-lane-h))`,
+                        backgroundColor: bar.color,
+                        color: bar.textColor,
+                      }}
+                    >
+                      <span className="bo-cal-bar-label">{bar.salonName}</span>
+                      {bar.reserva.cliente_nombre && (
+                        <span className="bo-cal-bar-sub">· {bar.reserva.cliente_nombre}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-6 flex gap-4 flex-wrap">
@@ -465,6 +617,68 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
               <button
                 type="button"
                 onClick={handleSalonDayModalClose}
+                className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800 transition-colors hover:bg-gray-300"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {selectedDay !== null && createPortal(
+        <div className={`bo-calendar-reservas-overlay${showModal ? ' is-backgrounded' : ''}`}>
+          <div className="bo-calendar-reservas-modal bo-dialog-content w-full max-w-2xl rounded-lg bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-5">
+              <div className="min-w-0">
+                <h3 className="text-gray-900">Reservas del día</h3>
+                <p className="mt-1 text-sm text-gray-600" style={{ textTransform: 'capitalize' }}>
+                  {formatSalonDayModalDate(selectedDay)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDayModalClose}
+                className="rounded-lg p-2 transition-colors hover:bg-gray-100"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 p-5">
+              {getReservasForDay(selectedDay).map((reserva) => (
+                <button
+                  key={`day-modal-${reserva.id}`}
+                  type="button"
+                  onClick={() => handleReservaClick(reserva)}
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition-colors hover:bg-gray-100"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-gray-900">
+                        #{reserva.id} - {reserva.cliente_nombre || 'Sin nombre'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-600">
+                        {resolveSalonName(reserva)} · {formatAgendaTime(reserva.fecha_inicio)} a {formatAgendaTime(reserva.fecha_fin)}
+                      </p>
+                    </div>
+                    <span
+                      className="flex-shrink-0 rounded-full px-3 py-1 text-xs"
+                      style={{ backgroundColor: getEstadoColor(reserva.estado), color: getReadableTextColor(getEstadoColor(reserva.estado)) }}
+                    >
+                      {reserva.estado}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex justify-end border-t border-gray-200 bg-gray-50 p-5">
+              <button
+                type="button"
+                onClick={handleDayModalClose}
                 className="rounded-lg bg-gray-200 px-4 py-2 text-gray-800 transition-colors hover:bg-gray-300"
               >
                 Cerrar

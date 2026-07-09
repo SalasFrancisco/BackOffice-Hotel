@@ -1,25 +1,117 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../utils/supabase/client';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Lock,
+  LogIn,
+  Mail,
+  Maximize2,
+  Send,
+} from 'lucide-react';
 import { hasNonWhitespaceValue } from '../utils/formSanitizers';
 import { ThemeToggle } from './ThemeToggle';
+import { AuthBackgroundDecor } from './AuthBackgroundDecor';
 
 type LoginProps = {
   onLoginSuccess: () => void;
+  onLoginStart?: () => void;
+  onLoginError?: () => void;
   authMessage?: { type: 'success' | 'error'; text: string } | null;
+  // Si es false, la pantalla arranca en el formulario en vez de la portada
+  // "Comenzar". Se usa al volver de un logout: el portal de despedida revela el
+  // formulario (pantalla distinta) en vez de otra portada casi idéntica, que
+  // producía un parpadeo por superposición.
+  initialShowCover?: boolean;
 };
 
-export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
+// Convierte errores técnicos (sobre todo de red) en mensajes claros en usted.
+const getFriendlyAuthError = (err: any, fallback: string) => {
+  const raw = String(err?.message || err?.error_description || '');
+
+  if (
+    err?.name === 'AuthRetryableFetchError'
+    || /failed to fetch|networkerror|network request failed|load failed/i.test(raw)
+  ) {
+    return 'No se pudo conectar con el servidor. Verifique su conexión a internet e intente nuevamente.';
+  }
+
+  if (/invalid login credentials/i.test(raw)) {
+    return 'Email o contraseña incorrectos.';
+  }
+
+  return raw || fallback;
+};
+
+export function Login({
+  onLoginSuccess,
+  onLoginStart,
+  onLoginError,
+  authMessage = null,
+  initialShowCover = true,
+}: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const [recoverySent, setRecoverySent] = useState(false);
+  // Cara visible del flip: false = login, true = recuperación de contraseña.
+  const [flipped, setFlipped] = useState(false);
+  // Si llegamos acá con un mensaje (p. ej. "sesión cerrada por inactividad"),
+  // mostramos la pantalla directo en vez de tapar el aviso con la portada.
+  const [coverVisible, setCoverVisible] = useState(() => initialShowCover && !authMessage);
+  const [isOpening, setIsOpening] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const visibleAuthMessage = authMessage?.text === error ? null : authMessage;
+
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const recoveryEmailInputRef = useRef<HTMLInputElement>(null);
+
+  // Al quedar visible el formulario (portada cerrada), llevamos el foco al campo
+  // de email correspondiente para cerrar el ciclo de accesibilidad de teclado.
+  useEffect(() => {
+    if (coverVisible || isOpening) return;
+    const target = flipped ? recoveryEmailInputRef.current : emailInputRef.current;
+    // Un frame de margen para no competir con la animación de flip.
+    const raf = window.requestAnimationFrame(() => target?.focus());
+    return () => window.cancelAnimationFrame(raf);
+  }, [coverVisible, isOpening, flipped]);
+
+  const goToRecovery = () => setFlipped(true);
+
+  const backToLogin = () => {
+    setFlipped(false);
+    setRecoverySent(false);
+    setRecoveryMessage('');
+    setRecoveryEmail('');
+  };
+
+  const handleBeginLogin = () => {
+    setIsClosing(false);
+    setIsOpening(true);
+  };
+
+  const reopenCover = () => {
+    setCoverVisible(true);
+    setIsOpening(false);
+    setIsClosing(true);
+  };
+
+  const handleCoverAnimationEnd = () => {
+    if (isOpening) {
+      setIsOpening(false);
+      setCoverVisible(false);
+    }
+    if (isClosing) {
+      setIsClosing(false);
+    }
+  };
 
   const parseServerResponse = async (response: Response) => {
     const text = await response.text();
@@ -99,6 +191,10 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
     }
 
     try {
+      // Avisamos que es un login interactivo real para que se muestre el
+      // portal de bienvenida (y no en re-emisiones de sesión al cambiar de pestaña).
+      onLoginStart?.();
+
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: emailSanitizado,
         password,
@@ -130,7 +226,8 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
       onLoginSuccess();
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Error al iniciar sesión');
+      onLoginError?.();
+      setError(getFriendlyAuthError(err, 'Error al iniciar sesión'));
     } finally {
       setLoading(false);
     }
@@ -159,178 +256,240 @@ export function Login({ onLoginSuccess, authMessage = null }: LoginProps) {
 
       setRecoverySent(true);
       setRecoveryMessage(
-        'Si el email corresponde a un usuario válido, vas a recibir un enlace para cambiar la contraseña.',
+        'Si el email corresponde a un usuario válido, recibirá un enlace para cambiar la contraseña.',
       );
     } catch (err: any) {
       console.error('Recovery error:', err);
-      setRecoveryMessage(err.message || 'Error al enviar el email de recuperación');
+      setRecoverySent(false);
+      setRecoveryMessage(getFriendlyAuthError(err, 'Error al enviar el email de recuperación'));
     } finally {
       setLoading(false);
     }
   };
 
-  if (showRecovery) {
-    return (
-      <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className="absolute right-4 top-4">
-          <ThemeToggle />
-        </div>
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-lg shadow-xl p-8">
-            <div className="text-center mb-8">
-              <h1 className="text-gray-900 mb-2">Recuperar Contraseña</h1>
-              <p className="text-gray-600">Ingresa tu email para recibir instrucciones</p>
-            </div>
-
-            {recoveryMessage && (
-              <div
-                className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
-                  recoverySent
-                    ? 'bg-green-50 border border-green-200'
-                    : 'bg-red-50 border border-red-200'
-                }`}
-              >
-                {recoverySent ? (
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                )}
-                <p className={`text-sm ${recoverySent ? 'text-green-800' : 'text-red-800'}`}>
-                  {recoveryMessage}
-                </p>
-              </div>
-            )}
-
-            {!recoverySent && (
-              <form onSubmit={handlePasswordRecovery} className="space-y-4">
-                <div>
-                  <label htmlFor="recovery-email" className="block text-sm text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    id="recovery-email"
-                    type="email"
-                    value={recoveryEmail}
-                    onChange={(e) => setRecoveryEmail(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="tu@email.com"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? 'Enviando...' : 'Enviar Email de Recuperación'}
-                </button>
-              </form>
-            )}
-
-            <button
-              onClick={() => {
-                setShowRecovery(false);
-                setRecoverySent(false);
-                setRecoveryMessage('');
-                setRecoveryEmail('');
-              }}
-              className="w-full mt-4 text-sm text-gray-600 hover:text-gray-900"
-            >
-              Volver al inicio de sesión
+  const renderWelcomeCover = () =>
+    coverVisible && (
+      <div className="bo-auth-cover-perspective-full">
+        <div
+          className={`bo-auth-cover-full${isOpening ? ' is-opening' : ''}${
+            isClosing ? ' is-closing' : ''
+          }`}
+          onAnimationEnd={handleCoverAnimationEnd}
+        >
+          <AuthBackgroundDecor />
+          <div className="bo-auth-cover-full-content">
+            <img
+              src="/QuintoCente.png"
+              alt="Hotel Quinto Centenario"
+              className="bo-auth-cover-full-logo"
+            />
+            <h2 className="bo-auth-cover-full-heading">Sistema de Gestión de Reservas</h2>
+            <p className="bo-auth-cover-full-description">Hotel Quinto Centenario</p>
+            <button type="button" onClick={handleBeginLogin} className="bo-auth-cover-cta">
+              Comenzar
+              <LogIn className="bo-auth-submit-icon" />
             </button>
           </div>
         </div>
       </div>
     );
-  }
 
-  return (
-    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
+  const loginFace = (
+    <div className="bo-auth-card p-8">
+      <div className="text-center mb-8">
+        <h2 className="text-gray-900 mb-2">Hotel Back-Office</h2>
+        <p className="text-gray-600">Ingrese sus credenciales para continuar</p>
       </div>
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-xl p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-gray-900 mb-2">Hotel Back-Office</h1>
-            <p className="text-gray-600">Sistema de Gestión de Reservas</p>
+
+      {visibleAuthMessage && (
+        <div
+          className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
+            visibleAuthMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+          }`}
+        >
+          {visibleAuthMessage.type === 'success' ? (
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          )}
+          <p
+            className={`text-sm ${
+              visibleAuthMessage.type === 'success' ? 'text-green-800' : 'text-red-800'
+            }`}
+          >
+            {visibleAuthMessage.text}
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-6">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleLogin} className="space-y-4">
+        <div>
+          <label htmlFor="email" className="bo-auth-label">
+            Email
+          </label>
+          <div className="bo-auth-input-group">
+            <Mail className="bo-auth-input-icon" />
+            <input
+              ref={emailInputRef}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="bo-auth-input w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="correo@ejemplo.com"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="password" className="bo-auth-label">
+            Contraseña
+          </label>
+          <div className="bo-auth-input-group">
+            <Lock className="bo-auth-input-icon" />
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="bo-auth-input bo-auth-input--toggle w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="bo-auth-input-toggle"
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" disabled={loading} className="bo-auth-submit">
+          <LogIn className="bo-auth-submit-icon" />
+          {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+        </button>
+      </form>
+
+      <button type="button" onClick={goToRecovery} className="bo-auth-link">
+        ¿Olvidó su contraseña?
+      </button>
+    </div>
+  );
+
+  const recoveryFace = (
+    <div className="bo-auth-card p-8">
+      <div className="text-center mb-8">
+        <h2 className="text-gray-900 mb-2">Recuperar Contraseña</h2>
+        <p className="text-gray-600">Ingrese su email para recibir instrucciones</p>
+      </div>
+
+      {recoveryMessage && (
+        <div
+          className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
+            recoverySent
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+          }`}
+        >
+          {recoverySent ? (
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          )}
+          <p className={`text-sm ${recoverySent ? 'text-green-800' : 'text-red-800'}`}>
+            {recoveryMessage}
+          </p>
+        </div>
+      )}
+
+      {!recoverySent && (
+        <form onSubmit={handlePasswordRecovery} className="space-y-4">
+          <div>
+            <label htmlFor="recovery-email" className="bo-auth-label">
+              Email
+            </label>
+            <div className="bo-auth-input-group">
+              <Mail className="bo-auth-input-icon" />
+              <input
+                ref={recoveryEmailInputRef}
+                id="recovery-email"
+                type="email"
+                value={recoveryEmail}
+                onChange={(e) => setRecoveryEmail(e.target.value)}
+                required
+                className="bo-auth-input w-full px-4 py-2 border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="correo@ejemplo.com"
+              />
+            </div>
           </div>
 
-          {visibleAuthMessage && (
-            <div
-              className={`flex items-start gap-2 p-3 rounded-lg mb-6 ${
-                visibleAuthMessage.type === 'success'
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-red-50 border border-red-200'
-              }`}
-            >
-              {visibleAuthMessage.type === 'success' ? (
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              )}
-              <p className={`text-sm ${visibleAuthMessage.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-                {visibleAuthMessage.text}
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-6">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="tu@email.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm text-gray-700 mb-1">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="••••••••"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-            </button>
-          </form>
-
-          <button
-            onClick={() => setShowRecovery(true)}
-            className="w-full mt-4 text-sm text-gray-600 hover:text-gray-900"
-          >
-            ¿Olvidaste tu contraseña?
+          <button type="submit" disabled={loading} className="bo-auth-submit">
+            <Send className="bo-auth-submit-icon" />
+            {loading ? 'Enviando...' : 'Enviar Email de Recuperación'}
           </button>
+        </form>
+      )}
+
+      <button type="button" onClick={backToLogin} className="bo-auth-link">
+        Volver al inicio de sesión
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="bo-auth-shell">
+      <div className="bo-auth-brand-panel">
+        <AuthBackgroundDecor />
+        <button
+          type="button"
+          onClick={reopenCover}
+          className="bo-auth-expand-btn"
+          aria-label="Ver presentación en pantalla completa"
+          title="Ver presentación"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+        <div className="bo-auth-brand-content">
+          <img src="/QuintoCente.png" alt="Hotel Quinto Centenario" className="bo-auth-brand-logo" />
+          <span className="bo-auth-brand-eyebrow">Back-Office</span>
+          <h1 className="bo-auth-brand-heading">Sistema de Gestión de Reservas</h1>
+          <p className="bo-auth-brand-description">
+            {flipped
+              ? 'Recupere el acceso a su cuenta para seguir gestionando las reservas del hotel.'
+              : 'Acceda al sistema de gestión de reservas del Hotel Quinto Centenario.'}
+          </p>
         </div>
       </div>
+      <div className="bo-auth-form-panel">
+        <div className="bo-auth-form-panel-toggle">
+          <ThemeToggle />
+        </div>
+
+        <div className="bo-auth-flip-perspective bo-page-transition w-full max-w-md">
+          <div className={`bo-auth-flip${flipped ? ' is-flipped' : ''}`}>
+            <div className="bo-auth-flip-face bo-auth-flip-front" aria-hidden={flipped}>
+              {loginFace}
+            </div>
+            <div className="bo-auth-flip-face bo-auth-flip-back" aria-hidden={!flipped}>
+              {recoveryFace}
+            </div>
+          </div>
+        </div>
+      </div>
+      {renderWelcomeCover()}
     </div>
   );
 }

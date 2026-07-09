@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase, Perfil, CategoriaServicio, Servicio } from '../utils/supabase/client';
-import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Package, FolderOpen, ListOrdered, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { formatUSD } from '../utils/currency';
+import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Coffee, Package, FolderOpen, FolderPlus, PackagePlus, ListOrdered, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ModuleInfoBanner } from './ModuleInfoBanner';
 import { RichTextDescription } from './RichTextDescription';
 import { ServiceDescriptionEditor } from './ServiceDescriptionEditor';
 import {
@@ -33,6 +35,8 @@ type ServiciosAdicionalesProps = {
 export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
   const [categorias, setCategorias] = useState<CategoriaServicio[]>([]);
   const [servicios, setServicios] = useState<Servicio[]>([]);
+  const [expandedServicios, setExpandedServicios] = useState<Set<number>>(new Set());
+  const [expandedCategorias, setExpandedCategorias] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -69,6 +73,11 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
     open: false,
     servicioId: null,
   });
+  const [confirmReactivateServicio, setConfirmReactivateServicio] = useState<{ open: boolean; servicioId: number | null }>({
+    open: false,
+    servicioId: null,
+  });
+  const [serviceStatusFilter, setServiceStatusFilter] = useState<'activos' | 'inactivos'>('activos');
 
   useEffect(() => {
     loadData();
@@ -93,17 +102,14 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
       if (categoriasError) throw categoriasError;
       setCategorias(sortServiceCategories(categoriasData || []));
 
-      // Load servicios
+      // Load servicios (todos: activos e inactivos; el filtro se hace en la UI)
       const { data: serviciosData, error: serviciosError } = await supabase
         .from('servicios')
         .select('*, categoria:categorias_servicios(*)')
-        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (serviciosError) throw serviciosError;
-      setServicios(sortServicesByName(
-        (serviciosData || []).filter((servicio) => servicio.activo !== false),
-      ));
+      setServicios(sortServicesByName(serviciosData || []));
 
     } catch (err: any) {
       console.error('Error loading data:', err);
@@ -435,21 +441,50 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         .eq('id', servicioId);
 
       if (error) throw error;
-      
-      setMessage({ type: 'success', text: 'Servicio deshabilitado correctamente' });
-      setServicios((prev) => prev.filter((servicio) => servicio.id !== servicioId));
+
+      setMessage({ type: 'success', text: 'Servicio desactivado correctamente' });
       setConfirmDeleteServicio({ open: false, servicioId: null });
       void loadData();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
-      console.error('Error deleting servicio:', err);
+      console.error('Error deactivating servicio:', err);
       setMessage({ type: 'error', text: err.message });
       setConfirmDeleteServicio({ open: false, servicioId: null });
     }
   };
 
+  const handleReactivateServicio = (id: number) => {
+    setConfirmReactivateServicio({ open: true, servicioId: id });
+  };
+
+  const confirmReactivateServicioAction = async () => {
+    if (!confirmReactivateServicio.servicioId) return;
+    const servicioId = confirmReactivateServicio.servicioId;
+
+    try {
+      const { error } = await supabase
+        .from('servicios')
+        .update({ activo: true })
+        .eq('id', servicioId);
+
+      if (error) throw error;
+
+      setMessage({ type: 'success', text: 'Servicio reactivado correctamente' });
+      setConfirmReactivateServicio({ open: false, servicioId: null });
+      void loadData();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: any) {
+      console.error('Error reactivating servicio:', err);
+      setMessage({ type: 'error', text: err.message });
+      setConfirmReactivateServicio({ open: false, servicioId: null });
+    }
+  };
+
   const getServiciosByCategoria = (categoriaId: number) => {
-    return servicios.filter((servicio) => servicio.id_categoria === categoriaId && servicio.activo !== false);
+    return servicios.filter((servicio) =>
+      servicio.id_categoria === categoriaId &&
+      (serviceStatusFilter === 'activos' ? servicio.activo !== false : servicio.activo === false),
+    );
   };
 
   if (loading) {
@@ -467,9 +502,23 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
   return (
     <div className="bo-page">
+      <div className="mb-4">
+        <h2 className="bo-module-title text-gray-900">
+          <span className="bo-module-title-icon">
+            <Coffee className="h-6 w-6" />
+          </span>
+          Servicios Adicionales
+        </h2>
+        <p className="bo-module-subtitle">Gestión de categorías y servicios adicionales para reservas</p>
+      </div>
+
       <div className="mb-6">
-        <h2 className="text-gray-900 mb-2">Servicios Adicionales</h2>
-        <p className="text-gray-600">Gestión de categorías y servicios adicionales para reservas</p>
+        <ModuleInfoBanner>
+          Organice el catálogo de servicios adicionales en categorías (catering, ambientación, etc.)
+          con sus precios. Con el badge de estado puede desactivar o reactivar un servicio; use el
+          filtro Activos / Inactivos para verlos. Las categorías, en cambio, se eliminan de forma
+          definitiva.
+        </ModuleInfoBanner>
       </div>
 
       {message && (
@@ -493,34 +542,77 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
 
       {/* Action buttons */}
       {isAdmin && (
-        <div className="bo-page-actions flex gap-3 mb-6">
+        <div className="bo-page-actions bo-page-actions--pair flex gap-3 mb-6">
           <button
             onClick={handleCreateCategoria}
-            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title="Nueva categoría"
+            aria-label="Nueva categoría"
           >
-            <Plus className="w-5 h-5" />
-            Nueva Categoría
+            <FolderPlus className="w-5 h-5" />
+            <span className="bo-btn-label">Nueva Categoría</span>
           </button>
           <button
             onClick={handleCreateServicio}
-            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="bo-action-button flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            title="Nuevo servicio"
+            aria-label="Nuevo servicio"
           >
-            <Plus className="w-5 h-5" />
-            Nuevo Servicio
+            <PackagePlus className="w-5 h-5" />
+            <span className="bo-btn-label">Nuevo Servicio</span>
           </button>
           <button
             onClick={handleOpenOrdenCategoriasDialog}
-            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title="Ordenar categorías"
+            aria-label="Ordenar categorías"
           >
             <ListOrdered className="w-5 h-5" />
-            Ordenar categorias
+            <span className="bo-btn-label">Ordenar categorias</span>
           </button>
+        </div>
+      )}
+
+      {/* Filtro por estado de los servicios */}
+      {isAdmin && (
+        <div className="mb-6">
+          <div className="bo-status-segment" role="tablist" aria-label="Filtrar servicios por estado">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={serviceStatusFilter === 'activos'}
+              onClick={() => setServiceStatusFilter('activos')}
+              className={`bo-status-segment-btn${serviceStatusFilter === 'activos' ? ' is-active' : ''}`}
+            >
+              Servicios activos
+              <span className="bo-status-segment-count">
+                {servicios.filter((s) => s.activo !== false).length}
+              </span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={serviceStatusFilter === 'inactivos'}
+              onClick={() => setServiceStatusFilter('inactivos')}
+              className={`bo-status-segment-btn${serviceStatusFilter === 'inactivos' ? ' is-active' : ''}`}
+            >
+              Servicios inactivos
+              <span className="bo-status-segment-count">
+                {servicios.filter((s) => s.activo === false).length}
+              </span>
+            </button>
+          </div>
         </div>
       )}
 
       {/* Categorías y Servicios */}
       <div className="space-y-6">
-        {categorias.length === 0 ? (
+        {serviceStatusFilter === 'inactivos' && servicios.filter((s) => s.activo === false).length === 0 ? (
+          <div className="bo-card-compact bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600">No hay servicios inactivos</p>
+          </div>
+        ) : categorias.length === 0 ? (
           <div className="bo-card-compact bg-white rounded-lg border border-gray-200 p-8 text-center">
             <FolderOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-600 mb-4">No hay categorías creadas</p>
@@ -536,25 +628,48 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         ) : (
           categorias.map(categoria => {
             const serviciosCategoria = getServiciosByCategoria(categoria.id);
-            
+            // En la vista de inactivos ocultamos las categorías que no tienen
+            // ningún servicio inactivo, para no llenar de tarjetas vacías.
+            if (serviceStatusFilter === 'inactivos' && serviciosCategoria.length === 0) {
+              return null;
+            }
+            const isCategoriaOpen = expandedCategorias.has(Number(categoria.id));
+            const toggleCategoria = () =>
+              setExpandedCategorias((prev) => {
+                const next = new Set(prev);
+                if (next.has(Number(categoria.id))) {
+                  next.delete(Number(categoria.id));
+                } else {
+                  next.add(Number(categoria.id));
+                }
+                return next;
+              });
+
             return (
               <div key={categoria.id} className="bo-admin-card bg-white rounded-lg border border-gray-200 overflow-hidden">
                 {/* Categoria Header */}
                 <div className="bo-section-header bg-gray-50 p-4 border-b border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <FolderOpen className="w-5 h-5 text-blue-600" />
-                    <div>
+                  <button
+                    type="button"
+                    onClick={toggleCategoria}
+                    className="bo-cat-toggle"
+                    aria-expanded={isCategoriaOpen}
+                  >
+                    <ChevronDown className="w-5 h-5 bo-cat-toggle-chevron" />
+                    <FolderOpen className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0">
                       <h3 className="text-gray-900">{categoria.nombre}</h3>
                       <p className="mt-1 text-xs font-medium text-blue-700">
                         {getServiceIncomeCategoryLabel(categoria.categoria_superior)}
+                        <span className="text-gray-500"> · {serviciosCategoria.length} servicio(s)</span>
                       </p>
                       {categoria.descripcion && (
                         <p className="text-sm text-gray-600">{categoria.descripcion}</p>
                       )}
                     </div>
-                  </div>
+                  </button>
                   {isAdmin && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleEditCategoria(categoria)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -573,7 +688,9 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                   )}
                 </div>
 
-                {/* Servicios de la categoría */}
+                {/* Servicios de la categoría (acordeón) */}
+                <div className={`bo-accordion-body${isCategoriaOpen ? ' is-open' : ''}`}>
+                  <div className="bo-accordion-inner">
                 <div className="p-4">
                   {serviciosCategoria.length === 0 ? (
                     <p className="text-gray-500 text-sm text-center py-4">
@@ -581,7 +698,20 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                     </p>
                   ) : (
                     <div className="bo-service-grid gap-3">
-                      {serviciosCategoria.map(servicio => (
+                      {serviciosCategoria.map(servicio => {
+                        const isExpanded = expandedServicios.has(Number(servicio.id));
+                        const toggleExpanded = () =>
+                          setExpandedServicios((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(Number(servicio.id))) {
+                              next.delete(Number(servicio.id));
+                            } else {
+                              next.add(Number(servicio.id));
+                            }
+                            return next;
+                          });
+
+                        return (
                         <div
                           key={servicio.id}
                           className="bo-service-card border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors"
@@ -601,26 +731,62 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                                   <Edit className="w-3 h-3" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteServicio(servicio.id)}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Eliminar"
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={servicio.activo !== false}
+                                  onClick={() =>
+                                    servicio.activo !== false
+                                      ? handleDeleteServicio(servicio.id)
+                                      : handleReactivateServicio(servicio.id)
+                                  }
+                                  className={`bo-status-toggle ${
+                                    servicio.activo !== false ? 'is-activo' : 'is-inactivo'
+                                  }`}
+                                  title={
+                                    servicio.activo !== false
+                                      ? 'Desactivar servicio'
+                                      : 'Reactivar servicio'
+                                  }
                                 >
-                                  <Trash2 className="w-3 h-3" />
+                                  <span className="bo-status-toggle-track">
+                                    <span className="bo-status-toggle-knob" />
+                                  </span>
+                                  <span className="bo-status-toggle-label">
+                                    {servicio.activo !== false ? 'Activo' : 'Inactivo'}
+                                  </span>
                                 </button>
                               </div>
                             )}
                           </div>
+                          <p className="bo-service-price text-blue-600">{formatUSD(servicio.precio)}</p>
                           {servicio.descripcion && (
-                            <RichTextDescription
-                              value={servicio.descripcion}
-                              className="text-xs text-gray-600 mb-2 leading-relaxed"
-                            />
+                            <>
+                              <button
+                                type="button"
+                                onClick={toggleExpanded}
+                                className="bo-accordion-toggle"
+                                aria-expanded={isExpanded}
+                              >
+                                {isExpanded ? 'Ver menos' : 'Ver más información'}
+                                <ChevronDown className="w-4 h-4 bo-accordion-toggle-icon" />
+                              </button>
+                              <div className={`bo-accordion-body${isExpanded ? ' is-open' : ''}`}>
+                                <div className="bo-accordion-inner">
+                                  <RichTextDescription
+                                    value={servicio.descripcion}
+                                    className="text-xs text-gray-600 pt-2 leading-relaxed"
+                                  />
+                                </div>
+                              </div>
+                            </>
                           )}
-                          <p className="bo-service-price text-blue-600">${servicio.precio.toLocaleString('es-AR')}</p>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
+                </div>
+                  </div>
                 </div>
               </div>
             );
@@ -649,7 +815,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
           <div className="space-y-4 p-2">
             <div className="space-y-4">
               <p className="text-sm text-gray-600">
-                Agarrá y arrastrá cada categoría para reordenarla. Al final, guardá los cambios.
+                Arrastre y suelte cada categoría para reordenarla. Al final, guarde los cambios.
               </p>
 
               {categoriasOrdenDraft.length === 0 ? (
@@ -717,7 +883,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
                   setDraggingCategoriaId(null);
                 }}
                 disabled={savingOrdenCategorias}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                className="px-4 py-2 bo-btn-cancel rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -797,7 +963,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               <button
                 type="button"
                 onClick={() => setShowCategoriaDialog(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bo-btn-cancel rounded-lg transition-colors"
               >
                 Cancelar
               </button>
@@ -889,7 +1055,7 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
               <button
                 type="button"
                 onClick={() => setShowServicioDialog(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bo-btn-cancel rounded-lg transition-colors"
               >
                 Cancelar
               </button>
@@ -918,10 +1084,21 @@ export function ServiciosAdicionales({ perfil }: ServiciosAdicionalesProps) {
         open={confirmDeleteServicio.open}
         onOpenChange={(open) => setConfirmDeleteServicio({ open, servicioId: null })}
         onConfirm={confirmDeleteServicioAction}
-        title="Eliminar Servicio"
-        description="¿Está seguro de eliminar este servicio? Esta acción no se puede deshacer."
-        confirmText="Eliminar"
+        title="Desactivar servicio"
+        description="¿Está seguro de desactivar este servicio? Dejará de ofrecerse en nuevas reservas. Podrá reactivarlo más adelante desde la pestaña Servicios inactivos."
+        confirmText="Desactivar"
         cancelText="Cancelar"
+      />
+
+      <ConfirmDialog
+        open={confirmReactivateServicio.open}
+        onOpenChange={(open) => setConfirmReactivateServicio({ open, servicioId: null })}
+        onConfirm={confirmReactivateServicioAction}
+        title="Reactivar servicio"
+        description="¿Desea reactivar este servicio? Volverá a estar disponible para sumarse a las reservas."
+        confirmText="Reactivar"
+        cancelText="Cancelar"
+        variant="default"
       />
     </div>
   );

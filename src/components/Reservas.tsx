@@ -1,9 +1,13 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
 import { projectId } from '../utils/supabase/info';
-import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, Send, History, Download, MoreHorizontal } from 'lucide-react';
+import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, CalendarCheck, Mail, History, FileSpreadsheet, MoreHorizontal, Clock, DollarSign, XCircle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ReservaCalendar } from './ReservaCalendar';
+import { WelcomeBanner } from './WelcomeBanner';
+import { ModuleInfoBanner } from './ModuleInfoBanner';
 import { ConfirmDialog } from './ConfirmDialog';
 import { InfoDialog } from './InfoDialog';
 import { ReservaEstadoGestionDialog } from './ReservaEstadoGestionDialog';
@@ -19,7 +23,9 @@ import {
   type ReservaExportFilters,
 } from './ReservaExportDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
+import { formatUSD } from '../utils/currency';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
+import { createInternalNotification } from '../utils/notifications';
 import {
   getReservaConflictIds,
   getReservaConflictText,
@@ -46,6 +52,27 @@ type ReservasProps = {
 
 type SortKey = 'id' | 'cliente' | 'registradaPor' | 'salon' | 'fechaInicio' | 'fechaFin' | 'estado' | 'montoInicial' | 'monto';
 type SortDirection = 'asc' | 'desc';
+
+// Elige texto claro u oscuro según la luminancia del color de fondo, para que
+// el estado se lea bien sobre su color sólido (ej. amarillo → texto oscuro).
+const getReadableTextColor = (hexColor: string) => {
+  const hex = hexColor.replace('#', '');
+  if (hex.length !== 6) return '#ffffff';
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.6 ? '#1f2937' : '#ffffff';
+};
+
+// Ícono acorde a cada estado, para los KPI del encabezado del módulo.
+const ESTADO_KPI_ICONS: Record<string, LucideIcon> = {
+  'Pendiente validación': Clock,
+  'Validado': CheckCircle,
+  'Confirmado': CalendarCheck,
+  'Pagado': DollarSign,
+  'Cancelado': XCircle,
+};
 
 const getReservaServiciosTotal = (reserva: Reserva) =>
   (reserva.reserva_servicios || []).reduce((acc, item) => {
@@ -154,6 +181,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [creadorNamesById, setCreadorNamesById] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
+  const [prioritizeWarnings, setPrioritizeWarnings] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [editingReserva, setEditingReserva] = useState<Reserva | null>(null);
   const [isReservaFormDirty, setIsReservaFormDirty] = useState(false);
@@ -165,6 +193,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('fechaInicio');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  // Fila de reserva expandida en la lista mobile (acordeón compacto).
+  const [expandedReservaId, setExpandedReservaId] = useState<number | null>(null);
   const [reservasActivas, setReservasActivas] = useState<ReservaConflictComparable[]>([]);
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string[] } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
@@ -487,6 +517,16 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       setCalendarRefreshKey((key) => key + 1);
       setMessage({ type: 'success', text: 'Reserva eliminada correctamente' });
       setTimeout(() => setMessage(null), 3000);
+      // Aviso interno (solo para administradores). Sin reservaId porque la
+      // reserva ya no existe (evita una notificación que apunte a nada).
+      void createInternalNotification({
+        tipo: 'RESERVA_ELIMINADA',
+        titulo: 'Reserva eliminada',
+        mensaje: `${perfil.nombre || 'Un usuario'} eliminó la reserva #${reserva.id}${reserva.cliente_nombre ? ` de ${reserva.cliente_nombre}` : ''}.`,
+        reservaId: null,
+        audiencia: 'admin',
+        actor: { user_id: perfil.user_id, nombre: perfil.nombre },
+      });
     } catch (err: any) {
       console.error('Error deleting reserva:', err);
       setMessage({
@@ -548,6 +588,14 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       setEstadoHistoryRefreshKey((key) => key + 1);
       if (hayCambioEstado) {
         setCalendarRefreshKey((key) => key + 1);
+        void createInternalNotification({
+          tipo: 'ESTADO_CAMBIADO',
+          titulo: 'Cambio de estado',
+          mensaje: `${perfil.nombre || 'Un usuario'} cambió la reserva #${estadoDialogReserva.id}${estadoDialogReserva.cliente_nombre ? ` de ${estadoDialogReserva.cliente_nombre}` : ''} de ${estadoAnterior} a ${estadoSeleccionado}.`,
+          reservaId: estadoDialogReserva.id,
+          audiencia: 'todos',
+          actor: { user_id: perfil.user_id, nombre: perfil.nombre },
+        });
       }
       await loadReservas();
       setEstadoDialogFeedback({
@@ -581,33 +629,43 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
   const renderEstadoControl = (reserva: Reserva, mobile = false) => {
     const isChanging = changingEstadoId === reserva.id;
+    const estadoColor = RESERVA_ESTADO_COLORS[reserva.estado];
+    const estadoTextColor = getReadableTextColor(estadoColor);
 
     return (
       <button
         type="button"
         onClick={() => openEstadoDialog(reserva)}
         disabled={isChanging}
-        className={`group inline-flex min-h-10 items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-70 ${
+        className={`bo-estado-btn group inline-flex min-h-10 items-center justify-between gap-3 rounded-lg border-2 px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-70 ${
           mobile ? 'w-full' : 'min-w-[190px] max-w-[230px]'
         }`}
-        style={{ borderColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+        style={{
+          borderColor: estadoColor,
+          backgroundColor: estadoColor,
+          color: estadoTextColor,
+        }}
         title="Gestionar estado, notas e historial"
         aria-label={`Gestionar estado e historial de la reserva ${reserva.id}`}
       >
-        <span className="inline-flex min-w-0 items-center gap-2">
-          <span
-            className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-            style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
-          />
-          <span className="truncate">{reserva.estado}</span>
-        </span>
+        <span className="truncate">{reserva.estado}</span>
         {isChanging ? (
-          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-gray-500" />
+          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
         ) : (
-          <History className="h-4 w-4 flex-shrink-0 text-gray-500 transition-transform group-hover:scale-110" />
+          <History className="h-4 w-4 flex-shrink-0 transition-transform group-hover:scale-110" />
         )}
       </button>
     );
+  };
+
+  const getReservaWarningMessages = (reserva: Reserva): string[] => {
+    const conflictIds = getReservaConflictIds(reserva, reservasActivas);
+    return [
+      getReservaCapacityWarningText(reserva),
+      getReservaConflictText(conflictIds),
+      getReservaExpirationWarningText(reserva),
+      getReservaStartWarningText(reserva),
+    ].filter((message): message is string => Boolean(message));
   };
 
   const filteredReservas = reservas.filter(r => {
@@ -668,6 +726,25 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
     return sortDirection === 'asc' ? compareResult : -compareResult;
   });
+
+  const reservasConAdvertencia = filteredReservas.filter(
+    (reserva) => getReservaWarningMessages(reserva).length > 0,
+  );
+  const advertenciasCount = reservasConAdvertencia.length;
+  const warningIdSet = new Set(reservasConAdvertencia.map((reserva) => reserva.id));
+
+  // Al activar el KPI, las reservas con advertencia se muestran primero
+  // (orden estable: mantiene el orden actual dentro de cada grupo).
+  const displayedReservas = prioritizeWarnings
+    ? [...sortedReservas].sort(
+        (a, b) => (warningIdSet.has(a.id) ? 0 : 1) - (warningIdSet.has(b.id) ? 0 : 1),
+      )
+    : sortedReservas;
+
+  const estadoCounts = reservas.reduce<Record<string, number>>((acc, reserva) => {
+    acc[reserva.estado] = (acc[reserva.estado] || 0) + 1;
+    return acc;
+  }, {});
 
   const handleExportReservas = async (filters: ReservaExportFilters) => {
     const headers = [
@@ -856,7 +933,9 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
   const renderSortIcon = (column: SortKey) => {
     if (sortBy !== column) {
-      return null;
+      // Ícono atenuado en todas las columnas ordenables, para que se note
+      // que se puede ordenar por cualquiera de ellas.
+      return <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400" />;
     }
 
     return sortDirection === 'asc'
@@ -906,9 +985,18 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
 
   return (
     <div className="bo-page">
-      <div className="bo-page-header mb-6">
-        <h2 className="text-gray-900">Gestión de Reservas</h2>
-        <div className="bo-page-actions flex items-center justify-end gap-2">
+      {perfil.rol === 'OPERADOR' && <WelcomeBanner nombre={perfil.nombre} />}
+      <div className="bo-page-header mb-4">
+        <div className="bo-module-heading">
+          <h2 className="bo-module-title text-gray-900">
+            <span className="bo-module-title-icon">
+              <CalendarCheck className="h-6 w-6" />
+            </span>
+            Gestión de Reservas
+          </h2>
+          <p className="bo-module-subtitle">Alta, seguimiento y estados de las reservas de salones</p>
+        </div>
+        <div className="bo-page-actions bo-page-actions--pair flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => {
@@ -916,21 +1004,33 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
               setExportDialogOpen(true);
             }}
             disabled={loading}
-            className="bo-mobile-full inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bo-csv-btn bo-mobile-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             title="Exportar reservas en formato CSV compatible con Excel y Power BI"
+            aria-label="Exportar a CSV / Excel"
           >
-            <Download className="h-5 w-5" />
-            Exportar CSV
+            <FileSpreadsheet className="h-5 w-5" />
+            <span className="bo-btn-label">Exportar CSV</span>
           </button>
           <button
             type="button"
             onClick={handleCreateNew}
-            className="bo-action-button flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="bo-action-button flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title="Nueva reserva"
+            aria-label="Nueva reserva"
           >
             <Plus className="w-5 h-5" />
-            Nueva Reserva
+            <span className="bo-btn-label">Nueva Reserva</span>
           </button>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <ModuleInfoBanner>
+          Cree y edite reservas de los salones y controle su estado (pendiente de validación,
+          validado, confirmado, pagado o cancelado). Los KPI y el calendario ofrecen una vista
+          rápida del período, y las advertencias le avisan sobre conflictos de agenda, exceso de
+          capacidad o vencimientos próximos.
+        </ModuleInfoBanner>
       </div>
 
       {message && (
@@ -959,28 +1059,27 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         </div>
       )}
 
-      {showDialog && !editingReserva && (
-        <div className="bo-inline-form-card sticky top-0 z-20 mb-6 bg-white rounded-lg shadow border border-gray-200">
-          <div className="bo-inline-form-header flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold">Nueva Reserva</h3>
-            <button
-              onClick={() => handleDialogClose()}
-              className="text-gray-500 hover:text-gray-700 transition-colors"
-              title="Cerrar"
+      <div className="bo-estado-kpis">
+        {getReservaEstados().map((estado) => {
+          const color = RESERVA_ESTADO_COLORS[estado];
+          const EstadoIcon = ESTADO_KPI_ICONS[estado] || FileText;
+          return (
+            <div
+              key={estado}
+              className="bo-estado-kpi"
+              style={{ ['--kpi-color']: color } as React.CSSProperties}
             >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="bo-inline-form-body p-6">
-            <ReservaForm
-              reserva={editingReserva}
-              onClose={handleDialogClose}
-              onDirtyChange={setIsReservaFormDirty}
-            />
-          </div>
-        </div>
-      )}
+              <span className="bo-estado-kpi-icon" aria-hidden="true">
+                <EstadoIcon className="h-[1.05rem] w-[1.05rem]" />
+              </span>
+              <div className="bo-estado-kpi-body">
+                <div className="bo-estado-kpi-count">{estadoCounts[estado] || 0}</div>
+                <div className="bo-estado-kpi-label">{estado}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       <ReservaCalendar perfil={perfil} refreshKey={calendarRefreshKey} />
 
@@ -993,14 +1092,14 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             placeholder="Buscar por cliente, salón, registrada por, estado o ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="bo-search-input w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         <select
           value={filterEstado || ''}
           onChange={(e) => setFilterEstado(e.target.value || null)}
-          className="px-4 py-2 border border-gray-300 rounded-lg bg-white"
+          className="bo-select px-4 py-2 border border-gray-300 rounded-lg bg-white"
         >
           <option value="">Todos los estados</option>
           {getReservaEstados().map((estado) => (
@@ -1008,6 +1107,35 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           ))}
         </select>
       </div>
+
+      {advertenciasCount > 0 && (
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setPrioritizeWarnings((prev) => !prev)}
+            className={`bo-warning-kpi${prioritizeWarnings ? ' is-active' : ''}`}
+            aria-pressed={prioritizeWarnings}
+            title={
+              prioritizeWarnings
+                ? 'Restablecer el orden de la tabla'
+                : 'Mostrar primero las reservas con advertencia'
+            }
+          >
+            <span className="bo-warning-kpi-icon">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            <span className="bo-warning-kpi-body">
+              <span className="bo-warning-kpi-main">
+                <span className="bo-warning-kpi-count">{advertenciasCount}</span>
+                <span className="bo-warning-kpi-label">
+                  {advertenciasCount === 1 ? 'reserva con advertencia' : 'reservas con advertencia'}
+                </span>
+              </span>
+              <span className="bo-warning-kpi-hint">Clic para ver</span>
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bo-reservas-table bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -1105,7 +1233,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                     {renderSortIcon('monto')}
                   </button>
                 </th>
-                <th className="px-6 py-3 text-right text-xs text-gray-600 uppercase tracking-wider">Acciones</th>
+                <th className="px-6 py-3 text-center text-xs text-gray-600 uppercase tracking-wider">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -1122,19 +1250,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   </td>
                 </tr>
               ) : (
-                sortedReservas.map(reserva => {
+                displayedReservas.map(reserva => {
                   const reservaRowId = Number(reserva.id);
-                  const capacityWarningText = getReservaCapacityWarningText(reserva);
-                  const conflictIds = getReservaConflictIds(reserva, reservasActivas);
-                  const conflictText = getReservaConflictText(conflictIds);
-                  const expirationWarningText = getReservaExpirationWarningText(reserva);
-                  const startWarningText = getReservaStartWarningText(reserva);
-                  const warningMessages = [capacityWarningText, conflictText, expirationWarningText, startWarningText].filter(
-                    (message): message is string => Boolean(message),
-                  );
+                  const warningMessages = getReservaWarningMessages(reserva);
                   const warningText = warningMessages.join(' ');
                   const hasWarning = warningMessages.length > 0;
-                  const isEditingCurrentRow = showDialog && editingReserva?.id === reserva.id;
                   const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
                   const clienteEmail = reserva.cliente_email?.trim() || '';
                   const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
@@ -1155,10 +1275,29 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                       <tr
                         id={`reserva-row-${reservaRowId}`}
                         className={`transition-colors duration-700 ${
-                          isHighlightedRow ? 'bg-yellow-200 hover:bg-yellow-200' : 'hover:bg-gray-50'
+                          isHighlightedRow
+                            ? 'bg-yellow-200 hover:bg-yellow-200'
+                            : hasWarning
+                              ? 'bo-row-warning'
+                              : 'hover:bg-gray-50'
                         }`}
                       >
-                        <td className="px-6 py-4 text-sm text-gray-900">#{reserva.id}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            {hasWarning && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenWarningDialog(reserva, warningMessages)}
+                                className="bo-warning-chip inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                                title={warningText}
+                                aria-label={warningText}
+                              >
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <span>#{reserva.id}</span>
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {reserva.cliente_nombre || 'Sin nombre'}
                         </td>
@@ -1172,39 +1311,23 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                         <td className="px-6 py-4 text-right text-sm text-gray-900">
                           {montoInicial === null
                             ? 'Sin presupuesto'
-                            : `$${montoInicial.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`}
+                            : formatUSD(montoInicial)}
                         </td>
                         <td className="px-6 py-4 text-right text-sm text-gray-900">
                           <div className="text-right">
                             <div className="font-medium text-gray-900">
-                              ${totalReserva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                              {formatUSD(totalReserva)}
                             </div>
                             {totalServicios > 0 && (
                               <div className="mt-1 text-xs text-gray-500">
-                                Salón: ${(Number(reserva.monto) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                                {' '}+ Servicios: ${totalServicios.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                                Salón: {formatUSD(Number(reserva.monto) || 0)}
+                                {' '}+ Servicios: {formatUSD(totalServicios)}
                               </div>
                             )}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="bo-reserva-actions-wide flex items-center justify-end gap-2">
-                            {hasWarning && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenWarningDialog(reserva, warningMessages)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                                title="Ver advertencias"
-                                aria-label={warningText}
-                                style={{
-                                  color: CAPACITY_WARNING_STYLES.textColor,
-                                  borderColor: CAPACITY_WARNING_STYLES.borderColor,
-                                  backgroundColor: CAPACITY_WARNING_STYLES.backgroundColor,
-                                }}
-                              >
-                                <AlertTriangle className="w-4 h-4" />
-                              </button>
-                            )}
                             {reserva.presupuesto_url && (
                               <>
                                 <button
@@ -1228,7 +1351,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                                   {sendingPresupuestoId === reserva.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
-                                    <Send className={ACTION_ICON_BASE} />
+                                    <Mail className={ACTION_ICON_BASE} />
                                   )}
                                 </button>
                               </>
@@ -1268,15 +1391,6 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-56">
-                                {hasWarning && (
-                                  <DropdownMenuItem
-                                    onSelect={() => handleOpenWarningDialog(reserva, warningMessages)}
-                                    className="text-yellow-700"
-                                  >
-                                    <AlertTriangle />
-                                    Ver advertencias
-                                  </DropdownMenuItem>
-                                )}
                                 {reserva.presupuesto_url && (
                                   <>
                                     <DropdownMenuItem
@@ -1298,7 +1412,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                                       {sendingPresupuestoId === reserva.id ? (
                                         <Loader2 className="animate-spin" />
                                       ) : (
-                                        <Send />
+                                        <Mail />
                                       )}
                                       {sendingPresupuestoId === reserva.id ? 'Enviando presupuesto...' : 'Enviar presupuesto'}
                                     </DropdownMenuItem>
@@ -1330,31 +1444,6 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                           </div>
                         </td>
                       </tr>
-                      {isEditingCurrentRow && (
-                        <tr className="bg-gray-50/70">
-                          <td colSpan={10} className="px-6 py-5">
-                            <div className="rounded-lg bg-white">
-                              <div className="flex items-center justify-between px-5 py-3">
-                                <h3 className="text-base font-semibold text-gray-900">Editar Reserva #{reserva.id}</h3>
-                                <button
-                                  onClick={() => handleDialogClose()}
-                                  className="text-gray-500 hover:text-gray-700 transition-colors"
-                                  title="Cerrar"
-                                >
-                                  <X className="w-5 h-5" />
-                                </button>
-                              </div>
-                              <div className="p-5">
-                                <ReservaForm
-                                  reserva={editingReserva}
-                                  onClose={handleDialogClose}
-                                  onDirtyChange={setIsReservaFormDirty}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </Fragment>
                   );
                 })
@@ -1374,19 +1463,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             No se encontraron reservas
           </div>
         ) : (
-          sortedReservas.map((reserva) => {
+          displayedReservas.map((reserva) => {
             const reservaRowId = Number(reserva.id);
-            const capacityWarningText = getReservaCapacityWarningText(reserva);
-            const conflictIds = getReservaConflictIds(reserva, reservasActivas);
-            const conflictText = getReservaConflictText(conflictIds);
-            const expirationWarningText = getReservaExpirationWarningText(reserva);
-            const startWarningText = getReservaStartWarningText(reserva);
-            const warningMessages = [capacityWarningText, conflictText, expirationWarningText, startWarningText].filter(
-              (message): message is string => Boolean(message),
-            );
+            const warningMessages = getReservaWarningMessages(reserva);
             const warningText = warningMessages.join(' ');
             const hasWarning = warningMessages.length > 0;
-            const isEditingCurrentRow = showDialog && editingReserva?.id === reserva.id;
             const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
             const clienteEmail = reserva.cliente_email?.trim() || '';
             const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
@@ -1401,72 +1482,93 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                 : !clienteEmail
                   ? 'La reserva no tiene email asociado'
                   : `Enviar presupuesto a ${clienteEmail}`;
+            const isExpanded = expandedReservaId === reserva.id;
+            const shortFechaInicio = new Date(reserva.fecha_inicio).toLocaleDateString('es-AR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: '2-digit',
+            });
 
             return (
               <div
                 key={`mobile-${reserva.id}`}
                 id={`reserva-card-${reservaRowId}`}
-                className={`bo-reserva-card rounded-lg border bg-white p-4 shadow-sm transition-colors duration-700 ${
-                  isHighlightedRow ? 'bo-reserva-card-highlight' : 'border-gray-200'
+                className={`bo-reserva-row-card${isExpanded ? ' is-expanded' : ''}${
+                  isHighlightedRow ? ' bo-reserva-card-highlight' : ''
                 }`}
               >
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-500">Reserva #{reserva.id}</p>
-                    <h3 className="truncate text-gray-900">
-                      {reserva.cliente_nombre || 'Sin nombre'}
-                    </h3>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setExpandedReservaId((prev) => (prev === reserva.id ? null : reserva.id))}
+                  className="bo-reserva-row"
+                  aria-expanded={isExpanded}
+                >
                   <span
-                    className="inline-block px-3 py-1 rounded-full text-xs text-white"
+                    className="bo-reserva-row-strip"
+                    style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
+                    aria-hidden="true"
+                  />
+                  <span className="bo-reserva-row-main">
+                    <span className="bo-reserva-row-top">
+                      <span className="bo-reserva-row-id">#{reserva.id}</span>
+                      <span className="bo-reserva-row-name">{reserva.cliente_nombre || 'Sin nombre'}</span>
+                      {hasWarning && <AlertTriangle className="bo-reserva-row-warn" aria-hidden="true" />}
+                    </span>
+                    <span className="bo-reserva-row-sub">
+                      {reserva.salon?.nombre || 'Sin salón'} · {shortFechaInicio} · {formatUSD(totalReserva)}
+                    </span>
+                  </span>
+                  <span
+                    className="bo-reserva-row-badge"
                     style={{ backgroundColor: RESERVA_ESTADO_COLORS[reserva.estado] }}
                   >
                     {reserva.estado}
                   </span>
-                </div>
+                  <ChevronDown className="bo-reserva-row-chevron" aria-hidden="true" />
+                </button>
 
-                <div className="mb-4">
-                  <p className="mb-2 text-sm text-gray-500">Estado</p>
+                {isExpanded && (
+                <div className="bo-reserva-row-detail">
+                <div className="bo-reserva-card-estado">
+                  <span className="bo-reserva-card-estado-label">Estado</span>
                   {renderEstadoControl(reserva, true)}
                 </div>
 
-                <div className="bo-mobile-card-grid text-sm">
-                  <div>
-                    <p className="text-gray-500">Registrada por</p>
-                    <p className="text-gray-900">{registradaPor}</p>
+                <dl className="bo-reserva-card-info">
+                  <div className="bo-reserva-card-row">
+                    <dt>Registrada por</dt>
+                    <dd>{registradaPor}</dd>
                   </div>
-                  <div>
-                    <p className="text-gray-500">Salón</p>
-                    <p className="text-gray-900">{reserva.salon?.nombre || 'Sin salón'}</p>
+                  <div className="bo-reserva-card-row">
+                    <dt>Salón</dt>
+                    <dd>{reserva.salon?.nombre || 'Sin salón'}</dd>
                   </div>
-                  <div>
-                    <p className="text-gray-500">Inicio</p>
-                    <p className="text-gray-900">{formatDate(reserva.fecha_inicio)}</p>
+                  <div className="bo-reserva-card-row">
+                    <dt>Inicio</dt>
+                    <dd>{formatDate(reserva.fecha_inicio)}</dd>
                   </div>
-                  <div>
-                    <p className="text-gray-500">Fin</p>
-                    <p className="text-gray-900">{formatDate(reserva.fecha_fin)}</p>
+                  <div className="bo-reserva-card-row">
+                    <dt>Fin</dt>
+                    <dd>{formatDate(reserva.fecha_fin)}</dd>
                   </div>
-                  <div>
-                    <p className="text-gray-500">Monto inicial</p>
-                    <p className="font-medium text-gray-900">
-                      {montoInicial === null
-                        ? 'Sin presupuesto'
-                        : `$${montoInicial.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`}
-                    </p>
+                  <div className="bo-reserva-card-row">
+                    <dt>Monto inicial</dt>
+                    <dd>
+                      {montoInicial === null ? 'Sin presupuesto' : formatUSD(montoInicial)}
+                    </dd>
                   </div>
-                  <div>
-                    <p className="text-gray-500">Monto total</p>
-                    <p className="font-medium text-gray-900">
-                      ${totalReserva.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    </p>
-                    {totalServicios > 0 && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        Incluye ${totalServicios.toLocaleString('es-AR', { minimumFractionDigits: 2 })} en servicios
-                      </p>
-                    )}
+                  <div className="bo-reserva-card-row">
+                    <dt>Monto total</dt>
+                    <dd className="bo-reserva-card-total">
+                      <span className="bo-reserva-card-total-value">{formatUSD(totalReserva)}</span>
+                      {totalServicios > 0 && (
+                        <span className="bo-reserva-card-note">
+                          Incluye {formatUSD(totalServicios)} en servicios
+                        </span>
+                      )}
+                    </dd>
                   </div>
-                </div>
+                </dl>
 
                 <div className="bo-reserva-actions mt-4 border-t border-gray-200 pt-3">
                   {hasWarning && (
@@ -1508,7 +1610,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                         {sendingPresupuestoId === reserva.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Send className={ACTION_ICON_BASE} />
+                          <Mail className={ACTION_ICON_BASE} />
                         )}
                       </button>
                     </>
@@ -1535,27 +1637,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                     </button>
                   )}
                 </div>
-
-                {isEditingCurrentRow && (
-                  <div className="bo-inline-form-card mt-4 rounded-lg border border-gray-200 bg-white">
-                    <div className="bo-inline-form-header flex items-center justify-between px-4 py-3">
-                      <h3 className="text-base font-semibold text-gray-900">Editar Reserva #{reserva.id}</h3>
-                      <button
-                        onClick={() => handleDialogClose()}
-                        className="text-gray-500 hover:text-gray-700 transition-colors"
-                        title="Cerrar"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="bo-inline-form-body p-4">
-                      <ReservaForm
-                        reserva={editingReserva}
-                        onClose={handleDialogClose}
-                        onDirtyChange={setIsReservaFormDirty}
-                      />
-                    </div>
-                  </div>
+                </div>
                 )}
               </div>
             );
@@ -1566,6 +1648,36 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       <div className="mt-4 text-sm text-gray-600">
         Mostrando {filteredReservas.length} de {reservas.length} reservas
       </div>
+
+      {/* Alta / edición de reserva en un modal amplio (antes se abría dentro de
+          la fila, con muy poca visibilidad). */}
+      <Dialog open={showDialog} onOpenChange={(open) => { if (!open) handleDialogClose(); }}>
+        <DialogContent
+          className="bo-reserva-form-dialog"
+          onInteractOutside={(event) => {
+            // No cerrar por click afuera si hay cambios sin guardar (evita perder
+            // una edición larga por un click accidental).
+            if (isReservaFormDirty) event.preventDefault();
+          }}
+          onEscapeKeyDown={(event) => {
+            if (isReservaFormDirty) event.preventDefault();
+          }}
+        >
+          <DialogHeader className="bo-reserva-form-dialog-head">
+            <DialogTitle>
+              {editingReserva ? `Editar Reserva #${editingReserva.id}` : 'Nueva Reserva'}
+            </DialogTitle>
+          </DialogHeader>
+          {showDialog && (
+            <ReservaForm
+              reserva={editingReserva}
+              perfil={perfil}
+              onClose={handleDialogClose}
+              onDirtyChange={setIsReservaFormDirty}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={showDeleteConfirmDialog}
@@ -1588,6 +1700,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         title={warningDialog?.title || 'Advertencias'}
         description={warningDialog?.description || []}
         actionText="Cerrar"
+        variant="warning"
       />
 
       <ReservaEstadoGestionDialog

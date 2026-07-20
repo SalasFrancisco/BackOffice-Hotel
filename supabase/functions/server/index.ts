@@ -686,6 +686,8 @@ type PublicReservaPayload = {
   salon_nombre?: string | null;
   observaciones?: string | null;
   servicios?: PublicServicioPayload[] | null;
+  antibot_version?: number | null;
+  hp?: string | null;
 };
 
 type PresupuestoServicio = {
@@ -4272,10 +4274,12 @@ const publicReservaHandler = async (c: any) => {
     } = body ?? {};
 
     // --- Anti-bot (antes de tocar la base) ---
-    // 1) Honeypot: campo oculto que un humano nunca completa. Si viene con algo,
-    //    es un bot → cortamos de forma silenciosa (sin crear nada).
-    const honeypot = String((body as any)?.hp ?? "").trim();
-    if (honeypot.length > 0) {
+    // 1) Honeypot v2: checkbox oculto que un humano nunca marca.
+    const antibotVersion = Number(body?.antibot_version ?? 0);
+    const honeypot = String(body?.hp ?? "").trim();
+    // La versión anterior usaba un campo `empresa_web` que algunos
+    // autocompletadores llenaban, provocando falsos positivos.
+    if (antibotVersion >= 2 && honeypot.length > 0) {
       console.warn("public-reserva: honeypot completado, descartando solicitud.");
       return c.json({ error: "No se pudo procesar la solicitud." }, 400);
     }

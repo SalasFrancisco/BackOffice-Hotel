@@ -2646,13 +2646,12 @@
 
                     <div class="form-title">Cuidamos los detalles y desarrollamos tu evento a medida</div>
 
-                                        <form id="formTesis" novalidate>
-
-                    <!-- Honeypot anti-bot: oculto para humanos; si se completa, el servidor descarta la solicitud. -->
-                    <div class="hp-field" aria-hidden="true" style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;">
-                        <label for="empresa_web">No completar este campo</label>
-                        <input type="text" id="empresa_web" name="empresa_web" tabindex="-1" autocomplete="off">
+                    <!-- Honeypot anti-bot fuera del formulario para evitar que el autocompletado lo active. -->
+                    <div class="hp-field" aria-hidden="true" inert style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;">
+                        <input type="checkbox" id="formulario_confirmacion_secundaria" tabindex="-1" autocomplete="off">
                     </div>
+
+                                        <form id="formTesis" novalidate>
 
                     <h3 class="form-section-title">Datos de contacto</h3>
 
@@ -2660,13 +2659,13 @@
 
                         <div class="form-group half">
                             <label for="nombre">Nombre / Empresa</label>
-                            <input type="text" id="nombre" required>
+                            <input type="text" id="nombre" name="nombre" autocomplete="name" required>
                             <span class="field-error" id="err_nombre"></span>
                         </div>
 
                         <div class="form-group half">
                             <label for="email">Email</label>
-                            <input type="email" id="email" required>
+                            <input type="email" id="email" name="email" autocomplete="email" required>
                             <span class="field-error" id="err_email"></span>
                         </div>
 
@@ -2676,7 +2675,7 @@
 
                         <div class="form-group half">
                             <label for="telefono">Teléfono</label>
-                            <input type="tel" id="telefono" inputmode="numeric" required>
+                            <input type="tel" id="telefono" name="telefono" autocomplete="tel" inputmode="numeric" required>
                             <span class="field-error" id="err_telefono"></span>
                         </div>
 
@@ -4578,7 +4577,7 @@
 
         const consentimientoPresupuesto = document.getElementById('consentimientoPresupuesto');
 
-        const honeypotInput = document.getElementById('empresa_web');
+        const honeypotInput = document.getElementById('formulario_confirmacion_secundaria');
 
         // Momento en que quedó disponible el formulario (para el control anti-bot de tiempo mínimo).
         const formRenderedAt = Date.now();
@@ -4923,8 +4922,10 @@
 
                 servicios: serviciosSeleccionados,
 
-                // Anti-bot: honeypot (debe ir vacío) + tiempo transcurrido desde que cargó el form.
-                hp: honeypotInput ? honeypotInput.value : '',
+                // Anti-bot: checkbox trampa (debe quedar desmarcado) + tiempo transcurrido.
+                antibot_version: 2,
+
+                hp: honeypotInput?.checked ? '1' : '',
 
                 elapsed_ms: Date.now() - formRenderedAt
 

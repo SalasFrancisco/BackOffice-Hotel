@@ -74,13 +74,12 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
         const { data, error: salonesError } = await supabase
           .from('salones')
           .select('*')
-          .or('activo.is.null,activo.eq.true')
           .order('nombre');
 
         if (salonesError) throw salonesError;
 
         if (isActive) {
-          setSalones((data || []).filter((salon) => salon.activo !== false));
+          setSalones(data || []);
         }
       } catch (err: any) {
         console.error('Error loading dashboard salons:', err);

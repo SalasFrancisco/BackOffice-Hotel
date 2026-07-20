@@ -265,7 +265,6 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
       const salonesQuery = supabase
         .from('salones')
         .select('*')
-        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       let reservasQuery = supabase
@@ -295,7 +294,7 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
       if (salonesError) throw salonesError;
       if (reservasError) throw reservasError;
 
-      setSalones((salonesData || []).filter((salon) => salon.activo !== false));
+      setSalones(salonesData || []);
       setReservas((reservasData || []).filter((reserva) => reserva.estado !== 'Cancelado'));
     } catch (err: any) {
       console.error('Error loading calendar:', err);
@@ -430,7 +429,9 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
         >
           <option value="">Todos los salones</option>
           {salones.map((salon) => (
-            <option key={salon.id} value={salon.id}>{salon.nombre}</option>
+            <option key={salon.id} value={salon.id}>
+              {salon.nombre}{salon.activo === false ? ' (Inactivo)' : ''}
+            </option>
           ))}
         </select>
 

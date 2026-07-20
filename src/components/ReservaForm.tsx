@@ -505,10 +505,17 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
     endDayIsPartial ? 'día final al 65%' : null,
   ].filter((value): value is string => Boolean(value));
   const totalPersonasNumber = parseInt(cantidadPersonas, 10) || 0;
+  const salonInactivoActual = reserva
+    ? salones.find((salon) => (
+        Number(salon.id) === Number(reserva.id_salon) && salon.activo === false
+      )) || null
+    : null;
   const salonesRecomendadosData = useMemo(() => {
-    const salonesOrdenadosPorNombre = [...salones].sort((a, b) =>
-      String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'),
-    );
+    const salonesOrdenadosPorNombre = salones
+      .filter((salon) => salon.activo !== false)
+      .sort((a, b) =>
+        String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'),
+      );
 
     if (totalPersonasNumber <= 0) {
       return {
@@ -790,11 +797,12 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
       const { data: salonesData, error: salonesError } = await supabase
         .from('salones')
         .select('*')
-        .or('activo.is.null,activo.eq.true')
         .order('nombre');
 
       if (salonesError) throw salonesError;
-      setSalones((salonesData || []).filter((salon) => salon.activo !== false));
+      setSalones((salonesData || []).filter((salon) => (
+        salon.activo !== false || Number(salon.id) === Number(reserva?.id_salon)
+      )));
 
       // Load servicios y categorías
       const { data: categoriasData, error: categoriasError } = await supabase
@@ -1589,6 +1597,13 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value={0}>Seleccione un salón</option>
+              {salonInactivoActual && (
+                <optgroup label="Salón actual">
+                  <option value={salonInactivoActual.id}>
+                    {formatSalonOptionLabel(salonInactivoActual)} (Inactivo)
+                  </option>
+                </optgroup>
+              )}
               {!salonesRecomendadosData.hasPersonas && salonesRecomendadosData.recommended.map((salon) => (
                 <option key={salon.id} value={salon.id}>
                   {formatSalonOptionLabel(salon)}

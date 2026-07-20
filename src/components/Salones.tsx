@@ -11,7 +11,6 @@ import {
   sanitizeIntegerInput,
 } from '../utils/formSanitizers';
 import { formatUSD } from '../utils/currency';
-import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 
 type SalonesProps = {
   perfil: Perfil;
@@ -26,7 +25,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [editingSalon, setEditingSalon] = useState<Salon | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; salonId: number | null }>({
+  const [confirmDeactivate, setConfirmDeactivate] = useState<{ open: boolean; salonId: number | null }>({
     open: false,
     salonId: null,
   });
@@ -164,49 +163,34 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDeactivate = (id: number) => {
     if (!canEdit) return;
-    setConfirmDelete({ open: true, salonId: id });
+    setConfirmDeactivate({ open: true, salonId: id });
   };
 
-  const confirmDeleteSalon = async () => {
-    if (!confirmDelete.salonId) return;
-    const salonId = confirmDelete.salonId;
+  const confirmDeactivateSalon = async () => {
+    if (!confirmDeactivate.salonId) return;
+    const salonId = confirmDeactivate.salonId;
 
     try {
-      const { data: reservasAsociadas, error: reservasError } = await supabase
-        .from('reservas')
-        .select('id, presupuesto_url')
-        .eq('id_salon', salonId);
-
-      if (reservasError) throw reservasError;
-
-      const reservasDelSalon = reservasAsociadas || [];
-      for (const reserva of reservasDelSalon) {
-        await deleteReservaWithPresupuesto({
-          id: reserva.id,
-          presupuesto_url: reserva.presupuesto_url,
-        });
-      }
-
-      const { error: deleteError } = await supabase
+      const { error: updateError } = await supabase
         .from('salones')
         .update({ activo: false })
         .eq('id', salonId);
 
-      if (deleteError) throw deleteError;
+      if (updateError) throw updateError;
 
-      const reservasEliminadasText = reservasDelSalon.length > 0
-        ? ` y ${reservasDelSalon.length} reserva(s) asociada(s)`
-        : '';
-      setMessage({ type: 'success', text: `Salón desactivado correctamente${reservasEliminadasText}` });
-      setConfirmDelete({ open: false, salonId: null });
+      setMessage({
+        type: 'success',
+        text: 'Salón desactivado correctamente. Sus reservas y presupuestos se conservaron.',
+      });
+      setConfirmDeactivate({ open: false, salonId: null });
       void loadSalones();
       setTimeout(() => setMessage(null), 3000);
     } catch (err: any) {
       console.error('Error deactivating salon:', err);
       setMessage({ type: 'error', text: err.message });
-      setConfirmDelete({ open: false, salonId: null });
+      setConfirmDeactivate({ open: false, salonId: null });
     }
   };
 
@@ -280,7 +264,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       {!canEdit && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">
-            <strong>Modo de solo lectura:</strong> Solo los administradores pueden crear, editar o eliminar salones.
+            <strong>Modo de solo lectura:</strong> Solo los administradores pueden crear, editar o desactivar salones.
           </p>
         </div>
       )}
@@ -384,7 +368,7 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
                       aria-checked={salon.activo !== false}
                       onClick={() =>
                         salon.activo !== false
-                          ? handleDelete(salon.id)
+                          ? handleDeactivate(salon.id)
                           : handleReactivate(salon.id)
                       }
                       className={`bo-status-toggle ${
@@ -556,11 +540,11 @@ export function Salones({ perfil, onEditSalon }: SalonesProps) {
       </Dialog>
 
       <ConfirmDialog
-        open={confirmDelete.open}
-        onOpenChange={(open) => setConfirmDelete({ open, salonId: null })}
-        onConfirm={confirmDeleteSalon}
+        open={confirmDeactivate.open}
+        onOpenChange={(open) => setConfirmDeactivate({ open, salonId: null })}
+        onConfirm={confirmDeactivateSalon}
         title="Desactivar salón"
-        description="¿Está seguro de desactivar este salón? Dejará de poder reservarse y se eliminarán sus reservas asociadas y presupuestos. Podrá reactivarlo más adelante desde la pestaña Inactivos."
+        description="¿Está seguro de desactivar este salón? Dejará de estar disponible para nuevas reservas, pero se conservarán todas sus reservas y presupuestos. Podrá reactivarlo más adelante desde la pestaña Inactivos."
         confirmText="Desactivar"
         cancelText="Cancelar"
       />

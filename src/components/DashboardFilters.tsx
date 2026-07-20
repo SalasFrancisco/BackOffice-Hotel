@@ -173,7 +173,7 @@ export function DashboardFilters({
             <option value="all">Todos los salones</option>
             {salones.map((salon) => (
               <option key={salon.id} value={salon.id}>
-                {salon.nombre}
+                {salon.nombre}{salon.activo === false ? ' (Inactivo)' : ''}
               </option>
             ))}
           </select>

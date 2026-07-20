@@ -4341,6 +4341,7 @@ const publicReservaHandler = async (c: any) => {
     } else if (salonNombre) {
       salonQuery = salonQuery.ilike("nombre", salonNombre);
     }
+    salonQuery = salonQuery.or("activo.is.null,activo.eq.true");
 
     const { data: salonData, error: salonError } = await salonQuery.maybeSingle();
 
@@ -4350,7 +4351,7 @@ const publicReservaHandler = async (c: any) => {
     }
 
     if (!salonData) {
-      return c.json({ error: "No se encontró el salón seleccionado" }, 404);
+      return c.json({ error: "No se encontró un salón activo con la selección indicada" }, 404);
     }
 
     let distribucionData: { id: number; nombre: string; capacidad: number } | null = null;

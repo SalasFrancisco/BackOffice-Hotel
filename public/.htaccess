@@ -1,0 +1,51 @@
+# Hostinger/Apache equivalent of the routing and security rules in vercel.json.
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Keep the back-office PWA under a canonical directory URL.
+  RewriteRule ^reservas$ /reservas/ [R=301,L]
+
+  # Public embeddable booking form.
+  RewriteRule ^formulario-reserva\.html$ /salones.html [L]
+</IfModule>
+
+<IfModule mod_setenvif.c>
+  # Security headers below use the original requested URL, before the rewrite.
+  SetEnvIf Request_URI "^/formulario-reserva\.html$" booking_form_iframe=1
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+
+  # Deny framing by default, then override it only for the dedicated form URL.
+  # Apache prefixes environment variables with REDIRECT_ after an internal
+  # rewrite, so both forms are handled.
+  Header always set X-Frame-Options "DENY"
+  Header always set Content-Security-Policy "frame-ancestors 'none'"
+  Header always unset X-Frame-Options env=booking_form_iframe
+  Header always set Content-Security-Policy "frame-ancestors https://www.quintocentenariohotel.com" env=booking_form_iframe
+  Header always unset X-Frame-Options env=REDIRECT_booking_form_iframe
+  Header always set Content-Security-Policy "frame-ancestors https://www.quintocentenariohotel.com" env=REDIRECT_booking_form_iframe
+
+  # Vite fingerprints JS/CSS bundles, so they can be cached for a long time.
+  <FilesMatch "\.(?:css|js)$">
+    Header always set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Keep the service worker, manifest and documents revalidating on every visit.
+  <FilesMatch "^(?:sw\.js|manifest\.webmanifest|.*\.html)$">
+    Header always set Cache-Control "no-cache"
+  </FilesMatch>
+
+  <FilesMatch "\.(?:avif|gif|ico|jpe?g|png|svg|webp|woff2?)$">
+    Header always set Cache-Control "public, max-age=604800"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>

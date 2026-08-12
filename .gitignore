@@ -10,6 +10,9 @@ build/
 dist/
 docs/
 
+# Instalador local del MCP de desarrollo (no forma parte del proyecto)
+install.ps1
+
 *.log
 npm-debug.log*
 yarn-debug.log*

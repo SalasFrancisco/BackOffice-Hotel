@@ -236,4 +236,5 @@ trazabilidad, fichas de casos de uso) se encuentra en la unidad compartida del p
 - **Francisco Salas**
 
 Carrera de Analista de Sistemas — Colegio Universitario IES.
-Docente: German Verblud.
+Docente: Oscar German Verblud Blasco.
+Director de carrera: Esteban López Belcuore.

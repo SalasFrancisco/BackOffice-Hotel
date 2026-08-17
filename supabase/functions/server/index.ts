@@ -3639,80 +3639,47 @@ const upsertPresupuestoHandler = async (c: any) => {
     );
 
     const emailWarnings: string[] = [];
-    let clientEmailSent = false;
+    // El presupuesto NUNCA se le manda al cliente desde acá. Al dar de alta o
+    // editar una reserva en el back office el PDF se regenera, pero el envío al
+    // cliente es una decisión del operador: sale solo con el botón "enviar
+    // presupuesto" (endpoint send-presupuesto-email). El formulario público
+    // sigue siendo otra historia: ahí el visitante pidió el presupuesto y lo
+    // recibe automáticamente.
+    const clientEmailSent = false;
     let staffEmailsSent = 0;
 
     if (notificationAction) {
       try {
         const smtpConfig = getSmtpConfig();
 
-        const [clientEmailResult, staffEmailResult] = await Promise.allSettled([
-          sendGeneratedPresupuestoToClient(
-            smtpConfig,
-            supabaseAdmin,
-            {
-              action: notificationAction,
-              reservaId,
-              storagePath: result.storagePath,
-              fileName: result.fileName,
-              pdfBuffer: result.pdfBuffer,
-              clienteNombre: result.context.cliente.nombre,
-              clienteEmail: result.context.cliente.email,
-              fechaInicio: result.context.fechaInicio,
-              fechaFin: result.context.fechaFin,
-            },
-          ),
-          sendBackofficeReservaNotificationEmails(
-            smtpConfig,
-            supabaseAdmin,
-            {
-              action: notificationAction,
-              excludedUserId: accessCheck.userId,
-              reservaId,
-              clienteNombre: result.context.cliente.nombre,
-              clienteEmail: result.context.cliente.email || "No informado",
-              clienteTelefono: result.context.cliente.telefono,
-              salonNombre: result.context.salon.nombre,
-              distribucionNombre: result.context.distribucion?.nombre,
-              tipoEvento: result.context.tipoEvento,
-              cantidadPersonas: result.context.cantidadPersonas,
-              fechaInicio: result.context.fechaInicio,
-              fechaFin: result.context.fechaFin,
-            },
-          ),
-        ]);
+        // Aviso interno al personal del back office, no al cliente.
+        const staffEmailResult = await sendBackofficeReservaNotificationEmails(
+          smtpConfig,
+          supabaseAdmin,
+          {
+            action: notificationAction,
+            excludedUserId: accessCheck.userId,
+            reservaId,
+            clienteNombre: result.context.cliente.nombre,
+            clienteEmail: result.context.cliente.email || "No informado",
+            clienteTelefono: result.context.cliente.telefono,
+            salonNombre: result.context.salon.nombre,
+            distribucionNombre: result.context.distribucion?.nombre,
+            tipoEvento: result.context.tipoEvento,
+            cantidadPersonas: result.context.cantidadPersonas,
+            fechaInicio: result.context.fechaInicio,
+            fechaFin: result.context.fechaFin,
+          },
+        );
 
-        if (clientEmailResult.status === "fulfilled") {
-          clientEmailSent = clientEmailResult.value.sent;
-          if (
-            !clientEmailResult.value.sent
-            && clientEmailResult.value.reason === "missing_client_email"
-          ) {
-            emailWarnings.push("Cliente: la reserva no tiene un correo electrónico asociado.");
-          }
-        } else {
-          const message = getErrorMessage(
-            clientEmailResult.reason,
-            "No se pudo enviar el presupuesto al cliente.",
-          );
-          emailWarnings.push(`Cliente: ${message}`);
-          console.warn("No se pudo enviar el presupuesto al cliente:", clientEmailResult.reason);
-        }
-
-        if (staffEmailResult.status === "fulfilled") {
-          staffEmailsSent = staffEmailResult.value.recipientsCount;
-        } else {
-          const message = getErrorMessage(
-            staffEmailResult.reason,
-            "No se pudo notificar al personal.",
-          );
-          emailWarnings.push(`Personal: ${message}`);
-          console.warn("No se pudo notificar al personal sobre la reserva:", staffEmailResult.reason);
-        }
-      } catch (smtpError) {
-        const message = getErrorMessage(smtpError, "No se pudo configurar el envío de correos.");
-        emailWarnings.push(message);
-        console.warn("No se pudieron enviar los correos de la reserva:", smtpError);
+        staffEmailsSent = staffEmailResult.recipientsCount;
+      } catch (staffEmailError) {
+        const message = getErrorMessage(
+          staffEmailError,
+          "No se pudo notificar al personal.",
+        );
+        emailWarnings.push(`Personal: ${message}`);
+        console.warn("No se pudo notificar al personal sobre la reserva:", staffEmailError);
       }
     }
 

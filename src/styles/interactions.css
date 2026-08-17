@@ -1513,6 +1513,20 @@ html:not(.dark) .bo-cal-day {
   position: absolute;
   right: 1rem;
   top: 1rem;
+  /* Nunca por detrás del formulario: éste va después en el DOM y, sin z-index,
+     ganaba el apilado. */
+  z-index: 2;
+}
+
+/* En pantallas angostas el formulario ocupa casi todo el ancho disponible y,
+   cuando su alto llega a igualar al del panel, `align-items: center` se queda
+   sin holgura: el borde superior de la tarjeta trepa hasta la franja del botón
+   de tema y se lo monta encima. Se reserva esa franja (1rem de separación +
+   2.5rem del botón + 1rem de aire) para que no puedan solaparse. */
+@media (max-width: 767px) {
+  .bo-auth-form-panel {
+    padding-top: 4.5rem;
+  }
 }
 
 /* Tapa de bienvenida a pantalla completa: cubre todo (marca + formulario)

@@ -875,6 +875,42 @@ html.dark .bo-sidebar-desktop .bo-nav-item.is-active {
   color: #93c5fd;
 }
 
+/* El cajón mobile reutiliza las clases base del sidebar, que están pensadas
+   para fondo claro (texto #374151, hover casi blanco, activo celeste pálido).
+   En modo oscuro su fondo pasa a #111827, así que hay que reponer los colores:
+   sin esto las opciones quedan gris oscuro sobre casi negro y el nombre del
+   usuario directamente no se lee. El sidebar de escritorio no se toca: ya tiene
+   sus propias reglas arriba. */
+html.dark .bo-mobile-drawer .bo-nav-item {
+  color: #e2e8f0;
+}
+
+html.dark .bo-mobile-drawer .bo-nav-item:hover {
+  background-color: #1f2937;
+  color: #f8fafc;
+}
+
+html.dark .bo-mobile-drawer .bo-nav-item.is-active {
+  background-color: #172554;
+  color: #93c5fd;
+}
+
+html.dark .bo-mobile-drawer .bo-sidebar-user-name {
+  color: #f8fafc;
+}
+
+html.dark .bo-mobile-drawer .bo-sidebar-subtitle {
+  color: #94a3b8;
+}
+
+html.dark .bo-mobile-drawer .bo-sidebar-user:hover {
+  background-color: rgb(255 255 255 / 0.08);
+}
+
+html.dark .bo-mobile-drawer .bo-sidebar-user.is-active {
+  background-color: rgb(255 255 255 / 0.12);
+}
+
 html.dark .bo-sidebar-icon-btn {
   color: #e2e8f0;
 }

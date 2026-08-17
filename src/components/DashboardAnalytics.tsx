@@ -31,11 +31,18 @@ export type DashboardAnalyticsReserva = Pick<
   | 'reserva_servicios'
 >;
 
+// El gráfico mensual sólo necesita la fecha de inicio para contar por mes.
+export type DashboardMonthlyReserva = Pick<Reserva, 'id' | 'fecha_inicio'>;
+
 type DashboardAnalyticsProps = {
   reservas: DashboardAnalyticsReserva[];
+  /** Reservas de la ventana ampliada del gráfico mensual (ver getDashboardMonthlyChartRange). */
+  monthlyReservas: DashboardMonthlyReserva[];
   salones: Salon[];
   from: string;
   to: string;
+  monthlyFrom: string;
+  monthlyTo: string;
   loading: boolean;
 };
 
@@ -84,9 +91,12 @@ function ChartEmptyState({ message }: { message?: string }) {
 
 export function DashboardAnalytics({
   reservas,
+  monthlyReservas,
   salones,
   from,
   to,
+  monthlyFrom,
+  monthlyTo,
   loading,
 }: DashboardAnalyticsProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
@@ -114,11 +124,11 @@ export function DashboardAnalytics({
   }, [reservas, salonNameById]);
 
   const reservasPorMes = useMemo(() => {
-    const fromDate = parseDashboardInputDate(from);
-    const toDate = parseDashboardInputDate(to);
+    const fromDate = parseDashboardInputDate(monthlyFrom);
+    const toDate = parseDashboardInputDate(monthlyTo);
     const counts = new Map<string, number>();
 
-    reservas.forEach((reserva) => {
+    monthlyReservas.forEach((reserva) => {
       const date = new Date(reserva.fecha_inicio);
       if (!Number.isNaN(date.getTime())) {
         const key = getMonthKey(date);
@@ -139,7 +149,7 @@ export function DashboardAnalytics({
     }
 
     return result;
-  }, [reservas, from, to]);
+  }, [monthlyReservas, monthlyFrom, monthlyTo]);
 
   const reservasPorEstado = useMemo(() => {
     const counts = new Map<ReservaEstado, number>();
@@ -158,6 +168,13 @@ export function DashboardAnalytics({
 
   const salonChartHeight = Math.max(260, reservasPorSalon.length * 48);
   const monthChartMinWidth = Math.max(520, reservasPorMes.length * 64);
+
+  // Cuando la ventana del gráfico excede al filtro conviene decirlo: si no, ver
+  // meses que el filtro no incluye se lee como un error.
+  const monthlyRangeIsWider = monthlyFrom !== from || monthlyTo !== to;
+  const monthlyRangeLabel = reservasPorMes.length
+    ? `${reservasPorMes[0].mes} a ${reservasPorMes[reservasPorMes.length - 1].mes}`
+    : '';
 
   return (
     <section className="mt-12" aria-labelledby="dashboard-analytics-title">
@@ -303,14 +320,19 @@ export function DashboardAnalytics({
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h4 className="font-medium text-gray-900">Cantidad de reservas por mes</h4>
-              <p className="mt-1 text-sm text-gray-500">Evolución según la fecha de inicio</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Evolución según la fecha de inicio
+                {monthlyRangeIsWider
+                  ? ` · ${monthlyRangeLabel}, para no perder de vista los meses vecinos`
+                  : ''}
+              </p>
             </div>
             <TrendingUp className="bo-dashboard-card-icon h-5 w-5 flex-shrink-0 text-blue-600" />
           </div>
 
           {loading ? (
             <div className="h-72 animate-pulse rounded-lg bg-gray-100" />
-          ) : reservas.length === 0 ? (
+          ) : monthlyReservas.length === 0 ? (
             <ChartEmptyState />
           ) : (
             <div className="overflow-x-auto pb-2">

@@ -79,6 +79,52 @@ export const formatDashboardShortDate = (value: string) =>
     year: 'numeric',
   });
 
+// Meses de contexto que el gráfico mensual muestra a cada lado del mes en curso.
+export const MONTHLY_CHART_CONTEXT_MONTHS = 3;
+
+/**
+ * Ventana que usa el gráfico "Cantidad de reservas por mes".
+ *
+ * Con "Mes actual" el rango del filtro es un único mes y el gráfico quedaba
+ * reducido a una sola barra, sin nada con qué comparar. Para los períodos
+ * predefinidos se garantiza un mínimo de MONTHLY_CHART_CONTEXT_MONTHS meses a
+ * cada lado del mes en curso, sin recortar nunca lo que el filtro ya abarcaba.
+ *
+ * El rango personalizado se respeta tal cual: ahí las fechas las eligió el
+ * usuario a propósito y mostrar meses de más sería contradecirlo.
+ */
+export const getDashboardMonthlyChartRange = (
+  filters: Pick<DashboardFilterValues, 'period' | 'from' | 'to'>,
+) => {
+  if (filters.period === 'custom') {
+    return { from: filters.from, to: filters.to };
+  }
+
+  const now = new Date();
+  const contextStart = new Date(
+    now.getFullYear(),
+    now.getMonth() - MONTHLY_CHART_CONTEXT_MONTHS,
+    1,
+  );
+  const contextEnd = new Date(
+    now.getFullYear(),
+    now.getMonth() + MONTHLY_CHART_CONTEXT_MONTHS + 1,
+    0,
+  );
+
+  const filterStart = parseDashboardInputDate(filters.from);
+  const filterEnd = parseDashboardInputDate(filters.to);
+  const start = filterStart < contextStart ? filterStart : contextStart;
+  const end = filterEnd > contextEnd ? filterEnd : contextEnd;
+
+  // Meses completos: si la ventana arrancara o terminara a mitad de mes, esa
+  // barra contaría sólo una parte y se vería más baja de lo que corresponde.
+  return {
+    from: toDashboardDateInputValue(new Date(start.getFullYear(), start.getMonth(), 1)),
+    to: toDashboardDateInputValue(new Date(end.getFullYear(), end.getMonth() + 1, 0)),
+  };
+};
+
 const openNativeDatePicker = (event: MouseEvent<HTMLInputElement>) => {
   const input = event.currentTarget as HTMLInputElement & { showPicker?: () => void };
   try {

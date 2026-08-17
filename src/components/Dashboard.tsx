@@ -5,11 +5,15 @@ import { supabase } from '../utils/supabase/client';
 import { formatUSD } from '../utils/currency';
 import { WelcomeBanner } from './WelcomeBanner';
 import { ModuleInfoBanner } from './ModuleInfoBanner';
-import type { DashboardAnalyticsReserva } from './DashboardAnalytics';
+import type {
+  DashboardAnalyticsReserva,
+  DashboardMonthlyReserva,
+} from './DashboardAnalytics';
 import {
   createDefaultDashboardFilters,
   DashboardFilters,
   formatDashboardShortDate,
+  getDashboardMonthlyChartRange,
   parseDashboardInputDate,
   type DashboardFilterValues,
 } from './DashboardFilters';
@@ -54,6 +58,8 @@ const isReservaConfirmadaOPagada = (estado: Reserva['estado']) =>
 export function Dashboard({ perfil: _perfil }: DashboardProps) {
   const [salones, setSalones] = useState<Salon[]>([]);
   const [reservas, setReservas] = useState<DashboardAnalyticsReserva[]>([]);
+  // Conjunto propio del gráfico mensual: cubre más meses que el filtro aplicado.
+  const [monthlyReservas, setMonthlyReservas] = useState<DashboardMonthlyReserva[]>([]);
   const [draftFilters, setDraftFilters] = useState<DashboardFilterValues>(
     createDefaultDashboardFilters,
   );
@@ -100,6 +106,11 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
     };
   }, []);
 
+  const monthlyChartRange = useMemo(
+    () => getDashboardMonthlyChartRange(appliedFilters),
+    [appliedFilters],
+  );
+
   useEffect(() => {
     let isActive = true;
 
@@ -108,12 +119,38 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
         setLoadingReservas(true);
         setError('');
 
-        const fromDate = parseDashboardInputDate(appliedFilters.from);
-        const toDate = parseDashboardInputDate(appliedFilters.to, true);
+        // Mismo recorte de salón y estado para las dos consultas: lo único que
+        // cambia entre ellas es el rango de fechas.
+        const buildQuery = (columns: string, rangeFrom: string, rangeTo: string) => {
+          let query = supabase
+            .from('reservas')
+            .select(columns)
+            .gte('fecha_inicio', parseDashboardInputDate(rangeFrom).toISOString())
+            .lte('fecha_inicio', parseDashboardInputDate(rangeTo, true).toISOString())
+            .order('fecha_inicio', { ascending: true });
 
-        let query = supabase
-          .from('reservas')
-          .select(`
+          if (appliedFilters.salonId !== 'all') {
+            query = query.eq('id_salon', Number(appliedFilters.salonId));
+          }
+
+          if (appliedFilters.estado !== 'all') {
+            query = query.eq('estado', appliedFilters.estado);
+          }
+
+          return query;
+        };
+
+        // El gráfico mensual abarca una ventana más ancha que el resto del
+        // dashboard, así que necesita su propio conjunto de datos. Cuando la
+        // ventana coincide con la del filtro (rango personalizado) se reutiliza
+        // el principal y se evita la consulta de más.
+        const needsMonthlyQuery =
+          monthlyChartRange.from !== appliedFilters.from ||
+          monthlyChartRange.to !== appliedFilters.to;
+
+        const [mainResult, monthlyResult] = await Promise.all([
+          buildQuery(
+            `
             id,
             id_salon,
             estado,
@@ -127,29 +164,32 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
                 categoria:categorias_servicios(categoria_superior)
               )
             )
-          `)
-          .gte('fecha_inicio', fromDate.toISOString())
-          .lte('fecha_inicio', toDate.toISOString())
-          .order('fecha_inicio', { ascending: true });
+          `,
+            appliedFilters.from,
+            appliedFilters.to,
+          ),
+          needsMonthlyQuery
+            ? buildQuery('id, fecha_inicio', monthlyChartRange.from, monthlyChartRange.to)
+            : Promise.resolve(null),
+        ]);
 
-        if (appliedFilters.salonId !== 'all') {
-          query = query.eq('id_salon', Number(appliedFilters.salonId));
-        }
-
-        if (appliedFilters.estado !== 'all') {
-          query = query.eq('estado', appliedFilters.estado);
-        }
-
-        const { data, error: reservasError } = await query;
-        if (reservasError) throw reservasError;
+        if (mainResult.error) throw mainResult.error;
+        if (monthlyResult?.error) throw monthlyResult.error;
 
         if (isActive) {
-          setReservas((data || []) as DashboardAnalyticsReserva[]);
+          const reservasFiltradas = (mainResult.data || []) as DashboardAnalyticsReserva[];
+          setReservas(reservasFiltradas);
+          setMonthlyReservas(
+            monthlyResult
+              ? ((monthlyResult.data || []) as DashboardMonthlyReserva[])
+              : reservasFiltradas,
+          );
         }
       } catch (err: any) {
         console.error('Error loading dashboard reservations:', err);
         if (isActive) {
           setReservas([]);
+          setMonthlyReservas([]);
           setError(err?.message || 'No se pudieron cargar las reservas del dashboard.');
         }
       } finally {
@@ -164,7 +204,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
     return () => {
       isActive = false;
     };
-  }, [appliedFilters]);
+  }, [appliedFilters, monthlyChartRange]);
 
   const selectedSalones = useMemo(() => {
     if (appliedFilters.salonId === 'all') {
@@ -452,9 +492,12 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       >
         <DashboardAnalytics
           reservas={reservas}
+          monthlyReservas={monthlyReservas}
           salones={salones}
           from={appliedFilters.from}
           to={appliedFilters.to}
+          monthlyFrom={monthlyChartRange.from}
+          monthlyTo={monthlyChartRange.to}
           loading={loadingReservas}
         />
       </Suspense>

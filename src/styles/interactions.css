@@ -915,6 +915,14 @@ html:not(.dark) .bo-cal-day {
   opacity: 1;
 }
 
+/* Mes al que corresponden los KPI: van antes del calendario, así que sin este
+   rótulo no se sabría de qué período son los números. */
+.bo-estado-kpis-caption {
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
 /* KPIs por estado al inicio del módulo de reservas (indicador rápido). */
 .bo-estado-kpis {
   display: grid;

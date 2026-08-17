@@ -74,6 +74,27 @@ const ESTADO_KPI_ICONS: Record<string, LucideIcon> = {
   'Cancelado': XCircle,
 };
 
+const getMonthStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const formatMonthTitle = (monthStart: Date) =>
+  monthStart.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+
+// Solapamiento con el mes, igual criterio que usa el calendario: un evento que
+// cruza de un mes al otro aparece en el listado de los dos.
+const isReservaInMonth = (reserva: Reserva, monthStart: Date) => {
+  const desde = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1).getTime();
+  const hastaExclusivo = new Date(
+    monthStart.getFullYear(),
+    monthStart.getMonth() + 1,
+    1,
+  ).getTime();
+  const inicio = new Date(reserva.fecha_inicio).getTime();
+  const fin = new Date(reserva.fecha_fin).getTime();
+
+  if (Number.isNaN(inicio) || Number.isNaN(fin)) return false;
+  return inicio < hastaExclusivo && fin > desde;
+};
+
 const getReservaServiciosTotal = (reserva: Reserva) =>
   (reserva.reserva_servicios || []).reduce((acc, item) => {
     const cantidad = Number(item?.cantidad) || 0;
@@ -199,6 +220,12 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
   const [warningDialog, setWarningDialog] = useState<{ title: string; description: string[] } | null>(null);
   const [highlightedReservaId, setHighlightedReservaId] = useState<number | null>(null);
   const [pendingHighlight, setPendingHighlight] = useState<{ reservaId: number; nonce: number } | null>(null);
+  // Mes que muestra el calendario; el listado de abajo lo acompaña.
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => getMonthStart(new Date()));
+  // Reserva elegida en el calendario. A diferencia de highlightedReservaId (que
+  // es un destello de 1 s para las notificaciones), ésta queda marcada hasta que
+  // se elija otra: si no, al cerrar el detalle ya no se vería.
+  const [selectedCalendarReservaId, setSelectedCalendarReservaId] = useState<number | null>(null);
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
   const [estadoDialogReserva, setEstadoDialogReserva] = useState<Reserva | null>(null);
   const [estadoSeleccionado, setEstadoSeleccionado] = useState<Reserva['estado'] | null>(null);
@@ -668,7 +695,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     ].filter((message): message is string => Boolean(message));
   };
 
-  const filteredReservas = reservas.filter(r => {
+  // El listado acompaña al calendario: sólo las reservas del mes que está a la
+  // vista arriba.
+  const reservasDelMes = reservas.filter((reserva) => isReservaInMonth(reserva, calendarMonth));
+
+  const filteredReservas = reservasDelMes.filter(r => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -741,7 +772,14 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       )
     : sortedReservas;
 
-  const estadoCounts = reservas.reduce<Record<string, number>>((acc, reserva) => {
+  // Distingue "este mes no tiene reservas" de "la búsqueda no encontró nada",
+  // para que el listado vacío no se lea como que se perdieron las reservas.
+  const emptyListMessage = reservasDelMes.length === 0
+    ? `No hay reservas en ${formatMonthTitle(calendarMonth)}. Cambie el mes en el calendario para ver otras.`
+    : 'No se encontraron reservas con los filtros aplicados.';
+
+  // Los KPI cuentan el mismo universo que el listado: el mes del calendario.
+  const estadoCounts = reservasDelMes.reduce<Record<string, number>>((acc, reserva) => {
     acc[reserva.estado] = (acc[reserva.estado] || 0) + 1;
     return acc;
   }, {});
@@ -952,11 +990,61 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     });
   };
 
+  const scrollToReservaRow = (reservaId: number) => {
+    window.setTimeout(() => {
+      const row = document.getElementById(`reserva-row-${reservaId}`);
+      const card = document.getElementById(`reserva-card-${reservaId}`);
+      const target = row && row.offsetParent !== null ? row : card;
+      target?.scrollIntoView({ behavior: 'auto', block: 'center' });
+    }, 0);
+  };
+
+  const handleCalendarMonthChange = (monthStart: Date) => {
+    setCalendarMonth(monthStart);
+    // La marca pierde sentido al cambiar de mes: la reserva elegida ya no está.
+    setSelectedCalendarReservaId(null);
+  };
+
+  const handleCalendarReservaSelect = (reserva: Reserva) => {
+    const reservaId = Number(reserva.id);
+    if (!Number.isFinite(reservaId)) return;
+
+    setSelectedCalendarReservaId(reservaId);
+    // Si una búsqueda o un filtro de estado la dejaban afuera del listado, se
+    // limpian: la reserva elegida tiene que quedar visible sí o sí.
+    setSearchTerm('');
+    setFilterEstado(null);
+    scrollToReservaRow(reservaId);
+  };
+
   useEffect(() => {
     if (!pendingHighlight || loading) return;
 
     const targetId = Number(pendingHighlight.reservaId);
     if (!Number.isFinite(targetId)) {
+      setPendingHighlight(null);
+      return;
+    }
+
+    const targetReserva = reservas.find((item) => Number(item.id) === targetId);
+    if (!targetReserva) return;
+
+    // El listado sólo muestra el mes del calendario, así que una reserva que
+    // llega desde una notificación puede caer fuera. Se mueve el calendario a
+    // su mes y el resaltado sigue en el render siguiente.
+    if (!isReservaInMonth(targetReserva, calendarMonth)) {
+      const targetStart = new Date(targetReserva.fecha_inicio);
+      const targetMonth = Number.isNaN(targetStart.getTime())
+        ? null
+        : getMonthStart(targetStart);
+
+      // Sin la comparación de mes se entraría en bucle: cada intento crea un
+      // Date nuevo, así que el estado siempre cambiaría de referencia.
+      if (targetMonth && targetMonth.getTime() !== calendarMonth.getTime()) {
+        setCalendarMonth(targetMonth);
+        return;
+      }
+
       setPendingHighlight(null);
       return;
     }
@@ -967,12 +1055,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     setHighlightedReservaId(targetId);
     setPendingHighlight(null);
 
-    window.setTimeout(() => {
-      const row = document.getElementById(`reserva-row-${targetId}`);
-      const card = document.getElementById(`reserva-card-${targetId}`);
-      const target = row && row.offsetParent !== null ? row : card;
-      target?.scrollIntoView({ behavior: 'auto', block: 'center' });
-    }, 0);
+    scrollToReservaRow(targetId);
 
     if (highlightTimeoutRef.current) {
       window.clearTimeout(highlightTimeoutRef.current);
@@ -981,7 +1064,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     highlightTimeoutRef.current = window.setTimeout(() => {
       setHighlightedReservaId(null);
     }, 1000);
-  }, [pendingHighlight, sortedReservas, loading]);
+  }, [pendingHighlight, sortedReservas, loading, reservas, calendarMonth]);
 
   return (
     <div className="bo-page">
@@ -1059,6 +1142,14 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         </div>
       )}
 
+      {/* Los KPI van arriba del calendario, así que sin esta línea serían
+          números sin contexto: no se vería de qué mes son. */}
+      <p className="bo-estado-kpis-caption">
+        Estados de{' '}
+        <span style={{ textTransform: 'capitalize' }}>{formatMonthTitle(calendarMonth)}</span>
+        {' '}· {reservasDelMes.length} {reservasDelMes.length === 1 ? 'reserva' : 'reservas'}
+      </p>
+
       <div className="bo-estado-kpis">
         {getReservaEstados().map((estado) => {
           const color = RESERVA_ESTADO_COLORS[estado];
@@ -1081,7 +1172,13 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         })}
       </div>
 
-      <ReservaCalendar perfil={perfil} refreshKey={calendarRefreshKey} />
+      <ReservaCalendar
+        perfil={perfil}
+        refreshKey={calendarRefreshKey}
+        month={calendarMonth}
+        onMonthChange={handleCalendarMonthChange}
+        onReservaSelect={handleCalendarReservaSelect}
+      />
 
       {/* Filters */}
       <div className="bo-filter-bar mb-6">
@@ -1246,7 +1343,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
               ) : filteredReservas.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
-                    No se encontraron reservas
+                    {emptyListMessage}
                   </td>
                 </tr>
               ) : (
@@ -1256,6 +1353,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                   const warningText = warningMessages.join(' ');
                   const hasWarning = warningMessages.length > 0;
                   const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
+                  const isSelectedRow = Number.isFinite(reservaRowId)
+                    && selectedCalendarReservaId === reservaRowId;
                   const clienteEmail = reserva.cliente_email?.trim() || '';
                   const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
                   const totalServicios = getReservaServiciosTotal(reserva);
@@ -1275,6 +1374,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                       <tr
                         id={`reserva-row-${reservaRowId}`}
                         className={`transition-colors duration-700 ${
+                          isSelectedRow ? 'bo-reserva-row-selected ' : ''
+                        }${
                           isHighlightedRow
                             ? 'bg-yellow-200 hover:bg-yellow-200'
                             : hasWarning
@@ -1460,7 +1561,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           </div>
         ) : filteredReservas.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-gray-500">
-            No se encontraron reservas
+            {emptyListMessage}
           </div>
         ) : (
           displayedReservas.map((reserva) => {
@@ -1469,6 +1570,8 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             const warningText = warningMessages.join(' ');
             const hasWarning = warningMessages.length > 0;
             const isHighlightedRow = Number.isFinite(reservaRowId) && highlightedReservaId === reservaRowId;
+            const isSelectedRow = Number.isFinite(reservaRowId)
+              && selectedCalendarReservaId === reservaRowId;
             const clienteEmail = reserva.cliente_email?.trim() || '';
             const canSendPresupuestoEmail = Boolean(reserva.presupuesto_url && clienteEmail);
             const totalServicios = getReservaServiciosTotal(reserva);
@@ -1495,7 +1598,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
                 id={`reserva-card-${reservaRowId}`}
                 className={`bo-reserva-row-card${isExpanded ? ' is-expanded' : ''}${
                   isHighlightedRow ? ' bo-reserva-card-highlight' : ''
-                }`}
+                }${isSelectedRow ? ' bo-reserva-card-selected' : ''}`}
               >
                 <button
                   type="button"
@@ -1646,7 +1749,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       </div>
 
       <div className="mt-4 text-sm text-gray-600">
-        Mostrando {filteredReservas.length} de {reservas.length} reservas
+        Mostrando {filteredReservas.length} de {reservasDelMes.length} reservas de{' '}
+        <span style={{ textTransform: 'capitalize' }}>{formatMonthTitle(calendarMonth)}</span>
+        {reservas.length !== reservasDelMes.length && (
+          <> · {reservas.length} en total. Cambie el mes en el calendario para ver el resto.</>
+        )}
       </div>
 
       {/* Alta / edición de reserva en un modal amplio (antes se abría dentro de

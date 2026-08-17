@@ -365,6 +365,25 @@ html.dark .bo-reserva-card-highlight {
   border-color: #2563eb;
 }
 
+html.dark .bo-estado-kpis-caption {
+  color: #94a3b8;
+}
+
+/* Reserva elegida en el calendario. */
+html.dark .bo-reserva-row-card.bo-reserva-card-selected {
+  background: #172554;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+html.dark .bo-reserva-row-selected > td {
+  background: #1e293b;
+}
+
+html.dark .bo-reserva-row-selected > td:first-child {
+  box-shadow: inset 3px 0 0 0 #3b82f6;
+}
+
 /* Tarjeta de reserva compacta (mobile) — oscuro */
 html.dark .bo-reserva-card-estado-label,
 html.dark .bo-reserva-card-row dt,

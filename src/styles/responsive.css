@@ -1164,6 +1164,23 @@ textarea {
   background: #fef9c3;
 }
 
+/* Reserva elegida en el calendario. A diferencia del resaltado amarillo (un
+   destello de 1 s al llegar desde una notificación), ésta queda marcada
+   mientras siga seleccionada, así se la encuentra al cerrar el detalle. */
+.bo-reserva-row-card.bo-reserva-card-selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+.bo-reserva-row-selected > td {
+  background: #dbeafe;
+}
+
+.bo-reserva-row-selected > td:first-child {
+  box-shadow: inset 3px 0 0 0 #2563eb;
+}
+
 .bo-reserva-row {
   display: flex;
   align-items: center;

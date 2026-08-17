@@ -32,6 +32,14 @@ const MAX_VISIBLE_LANES = 4;
 type ReservaCalendarProps = {
   perfil: Perfil;
   refreshKey?: number;
+  /**
+   * Mes mostrado. Si viene definido el calendario queda controlado desde
+   * afuera; si no, mantiene su propio estado como antes.
+   */
+  month?: Date;
+  onMonthChange?: (monthStart: Date) => void;
+  /** Se dispara al abrir una reserva, para que el listado pueda resaltarla. */
+  onReservaSelect?: (reserva: Reserva) => void;
 };
 
 type SalonDayGroup = {
@@ -54,8 +62,15 @@ const formatAgendaTime = (dateStr: string) =>
     timeZone: 'America/Argentina/Cordoba',
   }).format(new Date(dateStr));
 
-export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+export function ReservaCalendar({
+  perfil,
+  refreshKey = 0,
+  month,
+  onMonthChange,
+  onReservaSelect,
+}: ReservaCalendarProps) {
+  const [internalDate, setInternalDate] = useState(() => month ?? new Date());
+  const currentDate = month ?? internalDate;
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [salones, setSalones] = useState<Salon[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +81,19 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   const [selectedSalonDay, setSelectedSalonDay] = useState<SelectedSalonDay | null>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
+
+  // Punto único de cambio de mes: mantiene el estado interno cuando el
+  // calendario es autónomo y avisa siempre hacia afuera.
+  const setCurrentDate = (
+    updater: Date | ((previous: Date) => Date),
+  ) => {
+    const next = typeof updater === 'function' ? updater(currentDate) : updater;
+    const monthStart = new Date(next.getFullYear(), next.getMonth(), 1);
+    if (!month) {
+      setInternalDate(monthStart);
+    }
+    onMonthChange?.(monthStart);
+  };
 
   const calendarDays = useMemo(() => {
     const year = currentDate.getFullYear();
@@ -330,6 +358,9 @@ export function ReservaCalendar({ perfil, refreshKey = 0 }: ReservaCalendarProps
   const handleReservaClick = (reserva: Reserva) => {
     setSelectedReserva(reserva);
     setShowModal(true);
+    // El listado de abajo la resalta y hace scroll hasta ella, así queda a la
+    // vista apenas se cierra el detalle.
+    onReservaSelect?.(reserva);
   };
 
   const handleSalonDayClick = (day: number, group: SalonDayGroup) => {

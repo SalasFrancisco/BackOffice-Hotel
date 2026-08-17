@@ -262,7 +262,7 @@ export function ReservaExportDialog({
             ) : (
               <Download className="h-4 w-4" />
             )}
-            {loading ? 'Preparando archivo...' : 'Descargar CSV'}
+            {loading ? 'Preparando archivo...' : 'Descargar Excel'}
           </button>
         </DialogFooter>
       </DialogContent>

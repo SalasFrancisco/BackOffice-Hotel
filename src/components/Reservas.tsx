@@ -5,6 +5,7 @@ import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangl
 import type { LucideIcon } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import type { SheetData as XlsxSheetData } from 'write-excel-file/universal';
 import { ReservaCalendar } from './ReservaCalendar';
 import { WelcomeBanner } from './WelcomeBanner';
 import { ModuleInfoBanner } from './ModuleInfoBanner';
@@ -114,20 +115,103 @@ const getReservaMontoInicial = (reserva: Reserva) => {
   return Number.isFinite(value) ? value : null;
 };
 
-const escapeCsvCell = (value: unknown) => {
-  const rawValue = value === null || value === undefined ? '' : String(value);
-  const safeValue = /^[=+\-@]/.test(rawValue.trimStart()) ? `'${rawValue}` : rawValue;
-  return `"${safeValue.replace(/"/g, '""')}"`;
+// Celdas de la planilla. Los importes y las fechas van con su tipo real (no
+// como texto), así Excel los puede sumar, ordenar y filtrar sin reconvertir
+// nada a mano.
+const EXCEL_AMOUNT_FORMAT = '#,##0.00';
+const EXCEL_DATETIME_FORMAT = 'dd/mm/yyyy hh:mm';
+
+const excelText = (value?: string | null) => ({
+  type: String,
+  value: value ? String(value) : '',
+});
+
+const excelInteger = (value: unknown) => {
+  // Sin este corte, Number(null) daría 0 y un dato ausente se exportaría como
+  // un cero real, que en una planilla no es lo mismo que "vacío".
+  if (value === null || value === undefined || value === '') {
+    return { type: Number, value: null };
+  }
+  const parsed = Number(value);
+  return {
+    type: Number,
+    value: Number.isFinite(parsed) ? parsed : null,
+  };
 };
 
-const formatCsvAmount = (value: number | null) =>
-  value === null ? '' : value.toFixed(2).replace('.', ',');
+const excelAmount = (value: number | null) => ({
+  type: Number,
+  value: value === null || !Number.isFinite(value) ? null : value,
+  format: EXCEL_AMOUNT_FORMAT,
+});
 
-const formatCsvDate = (value?: string | null) => {
-  if (!value) return '';
+const EXPORT_TIME_ZONE = 'America/Argentina/Cordoba';
+
+// La planilla guarda las fechas como número de serie a partir de los
+// componentes UTC. Sin esta conversión, un evento que arranca 21:30 en Córdoba
+// se exportaría como 00:30 del día siguiente. Se corre la fecha para que sus
+// componentes UTC coincidan con la hora local del hotel, que es la que muestra
+// el resto del sistema.
+const toExportZoneDate = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: EXPORT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+    .formatToParts(date)
+    .reduce<Record<string, string>>((acc, part) => {
+      acc[part.type] = part.value;
+      return acc;
+    }, {});
+
+  return new Date(Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    // Algunos motores devuelven "24" para la medianoche.
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second),
+  ));
+};
+
+const excelDate = (value?: string | null) => {
+  if (!value) return { type: Date, value: null, format: EXCEL_DATETIME_FORMAT };
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+  return {
+    type: Date,
+    value: Number.isNaN(date.getTime()) ? null : toExportZoneDate(date),
+    format: EXCEL_DATETIME_FORMAT,
+  };
 };
+
+// Ancho de cada columna de la planilla, en caracteres, en el mismo orden que
+// los encabezados de la exportación.
+const EXPORT_COLUMN_WIDTHS = [
+  { width: 10 },  // ID reserva
+  { width: 32 },  // Cliente
+  { width: 30 },  // Email
+  { width: 16 },  // Teléfono
+  { width: 20 },  // Registrada por
+  { width: 20 },  // Salón
+  { width: 16 },  // Distribución
+  { width: 18 },  // Fecha inicio
+  { width: 18 },  // Fecha fin
+  { width: 20 },  // Estado
+  { width: 12 },  // Cantidad de personas
+  { width: 14 },  // Monto inicial
+  { width: 14 },  // Monto salón
+  { width: 44 },  // Servicios
+  { width: 16 },  // Monto servicios
+  { width: 14 },  // Monto total
+  { width: 50 },  // Observaciones
+  { width: 18 },  // Fecha de creación
+];
 
 const parseLocalDate = (value: string) => {
   const [year, month, day] = value.split('-').map(Number);
@@ -896,41 +980,56 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
         const montoServicios = getReservaServiciosTotal(reserva);
 
         return [
-          reserva.id,
-          reserva.cliente_nombre || '',
-          reserva.cliente_email || '',
-          reserva.cliente_telefono || '',
-          reserva.creado_por
-            ? exportCreatorNames[reserva.creado_por] || 'Usuario back office'
-            : 'Formulario WEB',
-          reserva.salon?.nombre || '',
-          reserva.distribucion?.nombre || '',
-          formatCsvDate(reserva.fecha_inicio),
-          formatCsvDate(reserva.fecha_fin),
-          reserva.estado,
-          reserva.cantidad_personas,
-          formatCsvAmount(getReservaMontoInicial(reserva)),
-          formatCsvAmount(montoSalon),
-          servicios,
-          formatCsvAmount(montoServicios),
-          formatCsvAmount(montoSalon + montoServicios),
-          reserva.observaciones || '',
-          formatCsvDate(reserva.creado_en),
+          excelInteger(reserva.id),
+          excelText(reserva.cliente_nombre),
+          excelText(reserva.cliente_email),
+          excelText(reserva.cliente_telefono),
+          excelText(
+            reserva.creado_por
+              ? exportCreatorNames[reserva.creado_por] || 'Usuario back office'
+              : 'Formulario WEB',
+          ),
+          excelText(reserva.salon?.nombre),
+          excelText(reserva.distribucion?.nombre),
+          excelDate(reserva.fecha_inicio),
+          excelDate(reserva.fecha_fin),
+          excelText(reserva.estado),
+          excelInteger(reserva.cantidad_personas),
+          excelAmount(getReservaMontoInicial(reserva)),
+          excelAmount(montoSalon),
+          excelText(servicios),
+          excelAmount(montoServicios),
+          excelAmount(montoSalon + montoServicios),
+          excelText(reserva.observaciones),
+          excelDate(reserva.creado_en),
         ];
       });
 
-      const csvContent = [
-        headers.map(escapeCsvCell).join(';'),
-        ...rows.map((row) => row.map(escapeCsvCell).join(';')),
-      ].join('\r\n');
-      const blob = new Blob([`\uFEFF${csvContent}`], {
-        type: 'text/csv;charset=utf-8;',
-      });
+      // La librer\u00EDa se carga reci\u00E9n ac\u00E1, igual que pdfmake: no tiene sentido
+      // sumarla al bundle inicial por una acci\u00F3n puntual.
+      const { default: writeXlsxFile } = await import('write-excel-file/universal');
+
+      const sheetData: XlsxSheetData = [
+        headers.map((header) => ({
+          value: header,
+          fontWeight: 'bold' as const,
+          backgroundColor: '#e5e7eb',
+          align: 'left' as const,
+        })),
+        ...rows,
+      ];
+
+      const blob = await writeXlsxFile(sheetData, {
+        sheet: 'Reservas',
+        stickyRowsCount: 1,
+        columns: EXPORT_COLUMN_WIDTHS,
+      }).toBlob();
+
       const downloadUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
 
       link.href = downloadUrl;
-      link.download = `reservas-${fileSuffix}.csv`;
+      link.download = `reservas-${fileSuffix}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1088,11 +1187,11 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             }}
             disabled={loading}
             className="bo-csv-btn bo-mobile-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            title="Exportar reservas en formato CSV compatible con Excel y Power BI"
-            aria-label="Exportar a CSV / Excel"
+            title="Exportar reservas a una planilla de Excel (.xlsx)"
+            aria-label="Exportar a Excel"
           >
             <FileSpreadsheet className="h-5 w-5" />
-            <span className="bo-btn-label">Exportar CSV</span>
+            <span className="bo-btn-label">Exportar a Excel</span>
           </button>
           <button
             type="button"

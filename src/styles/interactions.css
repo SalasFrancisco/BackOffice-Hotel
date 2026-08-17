@@ -1216,7 +1216,7 @@ html:not(.dark) .bo-cal-day {
   }
 }
 
-/* Botón "Exportar CSV" con la estética verde de Excel. */
+/* Botón "Exportar a Excel" con la estética verde de Excel. */
 .bo-csv-btn {
   background: #1d6f42;
   color: #ffffff;

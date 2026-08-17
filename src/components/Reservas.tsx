@@ -1,11 +1,11 @@
 import { Fragment, useState, useEffect, useRef } from 'react';
 import { Perfil, supabase, Reserva } from '../utils/supabase/client';
-import { projectId } from '../utils/supabase/info';
 import { Plus, Search, Edit, AlertCircle, CheckCircle, FileText, X, AlertTriangle, Loader2, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, CalendarCheck, Mail, History, FileSpreadsheet, MoreHorizontal, Clock, DollarSign, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ReservaForm } from './ReservaForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import type { SheetData as XlsxSheetData } from 'write-excel-file/universal';
+import { invokeProtectedFunction } from '../utils/protectedFunction';
 import { ReservaCalendar } from './ReservaCalendar';
 import { WelcomeBanner } from './WelcomeBanner';
 import { ModuleInfoBanner } from './ModuleInfoBanner';
@@ -471,54 +471,6 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     const creadoPor = reserva.creado_por?.trim();
     if (!creadoPor) return 'Formulario WEB';
     return creadorNamesById[creadoPor] || 'Usuario back office';
-  };
-
-  const buildProtectedFunctionEndpoints = (path: string) => [
-    `https://${projectId}.supabase.co/functions/v1/server/${path}`,
-    `https://${projectId}.supabase.co/functions/v1/${path}`,
-    `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/${path}`,
-    `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/${path}`,
-  ];
-
-  const invokeProtectedFunction = async (path: string, body: Record<string, unknown>) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error('No hay sesión activa para completar esta acción.');
-    }
-
-    let lastError = `No se pudo completar la solicitud (${path}).`;
-
-    for (const endpoint of buildProtectedFunctionEndpoints(path)) {
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify(body),
-        });
-
-        const text = await response.text();
-        let payload: any = {};
-
-        try {
-          payload = text ? JSON.parse(text) : {};
-        } catch {
-          payload = { error: text };
-        }
-
-        if (response.ok) {
-          return payload;
-        }
-
-        lastError = payload?.error || `HTTP ${response.status} en ${endpoint}`;
-      } catch (fetchError: any) {
-        lastError = fetchError?.message || String(fetchError);
-      }
-    }
-
-    throw new Error(lastError);
   };
 
   const handleOpenPresupuesto = async (reserva: Reserva) => {

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase, Reserva, Salon, Distribucion, CategoriaServicio, Servicio, Cliente, Perfil } from '../utils/supabase/client';
 import { createInternalNotification } from '../utils/notifications';
+import { invokeProtectedFunction } from '../utils/protectedFunction';
 import { formatUSD } from '../utils/currency';
 import { AlertCircle, CalendarDays, CheckCircle, ChevronLeft, ChevronRight, Loader2, Package, UserRound, X } from 'lucide-react';
-import { projectId } from '../utils/supabase/info';
 import {
   hasNonWhitespaceValue,
   preventInvalidNumberKeys,
@@ -302,59 +302,6 @@ const formatLongAvailabilityDate = (isoDate: string) => {
     day: '2-digit',
     month: 'long',
   }).format(date);
-};
-
-const buildProtectedFunctionEndpoints = (path: string) => [
-  `https://${projectId}.supabase.co/functions/v1/server/${path}`,
-  `https://${projectId}.supabase.co/functions/v1/${path}`,
-  `https://${projectId}.supabase.co/functions/v1/server/make-server-484a241a/${path}`,
-  `https://${projectId}.supabase.co/functions/v1/make-server-484a241a/${path}`,
-];
-
-const parseServerResponse = async (response: Response) => {
-  const text = await response.text();
-  if (!text) return {};
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { error: text };
-  }
-};
-
-const invokeProtectedFunction = async (path: string, body: Record<string, unknown>) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  const accessToken = session?.access_token;
-
-  if (!accessToken) {
-    throw new Error('No se pudo obtener la sesión actual.');
-  }
-
-  let lastError: Error | null = null;
-
-  for (const endpoint of buildProtectedFunctionEndpoints(path)) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const payload = await parseServerResponse(response);
-      if (response.ok) {
-        return payload;
-      }
-
-      lastError = new Error(payload?.error || `HTTP ${response.status}`);
-    } catch (error: any) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-    }
-  }
-
-  throw lastError || new Error('No se pudo completar la operacion solicitada.');
 };
 
 export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: ReservaFormProps) {

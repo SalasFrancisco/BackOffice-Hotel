@@ -330,7 +330,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
         onOpenChange={setShowDeleteConfirmDialog}
         onConfirm={confirmDelete}
         title="Eliminar reserva"
-        description="¿Está seguro de eliminar esta reserva? También se eliminará el presupuesto asociado."
+        description="¿Está seguro de eliminar esta reserva? También se eliminará el presupuesto asociado. Esta acción no se puede deshacer."
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="destructive"

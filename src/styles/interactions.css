@@ -225,6 +225,22 @@
   cursor: not-allowed;
 }
 
+/* Flecha "volver arriba" — mismo look que la manija y las flechas flotantes. */
+.bo-scroll-top {
+  color: #374151;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px -4px rgb(15 23 42 / 0.2);
+  transition: opacity 180ms ease, transform 180ms ease,
+    background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.bo-scroll-top:hover {
+  background: #f9fafb;
+  color: #2563eb;
+  box-shadow: 0 6px 16px -4px rgb(37 99 235 / 0.35);
+}
+
 .bo-sidebar-title {
   line-height: 1.15;
   white-space: nowrap;

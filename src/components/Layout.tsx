@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Notificacion, Perfil, supabase } from "../utils/supabase/client";
 import { projectId } from "../utils/supabase/info";
+import { ScrollToTopButton } from "./ScrollToTopButton";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   getNotificationVisual,
@@ -125,6 +126,7 @@ export function Layout({
     return window.localStorage.getItem("bo-sidebar-collapsed") === "1";
   });
   const notificationRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const mobileHeaderRef = useRef<HTMLElement | null>(null);
   const toastTimeoutRef = useRef<number | null>(null);
   const knownNotificationIdsRef = useRef<Set<number>>(new Set());
   // Notificaciones que este usuario ocultó ("eliminó"): el borrado es por
@@ -136,6 +138,33 @@ export function Layout({
       window.localStorage.setItem("bo-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
     }
   }, [sidebarCollapsed]);
+
+  // El header mobile es `position: fixed`, así que el contenido necesita saber
+  // cuánto espacio dejarle arriba. Se publica su alto real en una variable CSS en
+  // vez de hardcodear una medida, porque el título puede pasar a dos líneas en
+  // pantallas angostas. En escritorio el header está oculto (alto 0) y la
+  // variable simplemente no se toca: el padding solo se aplica dentro del
+  // media query de mobile.
+  useEffect(() => {
+    const header = mobileHeaderRef.current;
+    if (!header || typeof ResizeObserver === "undefined") return;
+
+    const syncHeaderHeight = () => {
+      const { height } = header.getBoundingClientRect();
+      if (height > 0) {
+        document.documentElement.style.setProperty(
+          "--bo-mobile-header-h",
+          `${height}px`,
+        );
+      }
+    };
+
+    syncHeaderHeight();
+    const observer = new ResizeObserver(syncHeaderHeight);
+    observer.observe(header);
+
+    return () => observer.disconnect();
+  }, []);
 
   const isAdmin = String(perfil?.rol || "").toUpperCase() === "ADMIN";
   const menuItems = [
@@ -667,7 +696,7 @@ export function Layout({
         );
       })()}
 
-      <header className="bo-mobile-header">
+      <header className="bo-mobile-header" ref={mobileHeaderRef}>
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
@@ -802,6 +831,10 @@ export function Layout({
           </button>
         </div>
       )}
+
+      {/* Vuelta al inicio tras desplazarse. Se oculta con el cajón mobile abierto
+          para no quedar atenuada debajo de la capa oscura. */}
+      {!mobileMenuOpen && <ScrollToTopButton />}
 
       <main className="bo-main">
         <div key={currentPage} className="bo-page-transition">

@@ -849,6 +849,18 @@ html.dark .bo-collapsed-nav-btn:disabled {
   color: #475569;
 }
 
+html.dark .bo-scroll-top {
+  color: #e2e8f0;
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 4px 12px -4px rgb(0 0 0 / 0.5);
+}
+
+html.dark .bo-scroll-top:hover {
+  background: #273449;
+  color: #93c5fd;
+}
+
 html.dark .bo-sidebar-desktop .bo-nav-item {
   color: #e2e8f0;
 }

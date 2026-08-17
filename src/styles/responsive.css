@@ -196,6 +196,31 @@ textarea {
   gap: 0.35rem;
 }
 
+/* Flecha flotante para volver al inicio. Aparece recién al desplazarse (la
+   clase is-visible la agrega el componente) y queda por debajo del cajón mobile
+   y del panel de notificaciones para no taparlos. */
+.bo-scroll-top {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.75rem);
+}
+
+.bo-scroll-top.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 .bo-mobile-header,
 .bo-mobile-drawer,
 .bo-mobile-drawer-overlay {
@@ -1349,9 +1374,15 @@ textarea {
     padding-left: 1rem;
   }
 
+  /* Fijo al borde superior de la pantalla, no pegajoso: `.bo-shell` tiene
+     `overflow-x: hidden`, lo que lo convierte en contenedor de scroll y hacía
+     que un `position: sticky` se fuera con la página en lugar de quedarse
+     arriba. Con `fixed` queda anclado al viewport siempre. */
   .bo-mobile-header {
-    position: sticky;
+    position: fixed;
     top: 0;
+    right: 0;
+    left: 0;
     z-index: 40;
     display: flex;
     min-height: 4rem;
@@ -1361,6 +1392,8 @@ textarea {
     border-bottom: 1px solid #e5e7eb;
     background: #fff;
     padding: 0.75rem 1rem;
+    /* Respeta el notch / barra de estado en pantallas con recorte. */
+    padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
   }
 
   .bo-mobile-title {
@@ -1401,10 +1434,19 @@ textarea {
     transform: translateX(0);
   }
 
+  /* El header salió del flujo: se le reserva su alto real (lo publica Layout en
+     --bo-mobile-header-h) para que el contenido no arranque tapado. */
   .bo-main {
     margin-left: 0;
-    min-height: calc(100dvh - 4rem);
+    padding-top: var(--bo-mobile-header-h, 4.25rem);
+    min-height: 100dvh;
     overflow: visible;
+  }
+
+  /* El aviso emergente ya no puede vivir en top: 1rem, porque ahí ahora está
+     siempre el header. Se lo baja justo debajo. */
+  .bo-toast {
+    top: calc(var(--bo-mobile-header-h, 4.25rem) + 0.5rem);
   }
 
   .bo-page {

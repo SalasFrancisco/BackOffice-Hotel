@@ -1272,7 +1272,6 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
       </div>
 
       <ReservaCalendar
-        perfil={perfil}
         refreshKey={calendarRefreshKey}
         month={calendarMonth}
         onMonthChange={handleCalendarMonthChange}

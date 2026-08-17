@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { Perfil, Reserva, Salon, supabase } from '../utils/supabase/client';
-import { ReservaModal } from './ReservaModal';
+import { Reserva, Salon, supabase } from '../utils/supabase/client';
 import {
   getReservaEstados,
   RESERVA_ESTADO_CANCELADO,
@@ -30,7 +29,6 @@ const getReadableTextColor = (hexColor: string) => {
 const MAX_VISIBLE_LANES = 4;
 
 type ReservaCalendarProps = {
-  perfil: Perfil;
   refreshKey?: number;
   /**
    * Mes mostrado. Si viene definido el calendario queda controlado desde
@@ -63,7 +61,6 @@ const formatAgendaTime = (dateStr: string) =>
   }).format(new Date(dateStr));
 
 export function ReservaCalendar({
-  perfil,
   refreshKey = 0,
   month,
   onMonthChange,
@@ -77,10 +74,8 @@ export function ReservaCalendar({
   const [error, setError] = useState('');
   const [filterSalon, setFilterSalon] = useState<number | null>(null);
   const [filterEstado, setFilterEstado] = useState<string | null>(null);
-  const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   const [selectedSalonDay, setSelectedSalonDay] = useState<SelectedSalonDay | null>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [showModal, setShowModal] = useState(false);
 
   // Punto único de cambio de mes: mantiene el estado interno cuando el
   // calendario es autónomo y avisa siempre hacia afuera.
@@ -337,7 +332,7 @@ export function ReservaCalendar({
   }, [currentDate, filterSalon, filterEstado, refreshKey]);
 
   useEffect(() => {
-    if (!selectedSalonDay && !selectedReserva && selectedDay === null) return;
+    if (!selectedSalonDay && selectedDay === null) return;
 
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -345,7 +340,7 @@ export function ReservaCalendar({
     return () => {
       document.body.style.overflow = originalOverflow;
     };
-  }, [selectedSalonDay, selectedReserva, selectedDay]);
+  }, [selectedSalonDay, selectedDay]);
 
   const previousMonth = () => {
     setCurrentDate((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1));
@@ -356,11 +351,13 @@ export function ReservaCalendar({
   };
 
   const handleReservaClick = (reserva: Reserva) => {
-    setSelectedReserva(reserva);
-    setShowModal(true);
-    // El listado de abajo la resalta y hace scroll hasta ella, así queda a la
-    // vista apenas se cierra el detalle.
+    // No se abre ningún detalle encima del calendario: la reserva queda
+    // resaltada en el listado de abajo, con scroll hasta ella.
     onReservaSelect?.(reserva);
+    // Si venía de los detalles de día o de salón, se cierran para dejar el
+    // listado a la vista.
+    setSelectedSalonDay(null);
+    setSelectedDay(null);
   };
 
   const handleSalonDayClick = (day: number, group: SalonDayGroup) => {
@@ -372,14 +369,6 @@ export function ReservaCalendar({
 
   const handleDayClick = (day: number) => {
     setSelectedDay(day);
-  };
-
-  const handleModalClose = () => {
-    setShowModal(false);
-    setSelectedReserva(null);
-    setSelectedSalonDay(null);
-    setSelectedDay(null);
-    void loadCalendarData();
   };
 
   const handleSalonDayModalClose = () => {
@@ -597,7 +586,7 @@ export function ReservaCalendar({
 
       {selectedSalonDay && createPortal(
         <div
-          className={`bo-calendar-reservas-overlay${showModal ? ' is-backgrounded' : ''}`}
+          className="bo-calendar-reservas-overlay"
         >
           <div className="bo-calendar-reservas-modal bo-dialog-content w-full max-w-2xl rounded-lg bg-white shadow-xl">
             <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-5">
@@ -660,7 +649,7 @@ export function ReservaCalendar({
       )}
 
       {selectedDay !== null && createPortal(
-        <div className={`bo-calendar-reservas-overlay${showModal ? ' is-backgrounded' : ''}`}>
+        <div className="bo-calendar-reservas-overlay">
           <div className="bo-calendar-reservas-modal bo-dialog-content w-full max-w-2xl rounded-lg bg-white shadow-xl">
             <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-5">
               <div className="min-w-0">
@@ -719,14 +708,6 @@ export function ReservaCalendar({
           </div>
         </div>,
         document.body,
-      )}
-
-      {showModal && selectedReserva && (
-        <ReservaModal
-          reserva={selectedReserva}
-          canDelete={perfil.rol === 'ADMIN'}
-          onClose={handleModalClose}
-        />
       )}
     </div>
   );

@@ -501,6 +501,10 @@ textarea {
   gap: 1.5rem;
 }
 
+.bo-dashboard-analytics {
+  margin-top: 3rem;
+}
+
 .bo-dashboard-chart-wide {
   grid-column: 1 / -1;
 }

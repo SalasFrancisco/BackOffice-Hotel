@@ -177,7 +177,7 @@ export function DashboardAnalytics({
     : '';
 
   return (
-    <section className="mt-12" aria-labelledby="dashboard-analytics-title">
+    <section className="bo-dashboard-analytics" aria-labelledby="dashboard-analytics-title">
       <div className="bo-section-header mb-6">
         <div>
           <h3 id="dashboard-analytics-title" className="text-lg font-medium text-gray-900">

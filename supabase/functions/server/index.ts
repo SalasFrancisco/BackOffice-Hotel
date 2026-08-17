@@ -2592,7 +2592,7 @@ const loadReservaPresupuestoContext = async (
 
   const { data: reservaServiciosData, error: reservaServiciosError } = await supabaseAdmin
     .from("reserva_servicios")
-    .select("cantidad, servicio:servicios(id, nombre, descripcion, precio, categoria:categorias_servicios(id, nombre, descripcion))")
+    .select("cantidad, precio_unitario, servicio:servicios(id, nombre, descripcion, precio, categoria:categorias_servicios(id, nombre, descripcion))")
     .eq("id_reserva", reservaId);
 
   if (reservaServiciosError) {
@@ -2604,8 +2604,16 @@ const loadReservaPresupuestoContext = async (
       const servicioInfo = item?.servicio;
       if (!servicioInfo) return null;
 
+      const snapshotPrice = item?.precio_unitario;
+      const unitPrice = snapshotPrice === null || snapshotPrice === undefined
+        ? Number(servicioInfo.precio) || 0
+        : Number(snapshotPrice);
+
       return {
-        servicio: servicioInfo,
+        servicio: {
+          ...servicioInfo,
+          precio: Number.isFinite(unitPrice) ? unitPrice : Number(servicioInfo.precio) || 0,
+        },
         cantidad: Number(item?.cantidad) || 1,
       };
     })

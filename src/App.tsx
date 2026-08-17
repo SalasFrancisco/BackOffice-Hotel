@@ -32,6 +32,27 @@ type NavigationRequest = {
   reservaId?: number | null;
 };
 
+const NAVIGABLE_PAGES = new Set([
+  'dashboard',
+  'reservas',
+  'salones',
+  'servicios',
+  'notificaciones',
+  'perfil',
+  'usuarios',
+]);
+
+const getPageFromUrl = () => {
+  const hashPage = window.location.hash.replace(/^#/, '');
+  return NAVIGABLE_PAGES.has(hashPage) ? hashPage : 'dashboard';
+};
+
+const replacePageInUrl = (page: string) => {
+  const nextUrl = new URL(window.location.href);
+  nextUrl.hash = page;
+  window.history.replaceState(window.history.state, document.title, nextUrl.toString());
+};
+
 const isAdminRole = (rol?: string | null) => String(rol || '').toUpperCase() === 'ADMIN';
 const isAdminOnlyPage = (page: string) => page === 'dashboard' || page === 'usuarios';
 
@@ -100,13 +121,11 @@ export default function App() {
     // prioridad. Los OPERADOR se redirigen a 'reservas' por el guard de rol
     // (isAdminOnlyPage), tanto en el render como en el efecto, así que igual
     // aterrizan en su pantalla correcta.
-    const hashPage = window.location.hash.replace('#', '');
-    return hashPage || 'dashboard';
+    return getPageFromUrl();
   });
   // Historial de navegación interno (para las flechas atrás/adelante del sistema).
   const [navState, setNavState] = useState<{ stack: string[]; index: number }>(() => {
-    const hashPage = window.location.hash.replace('#', '');
-    return { stack: [hashPage || 'dashboard'], index: 0 };
+    return { stack: [getPageFromUrl()], index: 0 };
   });
   const [editingSalonId, setEditingSalonId] = useState<number | null>(null);
   const [rlsError, setRlsError] = useState(false);
@@ -439,6 +458,7 @@ export default function App() {
       setSession(null);
       setPerfil(null);
       setCurrentPage('dashboard');
+      replacePageInUrl('dashboard');
       manualLogoutInProgressRef.current = false;
       logoutSettledRef.current = true;
       maybeDismissExitPortal();
@@ -465,6 +485,7 @@ export default function App() {
       setSession(null);
       setPerfil(null);
       setCurrentPage('dashboard');
+      replacePageInUrl('dashboard');
       inactivityLogoutInProgressRef.current = false;
       logoutSettledRef.current = true;
       maybeDismissExitPortal();
@@ -627,6 +648,7 @@ export default function App() {
   const applyPage = (page: string, reservaId?: number | null) => {
     const authorizedPage = !isAdminRole(perfil?.rol) && isAdminOnlyPage(page) ? 'reservas' : page;
     setCurrentPage(authorizedPage);
+    replacePageInUrl(authorizedPage);
     setEditingSalonId(null);
 
     if (authorizedPage === 'reservas' && reservaId) {
@@ -724,6 +746,7 @@ export default function App() {
     }
 
     setCurrentPage('reservas');
+    replacePageInUrl('reservas');
     setEditingSalonId(null);
     setReservaHighlightRequest(null);
   }, [perfil?.rol, currentPage]);

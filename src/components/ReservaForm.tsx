@@ -14,6 +14,8 @@ import { InfoDialog } from './InfoDialog';
 import { RichTextDescription } from './RichTextDescription';
 import {
   RESERVA_ESTADO_BACKOFFICE_INICIAL,
+  RESERVA_ESTADO_CONFIRMADO,
+  RESERVA_ESTADO_PAGADO,
   RESERVA_ESTADOS_BLOQUEANTES,
   isReservaEstadoPendienteGestion,
 } from '../utils/reservaEstadoTransitions';
@@ -27,6 +29,13 @@ type ReservaFormProps = {
   perfil: Perfil;
   onClose: (success?: boolean) => void;
   onDirtyChange?: (isDirty: boolean) => void;
+};
+
+type ReservaServicioFormRow = {
+  id_servicio: number;
+  cantidad: number | null;
+  precio_unitario: number | null;
+  servicio?: Servicio | Servicio[] | null;
 };
 
 const HORARIO_OPCIONES = Array.from({ length: 48 }, (_, index) => {
@@ -361,6 +370,8 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
     initialFechaFinParts?.time || '',
   );
   const estadoReserva = reserva?.estado || RESERVA_ESTADO_BACKOFFICE_INICIAL;
+  const isReservaFacturada =
+    estadoReserva === RESERVA_ESTADO_CONFIRMADO || estadoReserva === RESERVA_ESTADO_PAGADO;
   const [observaciones, setObservaciones] = useState(reserva?.observaciones || '');
   const [cantidadPersonas, setCantidadPersonas] = useState(
     reserva?.cantidad_personas ? reserva.cantidad_personas.toString() : ''
@@ -437,7 +448,9 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
 
   const currentSalon = salones.find(s => s.id === idSalon) || null;
   const currentSalonDailyPrice = currentSalon?.precio_base || 0;
-  const currentReservaTotal = currentSalonDailyPrice * eventBillableDayUnits;
+  const currentReservaTotal = isReservaFacturada
+    ? Number(reserva?.monto) || 0
+    : currentSalonDailyPrice * eventBillableDayUnits;
   const currentDistribucion = idDistribucion
     ? distribuciones.find(d => d.id === idDistribucion) || null
     : null;
@@ -496,11 +509,16 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
       .map((categoria) => ({
         categoria,
         servicios: servicios.filter((servicio) => (
-          servicio.id_categoria === categoria.id && servicio.activo !== false
+          servicio.id_categoria === categoria.id
+          && (
+            isReservaFacturada
+              ? selectedServicios.has(servicio.id)
+              : servicio.activo !== false || selectedServicios.has(servicio.id)
+          )
         )),
       }))
       .filter((item) => item.servicios.length > 0),
-    [categorias, servicios],
+    [categorias, servicios, selectedServicios, isReservaFacturada],
   );
   const formatSalonOptionLabel = (salon: Salon) => (
     `${salon.nombre} - Cap: ${salon.capacidad} - ${formatUSD(salon.precio_base || 0)}`
@@ -770,7 +788,6 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
       const serviciosActivos = sortServicesByName(
         (serviciosData || []).filter((servicio) => servicio.activo !== false),
       );
-      const serviciosActivosIds = new Set(serviciosActivos.map((servicio) => servicio.id));
       setServicios(serviciosActivos);
 
       // Si estamos editando, cargar distribuciones y servicios
@@ -787,16 +804,47 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
         // Load servicios de la reserva
         const { data: reservaServiciosData, error: rsError } = await supabase
           .from('reserva_servicios')
-          .select('id_servicio, cantidad')
+          .select(`
+            id_servicio,
+            cantidad,
+            precio_unitario,
+            servicio:servicios(*, categoria:categorias_servicios(*))
+          `)
           .eq('id_reserva', reserva.id);
 
-        if (!rsError && reservaServiciosData) {
+        if (rsError) throw rsError;
+
+        if (reservaServiciosData) {
           const map = new Map<number, string>();
-          reservaServiciosData.forEach(rs => {
-            if (serviciosActivosIds.has(rs.id_servicio)) {
-              map.set(rs.id_servicio, String(rs.cantidad ?? 1));
-            }
+          const serviciosDisponibles = new Map<number, Servicio>(
+            serviciosActivos.map((servicio) => [servicio.id, servicio]),
+          );
+
+          (reservaServiciosData as ReservaServicioFormRow[]).forEach(rs => {
+            map.set(rs.id_servicio, String(rs.cantidad ?? 1));
+
+            const servicioRelation = rs.servicio;
+            const servicioReserva = Array.isArray(servicioRelation)
+              ? servicioRelation[0]
+              : servicioRelation;
+            if (!servicioReserva) return;
+
+            const snapshotPrice = rs.precio_unitario;
+            const parsedSnapshotPrice = snapshotPrice === null || snapshotPrice === undefined
+              ? Number(servicioReserva.precio) || 0
+              : Number(snapshotPrice);
+            const servicioExistente = serviciosDisponibles.get(rs.id_servicio);
+
+            serviciosDisponibles.set(rs.id_servicio, {
+              ...(servicioExistente || servicioReserva),
+              precio: Number.isFinite(parsedSnapshotPrice)
+                ? parsedSnapshotPrice
+                : Number(servicioReserva.precio) || 0,
+              activo: servicioReserva.activo,
+            });
           });
+
+          setServicios(sortServicesByName(Array.from(serviciosDisponibles.values())));
           setSelectedServicios(map);
         }
       }
@@ -824,6 +872,7 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
   };
 
   const toggleServicio = (servicioId: number) => {
+    if (isReservaFacturada) return;
     const newMap = new Map(selectedServicios);
     if (newMap.has(servicioId)) {
       newMap.delete(servicioId);
@@ -834,6 +883,7 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
   };
 
   const updateCantidadServicio = (servicioId: number, cantidad: string) => {
+    if (isReservaFacturada) return;
     const newMap = new Map(selectedServicios);
     newMap.set(servicioId, sanitizeIntegerInput(cantidad));
     setSelectedServicios(newMap);
@@ -1219,7 +1269,9 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
         endTime: fechaFinHora,
       });
       const salonDailyPrice = selectedSalon?.precio_base || 0;
-      const monto = salonDailyPrice * eventDaysForMonto;
+      const monto = isReservaFacturada
+        ? Number(reserva?.monto) || 0
+        : salonDailyPrice * eventDaysForMonto;
 
       const reservaData = {
         cliente_nombre: nombreClienteSanitizado,
@@ -1270,13 +1322,15 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
       }
 
       // Guardar servicios seleccionados
-      if (reservaId) {
+      if (reservaId && !isReservaFacturada) {
         // Primero eliminar servicios existentes si estamos editando
         if (reserva) {
-          await supabase
+          const { error: deleteServiciosError } = await supabase
             .from('reserva_servicios')
             .delete()
             .eq('id_reserva', reservaId);
+
+          if (deleteServiciosError) throw deleteServiciosError;
         }
 
         // Insertar servicios seleccionados
@@ -1292,8 +1346,7 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
             .insert(serviciosToInsert);
 
           if (serviciosError) {
-            console.error('Error saving servicios:', serviciosError);
-            // No lanzamos error aqui, la reserva ya fue creada
+            throw serviciosError;
           }
         }
       }
@@ -1513,6 +1566,7 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
               />
             </div>
           </div>
+
         </div>
         {/* Salon, Distribucion y Capacidad */}
         <div className="bo-form-grid-3">
@@ -1720,14 +1774,22 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
               <strong>Monto de la reserva:</strong> {formatUSD(currentReservaTotal)}
-              <span className="text-xs block mt-1">
-                ({formatUSD(currentSalonDailyPrice)} por día x {formatBillableDayUnits(eventBillableDayUnits)} días facturables)
-              </span>
-              {billingAdjustments.length > 0 && (
+              {isReservaFacturada ? (
                 <span className="text-xs block mt-1">
-                  Aplicando {billingAdjustments.join(' y ')}
-                  {eventCalendarDaysCount > 2 ? '. Los días entre el inicial y el final se cobran al 100%.' : '.'}
+                  Importe consolidado al confirmar o pagar la reserva.
                 </span>
+              ) : (
+                <>
+                  <span className="text-xs block mt-1">
+                    ({formatUSD(currentSalonDailyPrice)} por día x {formatBillableDayUnits(eventBillableDayUnits)} días facturables)
+                  </span>
+                  {billingAdjustments.length > 0 && (
+                    <span className="text-xs block mt-1">
+                      Aplicando {billingAdjustments.join(' y ')}
+                      {eventCalendarDaysCount > 2 ? '. Los días entre el inicial y el final se cobran al 100%.' : '.'}
+                    </span>
+                  )}
+                </>
               )}
             </p>
           </div>
@@ -1739,6 +1801,13 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
             <Package className="w-5 h-5 text-green-600" />
             <h4 className="text-gray-900">Servicios Adicionales</h4>
           </div>
+
+          {isReservaFacturada && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+              Los servicios y sus precios quedaron consolidados al facturar la reserva.
+              Los servicios inactivos seleccionados continúan visibles.
+            </div>
+          )}
 
           {categoriasConServicios.length === 0 ? (
             <p className="text-sm text-gray-500">No hay servicios disponibles</p>
@@ -1797,11 +1866,17 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
                               <input
                                 type="checkbox"
                                 checked={isSelected}
+                                disabled={isReservaFacturada}
                                 onChange={() => toggleServicio(servicio.id)}
                                 className="bo-reserva-service-checkbox"
                               />
                               <div className="bo-reserva-service-text">
-                                <p className="bo-reserva-service-name">{servicio.nombre}</p>
+                                <p className="bo-reserva-service-name">
+                                  {servicio.nombre}
+                                  {servicio.activo === false && (
+                                    <span className="ml-2 text-xs text-red-600">Inactivo</span>
+                                  )}
+                                </p>
                                 {servicio.descripcion && (
                                   <RichTextDescription
                                     value={servicio.descripcion}
@@ -1820,6 +1895,7 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
                                       type="number"
                                       min="1"
                                       value={cantidad}
+                                      disabled={isReservaFacturada}
                                       onChange={(e) => updateCantidadServicio(servicio.id, e.target.value)}
                                       onKeyDown={preventInvalidNumberKeys}
                                       inputMode="numeric"
@@ -1895,4 +1971,3 @@ export function ReservaForm({ reserva, perfil, onClose, onDirtyChange }: Reserva
     </div>
   );
 }
-

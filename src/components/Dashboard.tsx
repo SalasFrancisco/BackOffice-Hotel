@@ -3,6 +3,7 @@ import { AlertCircle, BarChart3, Building2, CheckCircle2, ReceiptText, Wallet } 
 import type { Perfil, Reserva, Salon } from '../utils/supabase/client';
 import { supabase } from '../utils/supabase/client';
 import { formatUSD } from '../utils/currency';
+import { getReservaServicioUnitPrice } from '../utils/reservaServicios';
 import { WelcomeBanner } from './WelcomeBanner';
 import { ModuleInfoBanner } from './ModuleInfoBanner';
 import type {
@@ -159,6 +160,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
             fecha_fin,
             reserva_servicios(
               cantidad,
+              precio_unitario,
               servicio:servicios(
                 precio,
                 categoria:categorias_servicios(categoria_superior)
@@ -231,7 +233,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       (totals, reserva) => {
         (reserva.reserva_servicios || []).forEach((reservaServicio) => {
           const cantidad = Number(reservaServicio.cantidad) || 0;
-          const precio = Number(reservaServicio.servicio?.precio) || 0;
+          const precio = getReservaServicioUnitPrice(reservaServicio);
           const ingreso = cantidad * precio;
           const category = normalizeServiceIncomeCategory(
             reservaServicio.servicio?.categoria?.categoria_superior,

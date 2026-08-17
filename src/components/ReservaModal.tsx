@@ -7,6 +7,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { RichTextDescription } from './RichTextDescription';
 import { RESERVA_ESTADO_COLORS } from '../utils/reservaEstadoTransitions';
 import { formatUSD } from '../utils/currency';
+import { getReservaServicioUnitPrice } from '../utils/reservaServicios';
 
 type ReservaModalProps = {
   reserva: Reserva;
@@ -27,7 +28,7 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [registradaPor, setRegistradaPor] = useState('Formulario WEB');
   const totalServicios = reservaServicios.reduce(
-    (sum, rs) => sum + ((Number(rs.servicio?.precio) || 0) * (Number(rs.cantidad) || 0)),
+    (sum, rs) => sum + (getReservaServicioUnitPrice(rs) * (Number(rs.cantidad) || 0)),
     0,
   );
   const montoActual = (Number(reserva.monto) || 0) + totalServicios;
@@ -264,7 +265,12 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
                     className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3"
                   >
                     <div className="flex-1">
-                      <p className="text-gray-900">{rs.servicio?.nombre}</p>
+                      <p className="text-gray-900">
+                        {rs.servicio?.nombre}
+                        {rs.servicio?.activo === false && (
+                          <span className="ml-2 text-xs text-red-600">Inactivo</span>
+                        )}
+                      </p>
                       {rs.servicio?.categoria && (
                         <p className="text-xs text-gray-600">{rs.servicio.categoria.nombre}</p>
                       )}
@@ -278,17 +284,17 @@ export function ReservaModal({ reserva, canDelete, onClose }: ReservaModalProps)
                     <div className="text-right">
                       <p className="text-sm text-gray-600">Cantidad: {rs.cantidad}</p>
                       <p className="text-green-600">
-                        {formatUSD(rs.servicio?.precio || 0)} c/u
+                        {formatUSD(getReservaServicioUnitPrice(rs))} c/u
                       </p>
                       <p className="text-gray-900">
-                        Total: {formatUSD((rs.servicio?.precio || 0) * rs.cantidad)}
+                        Total: {formatUSD(getReservaServicioUnitPrice(rs) * rs.cantidad)}
                       </p>
                     </div>
                   </div>
                 ))}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
                   <p className="text-sm text-blue-800">
-                    <strong>Total Servicios:</strong> {formatUSD(reservaServicios.reduce((sum, rs) => sum + ((rs.servicio?.precio || 0) * rs.cantidad), 0))}
+                    <strong>Total Servicios:</strong> {formatUSD(reservaServicios.reduce((sum, rs) => sum + (getReservaServicioUnitPrice(rs) * rs.cantidad), 0))}
                   </p>
                 </div>
               </div>

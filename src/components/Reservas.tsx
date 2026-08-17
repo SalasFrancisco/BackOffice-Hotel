@@ -25,6 +25,7 @@ import {
 } from './ReservaExportDialog';
 import { getReservaCapacityWarningText } from '../utils/reservaCapacity';
 import { formatUSD } from '../utils/currency';
+import { getReservaServicioUnitPrice } from '../utils/reservaServicios';
 import { deleteReservaWithPresupuesto } from '../utils/reservaDeletion';
 import { createInternalNotification } from '../utils/notifications';
 import {
@@ -99,7 +100,7 @@ const isReservaInMonth = (reserva: Reserva, monthStart: Date) => {
 const getReservaServiciosTotal = (reserva: Reserva) =>
   (reserva.reserva_servicios || []).reduce((acc, item) => {
     const cantidad = Number(item?.cantidad) || 0;
-    const precio = Number(item?.servicio?.precio) || 0;
+    const precio = getReservaServicioUnitPrice(item);
     return acc + (cantidad * precio);
   }, 0);
 
@@ -371,6 +372,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
           reserva_servicios(
             id_servicio,
             cantidad,
+            precio_unitario,
             servicio:servicios(
               nombre,
               precio
@@ -861,6 +863,7 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
             reserva_servicios(
               id_servicio,
               cantidad,
+              precio_unitario,
               servicio:servicios(
                 nombre,
                 precio
@@ -1901,4 +1904,3 @@ export function Reservas({ perfil, onUnsavedChangesChange, highlightRequest }: R
     </div>
   );
 }
-

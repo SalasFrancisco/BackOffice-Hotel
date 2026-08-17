@@ -59,6 +59,7 @@ export type ReservaServicio = {
   id_reserva: number;
   id_servicio: number;
   cantidad: number;
+  precio_unitario?: number | null;
   creado_en: string;
   servicio?: Servicio;
 };

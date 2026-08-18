@@ -208,9 +208,13 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
     };
   }, [appliedFilters, monthlyChartRange]);
 
+  // Salones que aportan capacidad al período: los inactivos ya no se pueden
+  // reservar, así que no suman días disponibles ni facturación potencial. Se
+  // los conserva sólo cuando el filtro apunta explícitamente a uno de ellos
+  // (el selector los ofrece marcados como "(Inactivo)").
   const selectedSalones = useMemo(() => {
     if (appliedFilters.salonId === 'all') {
-      return salones;
+      return salones.filter((salon) => salon.activo !== false);
     }
 
     return salones.filter((salon) => Number(salon.id) === Number(appliedFilters.salonId));
@@ -307,12 +311,24 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
     const porcentajeOcupacion = totalDiasDisponibles > 0
       ? (diasOcupados / totalDiasDisponibles) * 100
       : 0;
+    // El potencial sólo cubre los salones con capacidad computada, así que el
+    // ingreso del cociente se recorta al mismo conjunto (las claves del mapa de
+    // ocupación). "Ingresos obtenidos" sigue mostrando el total, inactivos
+    // incluidos: es facturación real y no debe desaparecer del tablero.
+    const ingresosSalonesConsiderados = reservasConfirmadasOPagadas.reduce(
+      (acc, reserva) => (
+        ocupacionPorSalon.has(Number(reserva.id_salon))
+          ? acc + Number(reserva.monto || 0)
+          : acc
+      ),
+      0,
+    );
     const facturacionPotencial = selectedSalones.reduce(
       (acc, salon) => acc + Number(salon.precio_base || 0),
       0,
     ) * daysInRange;
     const porcentajeFacturacion = facturacionPotencial > 0
-      ? (ingresosSalones / facturacionPotencial) * 100
+      ? (ingresosSalonesConsiderados / facturacionPotencial) * 100
       : 0;
 
     return {
@@ -321,6 +337,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
       porcentajeConfirmacion,
       ingresosObtenidos,
       ingresosSalones,
+      ingresosSalonesConsiderados,
       ingresosServicios,
       ticketPromedio,
       ticketPromedioSalones,
@@ -479,7 +496,7 @@ export function Dashboard({ perfil: _perfil }: DashboardProps) {
           <p className="mb-1 text-sm text-gray-600">Facturación vs potencial</p>
           <p className="text-3xl text-gray-900">{metrics.porcentajeFacturacion.toFixed(1)}%</p>
           <p className="mt-1 text-sm text-cyan-700">
-            Salones: {formatCurrency(metrics.ingresosSalones)} / {formatCurrency(metrics.facturacionPotencial)}
+            Salones: {formatCurrency(metrics.ingresosSalonesConsiderados)} / {formatCurrency(metrics.facturacionPotencial)}
           </p>
         </div>
       </div>

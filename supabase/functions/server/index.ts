@@ -1846,13 +1846,17 @@ function buildBackofficeReservaNotificationEmail(input: {
     ["Fin", fechaFinLabel],
   ];
 
+  // Sin `nowrap` y con corte de palabra: en un celular la tabla no puede
+  // ensancharse más que la pantalla, así que etiquetas largas ("Cantidad de
+  // personas") y valores largos (un email) envuelven en vez de empujar el
+  // ancho del correo. El reparto 42/58 lo fija `table-layout: fixed` abajo.
   const rowsHtml = rows
     .map(([label, value], index) => {
       const border = index === rows.length - 1 ? "" : "border-bottom: 1px solid #eef2f7;";
       return `
             <tr>
-              <td style="padding: 11px 18px; font-size: 13px; color: #64748b; ${border} white-space: nowrap;">${escapeHtml(label)}</td>
-              <td style="padding: 11px 18px; font-size: 14px; color: #0f172a; font-weight: 600; text-align: right; ${border}">${escapeHtml(value)}</td>
+              <td class="bo-cell" style="width: 42%; padding: 11px 18px; font-size: 13px; color: #64748b; ${border} vertical-align: top; overflow-wrap: break-word; word-break: break-word;">${escapeHtml(label)}</td>
+              <td class="bo-cell" style="width: 58%; padding: 11px 18px; font-size: 14px; color: #0f172a; font-weight: 600; text-align: right; ${border} vertical-align: top; overflow-wrap: break-word; word-break: break-word;">${escapeHtml(value)}</td>
             </tr>`;
     })
     .join("");
@@ -1873,32 +1877,54 @@ function buildBackofficeReservaNotificationEmail(input: {
       + `Fin: ${fechaFinLabel}\n\n`
       + "Ingrese al Back-Office para revisar y gestionar la reserva.",
     html: `
-      <div style="font-family: Arial, Helvetica, sans-serif; background: #eef2f9; padding: 28px 12px; color: #0f172a;">
-        <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 30px rgba(15,23,42,0.08);">
-          <div style="background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%); padding: 28px 32px;">
-            <span style="display: inline-block; background: ${accent}; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 4px 12px; border-radius: 9999px; margin-bottom: 12px;">${escapeHtml(eyebrow)}</span>
-            <h1 style="margin: 0; font-size: 22px; color: #ffffff;">${escapeHtml(title)}</h1>
-          </div>
-          <div style="padding: 28px 32px;">
-            <p style="margin: 0 0 22px; line-height: 1.6; font-size: 15px; color: #334155;">
-              ${escapeHtml(actionDescription)}
-            </p>
-            <table style="width: 100%; border-collapse: collapse; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-              ${rowsHtml}
-            </table>
-            <div style="margin: 24px 0 0; padding: 14px 16px; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 10px;">
-              <p style="margin: 0; line-height: 1.6; font-size: 13px; color: #1d4ed8;">
-                Ingrese al Back-Office para revisar y gestionar esta reserva.
-              </p>
+      <!DOCTYPE html>
+      <html lang="es">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>${escapeHtml(title)}</title>
+          <style>
+            /* Los clientes que ignoran el bloque igual quedan bien: los estilos
+               en línea ya evitan el desborde y esto sólo recorta márgenes para
+               ganar ancho útil en pantallas chicas. */
+            @media only screen and (max-width: 480px) {
+              .bo-outer { padding: 16px 8px !important; }
+              .bo-header, .bo-body { padding-left: 18px !important; padding-right: 18px !important; }
+              .bo-footer { padding-left: 16px !important; padding-right: 16px !important; }
+              .bo-cell { padding-left: 12px !important; padding-right: 12px !important; }
+              .bo-title { font-size: 19px !important; }
+            }
+          </style>
+        </head>
+        <body style="margin: 0; padding: 0; background: #eef2f9;">
+          <div class="bo-outer" style="font-family: Arial, Helvetica, sans-serif; background: #eef2f9; padding: 28px 12px; color: #0f172a;">
+            <div style="width: 100%; max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 30px rgba(15,23,42,0.08);">
+              <div class="bo-header" style="background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%); padding: 28px 32px;">
+                <span style="display: inline-block; background: ${accent}; color: #ffffff; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 4px 12px; border-radius: 9999px; margin-bottom: 12px;">${escapeHtml(eyebrow)}</span>
+                <h1 class="bo-title" style="margin: 0; font-size: 22px; color: #ffffff;">${escapeHtml(title)}</h1>
+              </div>
+              <div class="bo-body" style="padding: 28px 32px;">
+                <p style="margin: 0 0 22px; line-height: 1.6; font-size: 15px; color: #334155;">
+                  ${escapeHtml(actionDescription)}
+                </p>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; table-layout: fixed; border-collapse: collapse; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+                  ${rowsHtml}
+                </table>
+                <div style="margin: 24px 0 0; padding: 14px 16px; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 10px;">
+                  <p style="margin: 0; line-height: 1.6; font-size: 13px; color: #1d4ed8;">
+                    Ingrese al Back-Office para revisar y gestionar esta reserva.
+                  </p>
+                </div>
+              </div>
+              <div class="bo-footer" style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center;">
+                <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+                  Hotel Quinto Centenario — Back-Office
+                </p>
+              </div>
             </div>
           </div>
-          <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 32px; text-align: center;">
-            <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-              Hotel Quinto Centenario — Back-Office
-            </p>
-          </div>
-        </div>
-      </div>
+        </body>
+      </html>
     `.trim(),
   };
 }
